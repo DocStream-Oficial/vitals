@@ -534,24 +534,10 @@ async def api_insights():
         return JSONResponse(content=[])
 
 
-@app.get("/api/coach/suggestions")
-async def api_coach_suggestions(locale: Optional[str] = None):
-    """Preguntas sugeridas (chips) del tab Coach — F1 del roadmap P0.
-
-    Devuelve {questions: [{id, text}]}, derivadas de los insights activos del
-    dataset actual (mismo dataset/household que /api/insights — resuelto por
-    el middleware de userctx vía X-Vitals-User) con fallback al pool genérico.
-    Nunca 500: sin datos -> lista de genéricas (coach_suggest ya es None-safe).
-    """
-    dataset = _load_dataset()
-    try:
-        resolved_locale = locale or _profile.effective("locale") or "es"
-        questions = _suggested_questions(dataset or {}, locale=resolved_locale, limit=4)
-        return JSONResponse(content={"questions": questions})
-    except Exception as e:
-        logger.error(f"suggested_questions falló: {e}")
-        return JSONResponse(content={"questions": []})
-
+# Fase 9 (paso A2): /api/coach/suggestions vive ahora en app/routes/coach.py
+# (registrado más abajo junto con el resto de rutas del coach, después de que
+# ask_coach/load_history/clear_history ya estén definidos arriba en este
+# módulo — el router los lee dinámicamente vía `import main`).
 
 @app.get("/api/drivers")
 async def api_drivers():
@@ -812,39 +798,7 @@ from app.routes.journal import router as _journal_router  # noqa: E402
 app.include_router(_journal_router)
 
 
-@app.get("/api/sleep-coach")
-async def api_sleep_coach_get():
-    """Recomendación de hora de dormir para esta noche (Fase 8C, paso C4).
-    Sin datos suficientes (poco historial de wake time) -> {available: false}
-    (nunca 500).
-
-    Roadmap P1 F5 (paso 2): campos ADITIVOS `need_min/sleep_score/consistency`
-    — el shape previo (bedtime/wake_assumed/extra_min/need_min/drivers) se
-    conserva IDÉNTICO; sleep_score/consistency son None-safe y se calculan
-    on-read desde app/sleep_scores.py (nunca tocan build_dataset)."""
-    dataset = _load_dataset()
-    if not dataset:
-        return JSONResponse(content={"available": False})
-    try:
-        from app import sleep_coach as _sleep_coach
-        from app import sleep_scores as _sleep_scores
-        days = dataset.get("days", [])
-        summary = dataset.get("summary", {})
-        profile = effective_profile_dict()
-        rec = _sleep_coach.recommend_bedtime(days, summary, profile)
-        if rec is None:
-            return JSONResponse(content={"available": False})
-        rec["available"] = True
-
-        # Aditivo (F5): need_min ya viene de recommend_bedtime (misma
-        # fórmula) — sleep_score/consistency se derivan aparte, None-safe.
-        today = days[-1] if days and isinstance(days[-1], dict) else {}
-        rec["sleep_score"] = _sleep_scores.sleep_score(today.get("asleep"), rec.get("need_min"))
-        rec["consistency"] = _sleep_scores.consistency_score(days)
-        return JSONResponse(content=rec)
-    except Exception as e:
-        logger.error(f"GET /api/sleep-coach falló: {e}")
-        return JSONResponse(content={"available": False})
+# Fase 9 (paso A2): /api/sleep-coach vive ahora en app/routes/coach.py.
 
 
 # ---------------------------------------------------------------- programas del coach (Roadmap P1, F4)
@@ -997,76 +951,15 @@ async def api_healthspan_get():
         return JSONResponse(content={"available": False})
 
 
-@app.get("/api/coach/conversations")
-async def api_coach_conversations_list():
-    """Lista LIGERA de conversaciones [{id, title, updated, message_count}],
-    orden por `updated` desc. Sin conversaciones -> []. Nunca 500."""
-    return JSONResponse(content=_coach_store.list_conversations())
-
-
-@app.post("/api/coach/conversations")
-async def api_coach_conversations_create(body: ConversationCreate = None):
-    """Crea una conversación vacía. Devuelve {id}."""
-    title = body.title if body else None
-    conv = _coach_store.create_conversation(title=title)
-    return JSONResponse({"id": conv["id"]})
-
-
-@app.get("/api/coach/conversations/{cid}")
-async def api_coach_conversation_get(cid: str):
-    """Conversación completa (con messages). id inexistente -> 404 controlado."""
-    conv = _coach_store.get_conversation(cid)
-    if conv is None:
-        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
-    return JSONResponse(content=conv)
-
-
-@app.delete("/api/coach/conversations/{cid}")
-async def api_coach_conversation_delete(cid: str):
-    """Borra SOLO esa conversación. Nunca 500."""
-    _coach_store.delete_conversation(cid)
-    return JSONResponse({"status": "ok"})
-
-
-@app.post("/api/coach")
-async def api_coach(body: CoachRequest):
-    """Coach IA conversacional: recibe pregunta + conversation_id opcional,
-    responde vía claude CLI. El contexto que se le pasa a ask_coach es SOLO
-    el de ESA conversación (aislamiento — nunca se mezcla con otras).
-    Sin conversation_id -> usa la activa, o crea una nueva. Si no hay datos de
-    salud, responde igualmente con contexto mínimo. Si el CLI falla, devuelve
-    fallback amable — nunca 500.
-
-    NOTA (deprecación): `body.history` ya NO se usa como contexto — el contexto
-    sale exclusivamente de coach_store.get_context(cid). Se ignora si viene.
-    """
-    dataset = _load_dataset() or {}
-    cid = body.conversation_id or _coach_store.get_active_id()
-    # Contexto AISLADO: solo los últimos N mensajes de ESTA conversación.
-    context_history = _coach_store.get_context(cid, 10)
-    # Ronda 1: offload a threadpool — ask_coach lanza `claude` CLI vía subprocess.run
-    # síncrono (hasta ~90 s); en el event loop congelaba TODA la app mientras tanto.
-    answer = await run_in_threadpool(ask_coach, body.question, dataset, context_history)
-    # Persistir el turno (crea la conversación si cid era None/inexistente).
-    used_cid = _coach_store.append_turn(cid, body.question, answer)
-    _coach_store.set_active(used_cid)
-    return JSONResponse({"answer": answer, "conversation_id": used_cid})
-
-
-@app.get("/api/coach/history")
-async def api_coach_history():
-    """DEPRECADO: usa GET /api/coach/conversations/{id}. Devuelve los mensajes
-    de la conversación ACTIVA (últimos 100). Sin activa -> [] (nunca 500)."""
-    history = load_history()
-    return JSONResponse(content=history[-100:])
-
-
-@app.delete("/api/coach/history")
-async def api_coach_history_clear():
-    """DEPRECADO: usa DELETE /api/coach/conversations/{id}. Borra TODAS las
-    conversaciones (clear_all). Escritura atómica."""
-    clear_history()
-    return JSONResponse({"status": "ok", "message": "Historial borrado."})
+# Fase 9 (paso A2): /api/coach/suggestions, /api/sleep-coach,
+# /api/coach/conversations*, /api/coach, /api/coach/history viven ahora en
+# app/routes/coach.py. ask_coach/load_history/clear_history siguen
+# importados arriba en este módulo (from app.coach_chat import ask_coach /
+# from app.coach_store import load_history, clear as clear_history) — el
+# router los lee vía `import main` diferido porque decenas de tests parchean
+# main.ask_coach / main.load_history / main.clear_history por nombre.
+from app.routes.coach import router as _coach_router  # noqa: E402
+app.include_router(_coach_router)
 
 
 # ---------------------------------------------------------------- household (Fase 8D, paso D3)
