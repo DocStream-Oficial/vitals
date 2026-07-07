@@ -506,55 +506,15 @@ async def dashboard():
     return HTMLResponse(content=html, status_code=200)
 
 
-@app.get("/api/insights")
-async def api_insights():
-    """Devuelve la lista de insights evaluados sobre el dataset actual.
-    Si no hay datos → [] (nunca 500)."""
-    dataset = _load_dataset()
-    if not dataset:
-        return JSONResponse(content=[])
-    try:
-        locale = _profile.effective("locale") or "es"
-
-        # Fase 7: estado de ciclo (opt-in). Mismo patrón try/except que en /.
-        dataset_with_cycle = dataset
-        try:
-            cycle_profile = effective_profile_dict()
-            if cycle_profile.get("cycle_tracking"):
-                cycle_log = _cycle.load_cycle_log()
-                cycle_state = _cycle.compute_cycle_state(dataset.get("days", []), cycle_log, cycle_profile)
-                dataset_with_cycle = dict(dataset)
-                dataset_with_cycle["_cycle"] = cycle_state
-        except Exception as e:
-            logger.error(f"compute_cycle_state falló en /api/insights: {e}")
-
-        return JSONResponse(content=evaluate_insights(dataset_with_cycle, locale=locale))
-    except Exception as e:
-        logger.error(f"evaluate_insights falló: {e}")
-        return JSONResponse(content=[])
-
+# Fase 9 (paso A2): /api/insights y /api/drivers viven ahora en
+# app/routes/insights.py.
+from app.routes.insights import router as _insights_router  # noqa: E402
+app.include_router(_insights_router)
 
 # Fase 9 (paso A2): /api/coach/suggestions vive ahora en app/routes/coach.py
 # (registrado más abajo junto con el resto de rutas del coach, después de que
 # ask_coach/load_history/clear_history ya estén definidos arriba en este
 # módulo — el router los lee dinámicamente vía `import main`).
-
-@app.get("/api/drivers")
-async def api_drivers():
-    """Devuelve los drivers (palancas) con correlación de Spearman rezagada.
-    Findings filtrados: n>=25, significativos, |ρ|>=0.2; ordenados por |ρ| desc.
-    Si no hay datos o ningún driver pasa el filtro → [] (nunca 500)."""
-    dataset = _load_dataset()
-    if not dataset:
-        return JSONResponse(content=[])
-    try:
-        from app.drivers import analyze_drivers
-        locale = _profile.effective("locale") or "es"
-        return JSONResponse(content=analyze_drivers(dataset.get("days", []), locale=locale))
-    except Exception as e:
-        logger.error(f"analyze_drivers falló: {e}")
-        return JSONResponse(content=[])
-
 
 # Fase 9 (paso A2): GET /api/report vive ahora en app/routes/report.py.
 from app.routes.report import router as _report_router  # noqa: E402
