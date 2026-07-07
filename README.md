@@ -1,9 +1,9 @@
 # Vitals — self-hosted WHOOP alternative
 
-[![CI](https://github.com/your-org/vitals-app/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/vitals-app/actions/workflows/ci.yml)
+[![CI](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-1661%20passing-brightgreen.svg)](#tests)
 
 **Your data. Your server. Your AI.**
 
@@ -95,7 +95,7 @@ single daily record per metric.
 No Python setup, no venv — just Docker.
 
 ```bash
-git clone https://github.com/your-org/vitals-app.git
+git clone https://github.com/DocStream-Oficial/vitals-app.git
 cd vitals-app
 cp .env.example .env        # fill in your credentials (see below), or skip for demo mode
 docker compose up -d
@@ -125,7 +125,7 @@ script (Windows/Mac/Linux, stdlib only) that creates the venv, installs
 dependencies, generates `.env`, and launches the app — no manual steps.
 
 ```bash
-git clone https://github.com/your-org/vitals-app.git
+git clone https://github.com/DocStream-Oficial/vitals-app.git
 cd vitals-app
 python install.py
 # open http://localhost:8700
@@ -159,7 +159,7 @@ platform.
 If you'd rather run the steps yourself:
 
 ```bash
-git clone https://github.com/your-org/vitals-app.git
+git clone https://github.com/DocStream-Oficial/vitals-app.git
 cd vitals-app
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
