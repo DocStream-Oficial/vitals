@@ -235,26 +235,31 @@ Requires Python 3.9+, NSSM, and Tailscale (for remote HTTPS access).
 
 ---
 
-## Setting up Google OAuth (BYO credentials)
+## Connecting your wearables (Google Health, Oura, WHOOP)
 
-Vitals uses Google's OAuth 2.0 to read your health data.
-**Each person creates their own OAuth client** — there is no shared client ID.
+Vitals never uses a shared account — **each person creates their own free OAuth
+app** on the provider's site and drops two values (`CLIENT_ID` / `CLIENT_SECRET`)
+into `.env`. It's the same three-step pattern everywhere: create the app, trust
+`http://localhost:8700/auth/callback`, copy the two keys.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**.
-2. Create a project (or use an existing one).
-3. Enable **Fitness API** and/or **Health Connect API**.
-4. Create an **OAuth 2.0 Client ID** (type: *Web application*).
-5. Add `http://localhost:8700/auth/callback` as an authorized redirect URI.
-   - For remote access add `https://your-box.your-tailnet.ts.net/auth/callback`.
-6. Copy `CLIENT_ID` and `CLIENT_SECRET` into your `.env`.
+📖 **Full step-by-step walkthrough (beginner-friendly, no experience needed):
+[`docs/CONNECT-DATA-SOURCES.md`](docs/CONNECT-DATA-SOURCES.md)** — click-by-click
+for Google Health, Oura, and WHOOP, with the exact scopes and redirect URIs, plus
+troubleshooting.
 
-> **Testing mode:** while your OAuth app is in *Testing* status, tokens expire every 7 days.
-> The dashboard shows a "Reconnect" banner when that happens — tap it to re-auth in one click.
-> Publish the app (Google verification is optional for personal use) to get a permanent refresh token.
+Quick reference:
 
-Oura and WHOOP work the same way — create a developer app on their respective
-portals and drop the client ID/secret into `.env` (see `.env.example` for the
-exact keys). Apple HealthKit doesn't use OAuth; see `docs/IOS-HEALTHKIT.md`.
+| Provider | Developer portal | `.env` keys |
+|---|---|---|
+| **Google Health** | [console.cloud.google.com](https://console.cloud.google.com/) → enable the **Google Health API** | `CLIENT_ID`, `CLIENT_SECRET` |
+| **Oura** | [cloud.ouraring.com/oauth/applications](https://cloud.ouraring.com/oauth/applications) | `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` |
+| **WHOOP** | [developer.whoop.com](https://developer.whoop.com) (needs the `offline` scope) | `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET` |
+
+> Vitals uses Google's current **Google Health API** (`health.googleapis.com`) —
+> not the legacy Google Fit / Fitness API that Google is retiring at the end of 2026.
+
+Apple HealthKit doesn't use OAuth; the native iOS app pushes data on-device — see
+[`docs/IOS-HEALTHKIT.md`](docs/IOS-HEALTHKIT.md).
 
 ---
 
