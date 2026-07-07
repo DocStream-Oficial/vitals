@@ -143,3 +143,10 @@ def _clean_str_list(v) -> list[str]:
         if len(out) >= _CLINICAL_MAX_ITEMS:
             break
     return out
+
+
+# Fase 9 (paso A2): _DASHBOARD_COOKIE_NAME se descubrió compartido entre el
+# middleware de auth de dashboard (main.py, NO se mueve — es core de la app)
+# y las rutas /login (app/routes/auth.py) — se centraliza aquí para que
+# ambos lo importen del mismo lugar en vez de duplicar el string literal.
+_DASHBOARD_COOKIE_NAME = "vitals_dash"
