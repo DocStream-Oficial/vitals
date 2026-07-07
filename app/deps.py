@@ -150,3 +150,10 @@ def _clean_str_list(v) -> list[str]:
 # y las rutas /login (app/routes/auth.py) — se centraliza aquí para que
 # ambos lo importen del mismo lugar en vez de duplicar el string literal.
 _DASHBOARD_COOKIE_NAME = "vitals_dash"
+
+
+# Fase 9 (paso A2): _USER_COOKIE_NAME se descubrió compartido entre el
+# middleware de userctx (main.py, NO se mueve — es core de la app) y
+# POST /api/users (app/routes/household.py) — se centraliza aquí, mismo
+# motivo que _DASHBOARD_COOKIE_NAME arriba.
+_USER_COOKIE_NAME = "vitals_user"
