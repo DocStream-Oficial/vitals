@@ -1,0 +1,44 @@
+# ── Runtime / secrets (NEVER commit these) ──────────────────────────────────
+.env
+.env.prod*
+data/
+data.bak*/
+data-*.bak/
+*token*.json
+vitals_config.json
+
+# ── Dev-only notes (internal, not for public repo) ──────────────────────────
+_dev/
+
+# ── Build artifacts ──────────────────────────────────────────────────────────
+dist/
+build/
+*.zip
+_backup-*
+deploy_bak_*/
+*.bak*
+
+# ── Internal roadmaps (contain PII: birthdate, tailscale host) ───────────────
+ROADMAP-*.md
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ── IDE / editor configs (contain local paths) ───────────────────────────────
+.claude/
+
+# ── Node / Capacitor / iOS (kit móvil) ──────────────────────────────────────
+node_modules/
+ios/App/build/
+ios/DerivedData/
+ios/App/App/public/
+ios/App/Pods/
+*.xcuserstate
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store

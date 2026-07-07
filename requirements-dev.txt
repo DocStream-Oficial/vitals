@@ -1,0 +1,13 @@
+# Dependencias de DESARROLLO/TEST (Fase 8A, paso A2) — NO son dependencias de
+# runtime de la app (esas viven en requirements.txt). Usadas por `pytest -q` y
+# por CI (.github/workflows/ci.yml).
+#
+# httpx: requerido por fastapi.testclient.TestClient (usado en toda la suite).
+-r requirements.txt
+pytest==8.4.2
+httpx==0.28.1
+# pytest-randomly: orden aleatorio de tests (criterio 4 del roadmap
+# vitals-test-isolation). Sin él, `pytest -q` corre en orden fijo y
+# `-p no:randomly` es un no-op — la verificación de aleatoriedad no es
+# reproducible en un entorno limpio (CI u otra máquina).
+pytest-randomly==4.0.1

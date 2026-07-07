@@ -1,0 +1,38 @@
+# R2 pre-publicación: nunca hornear secretos/datos/dev-tooling en la imagen
+# Docker. Ver ROADMAP _dev/_harness/vitals-r2-prepub/ROADMAP.md, criterio 1.
+
+# Env files (secretos reales) — .env.example es el único que SÍ debe copiarse.
+.env
+.env.*
+!.env.example
+
+# Datos del usuario (montados como volumen en runtime, ver docker-compose.yml)
+data*/
+
+# Tokens / secretos serializados
+*token*.json
+
+# Herramientas de desarrollo internas (roadmaps, harness, notas)
+_dev/
+
+# Git
+.git/
+
+# Entorno virtual Python
+.venv/
+
+# Bytecode compilado
+__pycache__/
+*.pyc
+
+# App iOS nativa (no forma parte de la imagen del servidor)
+ios/
+
+# Dependencias JS (si existieran, no se usan en runtime del contenedor)
+node_modules/
+
+# Tests (no se ejecutan dentro de la imagen de producción)
+tests/
+
+# Backups / archivos temporales
+*.bak*

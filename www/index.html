@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>Vitals</title>
+<style>
+  :root{ --bg:#07090e; --card:rgba(30,30,34,.82); --bd:rgba(255,255,255,.1);
+         --label:#fff; --label2:rgba(235,235,245,.62); --green:#30D158; --red:#FF453A; --blue:#0A84FF; }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--label);min-height:100vh;
+       font-family:-apple-system,"SF Pro Display","SF Pro Text",system-ui,sans-serif;
+       display:flex;align-items:center;justify-content:center;
+       padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);}
+  .wrap{width:100%;max-width:420px;text-align:center;display:none}
+  .logo{width:84px;height:84px;border-radius:22px;margin:0 auto 22px;position:relative;overflow:hidden;
+        background:#000;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 14px 36px rgba(0,0,0,.5)}
+  .logo::before{content:"";position:absolute;inset:0;
+        background:radial-gradient(54% 46% at 50% 56%,rgba(255,45,120,.20),transparent 70%)}
+  .logo svg{position:relative;filter:drop-shadow(0 0 6px rgba(233,79,194,.45))}
+  h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px}
+  .sub{color:var(--label2);font-size:15px;line-height:1.4;margin-bottom:28px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:22px;padding:18px;
+        backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);text-align:left}
+  label{display:block;font-size:13px;color:var(--label2);margin:0 2px 8px}
+  input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid var(--bd);
+        background:rgba(255,255,255,.05);color:var(--label);font-size:16px;outline:none}
+  input:focus{border-color:var(--blue)}
+  .btn{width:100%;padding:15px;border:none;border-radius:999px;font-size:16px;font-weight:700;
+       color:#fff;cursor:pointer;margin-top:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.28)}
+  .btn-primary{background:var(--green)} .btn-ghost{background:rgba(255,255,255,.08)}
+  .err{color:var(--red);font-size:13px;margin-top:10px;min-height:16px;text-align:center}
+  .hint{color:var(--label2);font-size:12px;text-align:center;margin-top:18px;line-height:1.5}
+  /* Splash animado (diseño Claude Design — "Vitals Splash") */
+  #splash{position:fixed;inset:0;z-index:200;transition:opacity .5s ease}
+  #splash.hide{opacity:0;pointer-events:none}
+  @keyframes vDraw{ to{ stroke-dashoffset:0; } }
+  @keyframes vFade{ from{opacity:0} to{opacity:1} }
+  @keyframes vUp{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:translateY(0)} }
+  @keyframes vSpark{ 0%{opacity:0; transform:scale(0)} 55%{opacity:1; transform:scale(1.25)} 100%{opacity:.92; transform:scale(1)} }
+  @keyframes vBeat{ 0%,42%,100%{transform:scale(1)} 12%{transform:scale(1.06)} 22%{transform:scale(1)} 30%{transform:scale(1.035)} }
+  @keyframes vGlow{ 0%,42%,100%{filter:drop-shadow(0 0 10px rgba(233,79,194,.32))} 12%{filter:drop-shadow(0 0 26px rgba(233,79,194,.7))} 30%{filter:drop-shadow(0 0 17px rgba(233,79,194,.5))} }
+  @keyframes vRing{ 0%{transform:scale(.62); opacity:.45} 70%{opacity:0} 100%{transform:scale(1.85); opacity:0} }
+  @keyframes vBgPulse{ 0%,42%,100%{opacity:.5} 12%{opacity:.9} }
+  .screen .grid,.screen .heart,.screen .pulse,.screen .nodes,.screen .spark,.screen .word,.screen .tag,.screen .badge{opacity:0}
+  .screen .heart,.screen .pulse{stroke-dasharray:1;stroke-dashoffset:1;opacity:1}
+  .play .grid{animation:vFade .7s ease .15s both}
+  .play .heart{animation:vDraw 1.15s cubic-bezier(.65,0,.35,1) .5s forwards}
+  .play .pulse{animation:vDraw .7s ease-out 1.5s forwards}
+  .play .nodes{animation:vFade .45s ease 1.7s forwards}
+  .play .spark{transform-box:fill-box;transform-origin:center;animation:vSpark .6s ease 2.05s forwards}
+  .play .icon{transform-origin:center center;animation:vBeat 1.7s ease-in-out 2.3s infinite}
+  .play .glow{animation:vGlow 1.7s ease-in-out 2.3s infinite}
+  .play .ring{animation:vRing 1.7s cubic-bezier(.2,.6,.3,1) 2.45s infinite}
+  .play .haze{animation:vBgPulse 1.7s ease-in-out 2.3s infinite}
+  .play .word{animation:vUp .7s cubic-bezier(.2,.7,.2,1) 2.35s forwards}
+  .play .tag{animation:vUp .7s cubic-bezier(.2,.7,.2,1) 2.6s forwards}
+  .play .badge{animation:vUp .7s cubic-bezier(.2,.7,.2,1) 2.9s forwards}
+</style>
+</head>
+<body>
+  <div id="splash">
+    <div class="screen play" style="position:relative;width:100%;height:100%;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(130% 80% at 50% 38%, #1b1320 0%, #0d0c11 58%, #08080b 100%)">
+      <div class="haze" style="position:absolute;left:50%;top:42%;width:620px;height:620px;transform:translate(-50%,-50%);background:radial-gradient(closest-side, rgba(233,79,194,.22), rgba(191,90,242,.08) 55%, transparent 72%);pointer-events:none;opacity:.5"></div>
+      <div style="position:relative;width:300px;height:300px;display:flex;align-items:center;justify-content:center">
+        <span class="ring" style="position:absolute;width:188px;height:188px;border-radius:50%;border:1.5px solid rgba(233,79,194,.5);transform-origin:center;opacity:0"></span>
+        <div class="glow" style="position:relative;line-height:0">
+          <svg class="icon" viewBox="0 0 200 200" width="300" height="300" fill="none" style="overflow:visible;display:block">
+            <defs>
+              <linearGradient id="vStroke" x1="0.08" y1="0.05" x2="0.92" y2="0.98">
+                <stop offset="0" stop-color="#FF2D78"/><stop offset="0.5" stop-color="#E94FC2"/><stop offset="1" stop-color="#BF5AF2"/>
+              </linearGradient>
+            </defs>
+            <g class="grid">
+              <g stroke="rgba(191,90,242,.5)" stroke-width="0.4" opacity="0.5">
+                <path d="M20 14 V186"/><path d="M40 14 V186"/><path d="M60 14 V186"/><path d="M80 14 V186"/><path d="M100 14 V186"/><path d="M120 14 V186"/><path d="M140 14 V186"/><path d="M160 14 V186"/><path d="M180 14 V186"/>
+                <path d="M14 20 H186"/><path d="M14 40 H186"/><path d="M14 60 H186"/><path d="M14 80 H186"/><path d="M14 100 H186"/><path d="M14 120 H186"/><path d="M14 140 H186"/><path d="M14 160 H186"/><path d="M14 180 H186"/>
+              </g>
+              <g fill="none" stroke="rgba(233,79,194,.5)" stroke-linecap="round">
+                <circle cx="64" cy="69" r="37" stroke-width="0.8" opacity="0.85" stroke-dasharray="4 4"/>
+                <circle cx="136" cy="69" r="37" stroke-width="0.8" opacity="0.85" stroke-dasharray="4 4"/>
+                <path d="M100 20 V172" stroke-width="0.7" opacity="0.7" stroke-dasharray="3 5"/>
+                <path d="M14 69 H186" stroke-width="0.7" opacity="0.55" stroke-dasharray="3 5"/>
+                <path d="M28 30 H172 M28 30 V164 M172 30 V164 M28 164 H172" stroke-width="0.7" opacity="0.4"/>
+                <path d="M28 178 H172" stroke-width="0.7" opacity="0.7"/>
+                <path d="M28 175.4 V180.6 M172 175.4 V180.6" stroke-width="0.7" opacity="0.7"/>
+                <path d="M60 69 H68 M64 65 V73" stroke-width="0.7" opacity="0.9"/>
+                <path d="M132 69 H140 M136 65 V73" stroke-width="0.7" opacity="0.9"/>
+              </g>
+            </g>
+            <path class="heart" pathLength="1" d="M100 158 C58 129 28 102 28 73 C28 49 47 37 67 42 C82 46 93 58 100 73 C107 58 118 46 133 42 C153 37 172 49 172 73 C172 102 142 129 100 158 Z" fill="none" stroke="url(#vStroke)" stroke-width="5.67" stroke-linecap="round" stroke-linejoin="round"/>
+            <path class="pulse" pathLength="1" d="M30 113 H64 L75 113 L84 99 L94 74 L103 132 L112 104 L121 113 H170" fill="none" stroke="url(#vStroke)" stroke-width="4.65" stroke-linecap="round" stroke-linejoin="round"/>
+            <g class="nodes">
+              <circle cx="100" cy="73" r="2.6" fill="#13131a" stroke="#E94FC2" stroke-width="1.1"/>
+              <circle cx="100" cy="158" r="2.6" fill="#13131a" stroke="#BF5AF2" stroke-width="1.1"/>
+            </g>
+            <path class="spark" d="M94 61 C94 65.18 96.18 68 100.5 68 C96.18 68 94 70.82 94 75 C94 70.82 91.82 68 87.5 68 C91.82 68 94 65.18 94 61 Z" fill="#fff"/>
+          </svg>
+        </div>
+      </div>
+      <div class="word" style="margin-top:6px;font:700 38px/1 'SF Pro Display',-apple-system;letter-spacing:-.03em;color:#fff">Vitals</div>
+      <div class="tag" style="margin-top:11px;font:500 15px/1 -apple-system;letter-spacing:.01em;color:rgba(235,235,245,.5)">Tu cuerpo, en claro.</div>
+      <div class="badge" style="margin-top:30px;display:flex;align-items:center;gap:7px;font:500 12px/1 -apple-system;letter-spacing:.04em;color:rgba(235,235,245,.36)"><span style="font-size:12px;color:#E94FC2">&#10038;</span>Open source · Beta</div>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="logo">
+      <svg viewBox="0 0 200 200" width="54" height="54" fill="none" style="overflow:visible">
+        <defs><linearGradient id="vLogoC" x1="0.08" y1="0.05" x2="0.92" y2="0.98">
+          <stop offset="0" stop-color="#FF2D78"/><stop offset="0.5" stop-color="#E94FC2"/><stop offset="1" stop-color="#BF5AF2"/>
+        </linearGradient></defs>
+        <path d="M100 158 C58 129 28 102 28 73 C28 49 47 37 67 42 C82 46 93 58 100 73 C107 58 118 46 133 42 C153 37 172 49 172 73 C172 102 142 129 100 158 Z" fill="none" stroke="url(#vLogoC)" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M30 113 H64 L75 113 L84 99 L94 74 L103 132 L112 104 L121 113 H170" fill="none" stroke="url(#vLogoC)" stroke-width="7.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M94 61 C94 65.18 96.18 68 100.5 68 C96.18 68 94 70.82 94 75 C94 70.82 91.82 68 87.5 68 C91.82 68 94 65.18 94 61 Z" fill="#fff"/>
+      </svg>
+    </div>
+    <h1 id="t-title">Conecta tu Vitals</h1>
+    <p class="sub" id="t-sub">Pega la URL de tu instancia o escanea el codigo QR de tu tablero (pestana Mas).</p>
+    <div class="card">
+      <label id="t-label" for="url">URL de tu instancia</label>
+      <input id="url" type="url" inputmode="url" autocapitalize="none" autocorrect="off"
+             spellcheck="false" placeholder="https://tu-box.tu-tailnet.ts.net">
+      <label id="t-token-label" for="token" style="margin-top:14px">Token de sincronizacion (HealthKit) — opcional</label>
+      <input id="token" type="text" inputmode="text" autocapitalize="none" autocorrect="off"
+             spellcheck="false" placeholder="INGEST_TOKEN">
+      <button class="btn btn-ghost" id="scan" type="button">&#128247; <span id="t-scan">Escanear QR</span></button>
+      <button class="btn btn-primary" id="save" type="button">Conectar</button>
+      <div class="err" id="err"></div>
+    </div>
+    <p class="hint" id="t-hint">Tus datos viven solo en tu servidor. Esta app es un visor; no guarda tu salud.</p>
+  </div>
+
+<script>
+  var KEY = "vitals_instance_url";
+  var TOKEN_KEY = "vitals_ingest_token";
+  // Fase 8D (paso D3, household): usuario embebido en el QR (?vitals_user=)
+  // o pegado a mano en una versión futura del form. Opcional — instalaciones
+  // single-user (la mayoría) nunca tienen esta key, y pushHealthConfig omite
+  // el parámetro 'user' por completo (mismo setConfig() de siempre).
+  var USER_KEY = "vitals_user_id";
+  var $ = function(id){ return document.getElementById(id); };
+
+  // i18n minimo del shell (ES/EN segun idioma del dispositivo)
+  var L = (navigator.language || "es").toLowerCase().slice(0,2);
+  var STR = {
+    es:{title:"Conecta tu Vitals", sub:"Pega la URL de tu instancia o escanea el codigo QR de tu tablero (pestana Mas).",
+        label:"URL de tu instancia", tokenLabel:"Token de sincronizacion (HealthKit) — opcional",
+        scan:"Escanear QR", connect:"Conectar",
+        hint:"Tus datos viven solo en tu servidor. Esta app es un visor; no guarda tu salud.",
+        bad:"URL invalida. Debe empezar con http:// o https://", nocam:"Escaner no disponible en este dispositivo."},
+    en:{title:"Connect your Vitals", sub:"Paste your instance URL or scan the QR code from your dashboard (More tab).",
+        label:"Your instance URL", tokenLabel:"Sync token (HealthKit) — optional",
+        scan:"Scan QR", connect:"Connect",
+        hint:"Your data lives only on your server. This app is a viewer; it never stores your health data.",
+        bad:"Invalid URL. It must start with http:// or https://", nocam:"Scanner not available on this device."}
+  };
+  var t = STR[L] || STR.es;
+  $("t-title").textContent = t.title; $("t-sub").textContent = t.sub;
+  $("t-label").textContent = t.label; $("t-scan").textContent = t.scan;
+  $("t-token-label").textContent = t.tokenLabel;
+  $("save").textContent = t.connect; $("t-hint").textContent = t.hint;
+  if(L === "en"){ document.documentElement.lang = "en"; }
+
+  // Empuja config (url, token, user) al plugin nativo VitalsHealth si existe
+  // (no-op en web/Android). 'user' es opcional (household, Fase 8D paso D3):
+  // sin valor, el plugin nativo no toca la config de usuario previa (ver
+  // HealthSyncManager.setConfig, parámetro user: String? = nil).
+  function pushHealthConfig(url, token, user){
+    try {
+      var Cap = window.Capacitor;
+      var VH = Cap && Cap.Plugins && Cap.Plugins.VitalsHealth;
+      if(VH && VH.setConfig){
+        var cfg = { url: url, token: token || "" };
+        if(user){ cfg.user = user; }
+        VH.setConfig(cfg);
+      }
+    } catch(e){}
+  }
+
+  // Extrae ?vitals_user= de la URL actual (embebido en el QR por
+  // household.js cuando hay un usuario household activo). Ausente en
+  // instalaciones single-user -> null, comportamiento idéntico a antes.
+  function extractUserFromLocation(){
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var u = params.get("vitals_user");
+      return (u && u.trim()) ? u.trim() : null;
+    } catch(e){ return null; }
+  }
+
+  // v1: sin escaner nativo (SPM) -> ocultar boton de QR, dejar solo entrada manual.
+  // (Si un build futuro agrega un scanner compatible, el boton reaparece y el handler ya funciona.)
+  (function(){
+    var Cap = window.Capacitor;
+    var BS = Cap && Cap.Plugins && (Cap.Plugins.BarcodeScanner || Cap.Plugins.MlkitBarcodeScanner);
+    if(!BS){ var b = $("scan"); if(b) b.style.display = "none"; }
+  })();
+
+  // Splash animado (diseno) ~2.9s en arranque fresco; luego: si hay instancia -> cargarla;
+  // si no -> desvanecer el splash y mostrar la pantalla de conexion.
+  setTimeout(function(){
+    var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
+    var sp = document.getElementById("splash");
+    if(saved){
+      // Re-empujar setConfig con la URL+token(+user) guardados (para que tras
+      // un reinstall/relaunch nativo el plugin tenga la config aunque el
+      // usuario no re-teclee nada en esta sesion). Si esta apertura trae un
+      // ?vitals_user= nuevo en la URL (ej. reescaneo de QR de otro perfil),
+      // gana sobre el guardado y se persiste.
+      var savedToken = null; try { savedToken = localStorage.getItem(TOKEN_KEY); } catch(e){}
+      var urlUser = extractUserFromLocation();
+      var savedUser = null; try { savedUser = localStorage.getItem(USER_KEY); } catch(e){}
+      var effectiveUser = urlUser || savedUser || null;
+      if(urlUser){ try { localStorage.setItem(USER_KEY, urlUser); } catch(e){} }
+      pushHealthConfig(saved, savedToken || "", effectiveUser);
+      // Desvanecer el splash a oscuro y luego navegar (con el WebView en bg oscuro,
+      // no hay flash blanco/negro: la transicion al tablero es seamless).
+      if(sp){ sp.classList.add("hide"); }
+      setTimeout(function(){ window.location.replace(saved); }, 340);
+    } else {
+      if(sp){ sp.classList.add("hide"); }
+      var w = document.querySelector(".wrap"); if(w){ w.style.display = "block"; }
+    }
+  }, 2900);
+
+  function normalize(u){
+    u = (u || "").trim();
+    if(!u) return null;
+    if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+    try { var url = new URL(u); return url.origin + (url.pathname !== "/" ? url.pathname : ""); }
+    catch(e){ return null; }
+  }
+  function connect(u){
+    var n = normalize(u);
+    if(!n){ $("err").textContent = t.bad; return; }
+    try { localStorage.setItem(KEY, n); } catch(e){}
+    var token = "";
+    try { var tokEl = $("token"); token = tokEl ? (tokEl.value || "").trim() : ""; } catch(e){}
+    try { localStorage.setItem(TOKEN_KEY, token); } catch(e){}
+    // Fase 8D (paso D3, household): si el QR escaneado (o la URL pegada)
+    // trae ?vitals_user=, se persiste para futuros arranques y se empuja al
+    // plugin nativo junto con url/token.
+    var user = extractUserFromLocation();
+    if(user){ try { localStorage.setItem(USER_KEY, user); } catch(e){} }
+    pushHealthConfig(n, token, user);
+    window.location.replace(n);
+  }
+
+  $("save").addEventListener("click", function(){ connect($("url").value); });
+  $("url").addEventListener("keydown", function(e){ if(e.key === "Enter") connect($("url").value); });
+  $("token").addEventListener("keydown", function(e){ if(e.key === "Enter") connect($("url").value); });
+
+  // Escaneo QR via plugin Capacitor (con fallback elegante)
+  $("scan").addEventListener("click", async function(){
+    $("err").textContent = "";
+    try {
+      var Cap = window.Capacitor;
+      var BS = Cap && Cap.Plugins && (Cap.Plugins.BarcodeScanner || Cap.Plugins.MlkitBarcodeScanner);
+      if(!BS){ $("err").textContent = t.nocam; return; }
+      if(BS.requestPermissions){ await BS.requestPermissions(); }
+      var res = await BS.scan({ formats: ["QR_CODE"] });
+      var codes = (res && (res.barcodes || res.codes)) || [];
+      var val = codes[0] && (codes[0].rawValue || codes[0].displayValue || codes[0].value);
+      if(val){ connect(val); } else { $("err").textContent = t.nocam; }
+    } catch(e){ $("err").textContent = t.nocam; }
+  });
+</script>
+</body>
+</html>

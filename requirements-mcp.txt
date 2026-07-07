@@ -1,0 +1,14 @@
+# Dependencias del MCP server (vitals_mcp.py)
+# Instalar en el box (Python 3.12) — NO en el venv de la Mac (Python 3.9).
+#
+# En el box (Windows):
+#   .venv\Scripts\python -m pip install -r requirements-mcp.txt
+# En Linux/Mac:
+#   .venv/bin/pip install -r requirements-mcp.txt
+#
+# La app web (requirements.txt) NO depende de mcp.
+#
+# PIN: `mcp` se pinea EN EL DEPLOY con la versión ya instalada en el box
+# (`pip show mcp`). El venv de dev en la Mac es Python 3.9 y no puede instalar
+# mcp — pinear aquí a ciegas sería inventar una versión no verificada.
+mcp

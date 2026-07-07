@@ -1,0 +1,84 @@
+{
+  "weekly": {
+    "signature": "2026-06-22_2026-06-28",
+    "locale": "es",
+    "narrative": "Demo — narrativa de ejemplo. En una instancia real, el coach IA genera este texto a partir de tus números reales del período.",
+    "data": {
+      "period": "weekly",
+      "period_key": "2026-06-22_2026-06-28",
+      "start": "2026-06-22",
+      "end": "2026-06-28",
+      "n_days": 7,
+      "means": {
+        "recovery": 76.9,
+        "hrv": 60.9,
+        "strain": 8.2,
+        "asleep": 444.0,
+        "sleep_perf": 92.3
+      },
+      "deltas": {
+        "recovery": 6.9,
+        "hrv": 2.4,
+        "strain": -1.0,
+        "asleep": -12.1,
+        "sleep_perf": -2.7
+      },
+      "best_day": "2026-06-24",
+      "worst_day": "2026-06-25",
+      "adherence": {
+        "days_logged": 7,
+        "days_total": 7,
+        "pct": 100
+      },
+      "top_insight": null,
+      "trend_recovery": {
+        "slope": 0.0357,
+        "direction": "estable",
+        "significant": false,
+        "n": 7
+      }
+    },
+    "generated_at": "2026-07-04T09:00:00"
+  },
+  "monthly": {
+    "signature": "2026-06",
+    "locale": "es",
+    "narrative": "Demo — narrativa de ejemplo. En una instancia real, el coach IA genera este texto a partir de tus números reales del período.",
+    "data": {
+      "period": "monthly",
+      "period_key": "2026-06",
+      "start": "2026-06-01",
+      "end": "2026-06-30",
+      "n_days": 30,
+      "means": {
+        "recovery": 77.3,
+        "hrv": 60.9,
+        "strain": 9.6,
+        "asleep": 448.7,
+        "sleep_perf": 93.5
+      },
+      "deltas": {
+        "recovery": 15.2,
+        "hrv": 4.9,
+        "strain": 0.1,
+        "asleep": 4.5,
+        "sleep_perf": 1.1
+      },
+      "best_day": "2026-06-16",
+      "worst_day": "2026-06-20",
+      "adherence": {
+        "days_logged": 30,
+        "days_total": 30,
+        "pct": 100
+      },
+      "top_insight": null,
+      "trend_recovery": {
+        "slope": -0.0641,
+        "direction": "estable",
+        "significant": false,
+        "n": 30
+      }
+    },
+    "generated_at": "2026-07-04T09:00:00"
+  }
+}

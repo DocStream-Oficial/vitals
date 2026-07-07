@@ -1,0 +1,61 @@
+{
+  "entries": [
+    {
+      "id": "demo-lab-1",
+      "date": "2026-02-15",
+      "marker": "hba1c",
+      "value": 5.2,
+      "unit": "%",
+      "note": "Demo — chequeo trimestral"
+    },
+    {
+      "id": "demo-lab-2",
+      "date": "2026-02-15",
+      "marker": "vitamin_d",
+      "value": 28.0,
+      "unit": "ng/mL",
+      "note": "Demo — chequeo trimestral"
+    },
+    {
+      "id": "demo-lab-3",
+      "date": "2026-02-15",
+      "marker": "ldl",
+      "value": 108.0,
+      "unit": "mg/dL",
+      "note": null
+    },
+    {
+      "id": "demo-lab-4",
+      "date": "2026-04-26",
+      "marker": "hba1c",
+      "value": 5.1,
+      "unit": "%",
+      "note": null
+    },
+    {
+      "id": "demo-lab-5",
+      "date": "2026-04-26",
+      "marker": "vitamin_d",
+      "value": 34.0,
+      "unit": "ng/mL",
+      "note": "Demo — subió tras suplementar"
+    },
+    {
+      "id": "demo-lab-6",
+      "date": "2026-07-04",
+      "marker": "hba1c",
+      "value": 5.0,
+      "unit": "%",
+      "note": null
+    },
+    {
+      "id": "demo-lab-7",
+      "date": "2026-07-04",
+      "marker": "ldl",
+      "value": 96.0,
+      "unit": "mg/dL",
+      "note": "Demo — mejora con entrenamiento de fuerza"
+    }
+  ],
+  "updated": "2026-07-04"
+}

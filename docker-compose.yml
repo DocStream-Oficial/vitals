@@ -1,0 +1,15 @@
+services:
+  vitals:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      # Bind SOLO a loopback — el puerto 8700 nunca queda expuesto a la red
+      # (LAN/tailnet) directamente desde Docker. Para acceso remoto, exponlo
+      # tú mismo detrás de algo con su propia auth/TLS:
+      #   - tailscale serve (recomendado, cero config extra de certs), o
+      #   - un reverse proxy (nginx/Caddy) con su propio auth delante.
+      # Ver también DASHBOARD_TOKEN en .env.example / SECURITY.md.
+      - "127.0.0.1:8700:8700"
+    restart: unless-stopped

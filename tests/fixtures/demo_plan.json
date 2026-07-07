@@ -1,0 +1,10 @@
+{
+  "active": {
+    "program_id": "sleep_reset",
+    "started_date": "2026-06-30",
+    "checks": {
+      "2026-06-30": "manual"
+    }
+  },
+  "history": []
+}

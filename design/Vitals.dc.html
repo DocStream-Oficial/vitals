@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-family:-apple-system,"SF Pro Display","SF Pro Text",system-ui,"Segoe UI",sans-serif}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes screenIn{from{transform:translateY(12px)}to{transform:none}}
+@keyframes pop{from{transform:scale(.97)}to{transform:none}}
+@keyframes detailIn{from{transform:translateX(30px)}to{transform:none}}
+</style>
+</helmet>
+<div style="{{ appStyle }}">
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;width:393px">
+    <div style="font:600 13px/1.3 -apple-system,sans-serif;color:var(--label2,rgba(235,235,245,.62));flex:1">Vitals · iOS 27 <span style="opacity:.6">Liquid Glass</span></div>
+    <div style="display:flex;background:var(--card2,rgba(255,255,255,.06));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:999px;padding:3px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)">
+      <div onClick="{{ setLight }}" style="{{ lightBtn }}">Light</div>
+      <div onClick="{{ setDark }}" style="{{ darkBtn }}">Dark</div>
+    </div>
+  </div>
+
+  <div style="position:relative;width:393px;height:852px;border-radius:48px;overflow:hidden;background:var(--screen-bg,#000);box-shadow:0 50px 100px -20px rgba(0,0,0,.6),0 0 0 1px var(--card-border,rgba(255,255,255,.08));isolation:isolate">
+    <div style="{{ glowStyle }}"></div>
+
+    <sc-if value="{{ showStatus }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 9px;z-index:8;pointer-events:none">
+        <div style="font:600 15px/1 -apple-system;color:var(--label,#fff)">9:41</div>
+        <div style="display:flex;align-items:center;gap:7px;color:var(--label,#fff)">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+          <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.4c2.3 0 4.4.9 6 2.4l1.2-1.3A11 11 0 0 0 8.5.5 11 11 0 0 0 1.3 3.5L2.5 4.8a8.6 8.6 0 0 1 6-2.4Zm0 3.5c1.4 0 2.6.5 3.6 1.4l1.2-1.3a7.4 7.4 0 0 0-9.6 0l1.2 1.3a5.3 5.3 0 0 1 3.6-1.4Zm0 3.4c.7 0 1.3.3 1.8.7L8.5 12 6.7 10c.5-.4 1.1-.7 1.8-.7Z"/></svg>
+          <svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" opacity="0.5"/></svg>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:56px 17px 122px">
+      <sc-if value="{{ isHoy }}" hint-placeholder-val="{{ true }}">
+        <div>
+
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin:2px 2px 16px">
+            <div>
+              <div style="font:700 34px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label,#fff)">Vitals</div>
+              <div style="margin-top:5px;font:500 15px/1.2 -apple-system;color:var(--label2,rgba(235,235,245,.62))">miércoles, 24 de junio</div>
+            </div>
+            <div style="width:40px;height:40px;border-radius:999px;background:linear-gradient(140deg,#30D158,#0A84FF);display:flex;align-items:center;justify-content:center;font:700 16px -apple-system;color:#fff;position:relative;box-shadow:0 4px 14px rgba(10,132,255,.35)">M
+              <div style="position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:999px;background:#30D158;border:2.5px solid var(--screen-bg,#000)"></div>
+            </div>
+          </div>
+
+          <!-- HERO RINGS -->
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px 18px;display:flex;gap:6px;align-items:center;margin-bottom:14px">
+            <div style="width:142px;flex:none;display:flex;align-items:center;justify-content:center">{{ heroRings }}</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:14px;padding-left:4px">
+              <div onClick="{{ open.recovery }}" style="cursor:pointer">
+                <div style="display:flex;align-items:center;gap:7px"><span style="width:9px;height:9px;border-radius:3px;background:#30D158;box-shadow:0 0 8px rgba(48,209,88,.6)"></span><span style="font:600 11px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Recuperación</span></div>
+                <div style="margin-top:3px;font:680 27px/1 -apple-system;letter-spacing:-.02em;color:var(--label,#fff);font-variant-numeric:tabular-nums">66<span style="font-size:15px;color:var(--label2,rgba(235,235,245,.62));margin-left:1px">%</span></div>
+              </div>
+              <div onClick="{{ open.sleep }}" style="cursor:pointer">
+                <div style="display:flex;align-items:center;gap:7px"><span style="width:9px;height:9px;border-radius:3px;background:#5E5CE6;box-shadow:0 0 8px rgba(94,92,230,.6)"></span><span style="font:600 11px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Sueño</span></div>
+                <div style="margin-top:3px;font:680 27px/1 -apple-system;letter-spacing:-.02em;color:var(--label,#fff);font-variant-numeric:tabular-nums">7h 38m<span style="font-size:15px;color:var(--label2,rgba(235,235,245,.62));margin-left:5px">95%</span></div>
+              </div>
+              <div onClick="{{ open.strain }}" style="cursor:pointer">
+                <div style="display:flex;align-items:center;gap:7px"><span style="width:9px;height:9px;border-radius:3px;background:#64D2FF;box-shadow:0 0 8px rgba(100,210,255,.6)"></span><span style="font:600 11px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Esfuerzo</span></div>
+                <div style="margin-top:3px;font:680 27px/1 -apple-system;letter-spacing:-.02em;color:var(--label,#fff);font-variant-numeric:tabular-nums">7.9<span style="font-size:15px;color:var(--label2,rgba(235,235,245,.62));margin-left:2px">/ 21</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- COACH IA -->
+          <div style="position:relative;overflow:hidden;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px;margin-bottom:14px">
+            <div style="position:absolute;top:-40px;right:-30px;width:160px;height:160px;border-radius:999px;background:radial-gradient(circle,rgba(48,209,88,.22),transparent 70%);pointer-events:none"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;position:relative">
+              <div style="display:flex;align-items:center;gap:7px;background:rgba(48,209,88,.16);border:1px solid rgba(48,209,88,.32);padding:5px 11px;border-radius:999px">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="#30D158"><path d="M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z"/></svg>
+                <span style="font:700 11px/1 -apple-system;letter-spacing:.06em;color:#30D158">COACH IA · PREMIUM</span>
+              </div>
+              <span style="font:500 11px/1 -apple-system;color:var(--label3,rgba(235,235,245,.34))">Hoy, 24 jun</span>
+            </div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;position:relative">
+              <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="3">
+                <span style="font:600 12px/1 -apple-system;padding:6px 11px;border-radius:999px;color:{{ chip.c }};background:{{ chip.bg }};border:1px solid {{ chip.bd }}">{{ chip.t }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px;position:relative">
+              <p style="font:400 14px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))"><strong style="color:var(--label,#fff);font-weight:600">Tu cuerpo rinde como ~20–21 años.</strong> VO₂máx ~53, FC reposo 50. Solo te suma ~1 año dormir 6.6h — sube a 7h+ y tocas el piso.</p>
+              <p style="font:400 14px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))"><strong style="color:var(--label,#fff);font-weight:600">Lo urgente:</strong> 0 minutos de fuerza en 18 sesiones esta semana. Cardio élite, pero tu meta #2 es fuerza. Hoy mete 1 sesión de pesas.</p>
+              <p style="font:400 14px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))"><strong style="color:var(--label,#fff);font-weight:600">Sueño:</strong> el panel marca acostarte ~00:06, pero vienes durmiéndote ~1am. Adelántalo hoy.</p>
+            </div>
+            <div onClick="{{ goCoach }}" style="margin-top:15px;display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(48,209,88,.16);border:1px solid rgba(48,209,88,.3);color:#30D158;font:600 14px/1 -apple-system;padding:12px;border-radius:15px;cursor:pointer;position:relative">Ver plan del día
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#30D158" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+          </div>
+
+          <!-- EDAD CORPORAL -->
+          <div onClick="{{ open.bodyage }}" style="cursor:pointer;position:relative;overflow:hidden;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px;margin-bottom:14px">
+            <div style="position:absolute;top:-50px;left:-30px;width:170px;height:170px;border-radius:999px;background:radial-gradient(circle,rgba(94,92,230,.22),transparent 70%);pointer-events:none"></div>
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:16px;position:relative">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#5E5CE6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <span style="font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Edad corporal</span>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:26px;position:relative;margin-bottom:14px">
+              <div>
+                <div style="font:680 46px/1 -apple-system;letter-spacing:-.03em;color:#9D8DF5;font-variant-numeric:tabular-nums">20</div>
+                <div style="margin-top:5px;font:600 11px/1.3 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Edad de fitness</div>
+                <div style="font:400 11px/1.3 -apple-system;color:var(--label3,rgba(235,235,245,.34))">VO₂máx validada</div>
+              </div>
+              <div>
+                <div style="font:680 46px/1 -apple-system;letter-spacing:-.03em;color:#9D8DF5;font-variant-numeric:tabular-nums">21</div>
+                <div style="margin-top:5px;font:600 11px/1.3 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Edad corporal</div>
+                <div style="font:400 11px/1.3 -apple-system;color:var(--label3,rgba(235,235,245,.34))">+ HRV y sueño</div>
+              </div>
+            </div>
+            <div style="position:relative;font:400 13px/1.6 -apple-system;color:var(--label2,rgba(235,235,245,.62))">VO₂máx <strong style="color:var(--label,#fff);font-weight:600">52.9</strong> (Excelente) · tu edad real <strong style="color:var(--label,#fff);font-weight:600">40</strong> · FC reposo 50.3 · HRV 57.4 · sueño 6.6h</div>
+            <div style="position:relative;margin-top:9px;font:500 12.5px/1.4 -apple-system;color:#FF9F0A">+0.9 año(s) por recuperación (sueño &lt;7h)</div>
+          </div>
+
+          <!-- MONITOR DE SALUD -->
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px 6px 8px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:7px;margin:0 12px 6px">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#FF375F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5C7 17 3.5 13.8 3.5 10.2 3.5 7.6 5.5 6 7.7 6c1.6 0 2.9.9 3.6 2 .7-1.1 2-2 3.6-2 2.2 0 4.2 1.6 4.2 4.2 0 3.6-3.5 6.8-8.5 10.3z"/></svg>
+              <span style="font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Monitor de salud</span>
+              <span style="margin-left:auto;font:500 11px/1 -apple-system;color:var(--label3,rgba(235,235,245,.34))">3 días vs base</span>
+            </div>
+            <sc-for list="{{ monitorRows }}" as="row" hint-placeholder-count="5">
+              <div onClick="{{ row.onClick }}" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:14px;cursor:pointer">
+                <div style="width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ row.tile }}">{{ row.iconEl }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font:590 15px/1.2 -apple-system;color:var(--label,#fff)">{{ row.name }}</div>
+                  <div style="font:400 12px/1.2 -apple-system;color:var(--label3,rgba(235,235,245,.34))">{{ row.base }}</div>
+                </div>
+                <div style="width:62px;flex:none;opacity:.9">{{ row.sparkEl }}</div>
+                <div style="display:flex;align-items:baseline;gap:3px;min-width:62px;justify-content:flex-end">
+                  <span style="font:640 17px/1 -apple-system;color:var(--label,#fff);font-variant-numeric:tabular-nums">{{ row.value }}</span>
+                  <span style="font:500 11px/1 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ row.unit }}</span>
+                </div>
+                <span style="width:8px;height:8px;flex:none;border-radius:999px;background:#30D158;box-shadow:0 0 7px rgba(48,209,88,.55)"></span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- HORA DE DORMIR -->
+          <div style="position:relative;overflow:hidden;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px;margin-bottom:14px">
+            <div style="position:absolute;top:-40px;right:-20px;width:150px;height:150px;border-radius:999px;background:radial-gradient(circle,rgba(94,92,230,.2),transparent 70%);pointer-events:none"></div>
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;position:relative">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#5E5CE6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z"/></svg>
+              <span style="font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Hora de dormir hoy</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:14px;position:relative">
+              <div style="font:680 52px/1 -apple-system;letter-spacing:-.03em;color:#9D8DF5;font-variant-numeric:tabular-nums">00:06</div>
+              <div style="font:500 13px/1.4 -apple-system;color:var(--label2,rgba(235,235,245,.62))">acuéstate<br>a esta hora</div>
+            </div>
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:5px;position:relative">
+              <div style="font:400 13px/1.4 -apple-system;color:var(--label2,rgba(235,235,245,.62))">Despiertas ~08:21 · necesitas ~8h en cama</div>
+              <div style="font:400 13px/1.4 -apple-system;color:var(--label2,rgba(235,235,245,.62))">Tu bedtime reciente: <strong style="color:var(--label,#fff);font-weight:600">00:59</strong> <span style="color:#FF9F0A">(53 min tarde)</span></div>
+            </div>
+          </div>
+
+          <!-- CARGA -->
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.4);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.4);border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:26px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#FF9F0A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M3.5 9.5v5M17.5 8v8M20.5 9.5v5M6.5 12h11"/></svg>
+              <span style="font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Carga · 7 días</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+              <sc-for list="{{ loadTiles }}" as="tile" hint-placeholder-count="4">
+                <div style="background:var(--tile,rgba(255,255,255,.05));border:1px solid var(--card-border,rgba(255,255,255,.07));border-radius:16px;padding:14px">
+                  <div style="display:flex;align-items:baseline;gap:3px"><span style="font:680 26px/1 -apple-system;letter-spacing:-.02em;color:{{ tile.c }};font-variant-numeric:tabular-nums">{{ tile.v }}</span><span style="font:600 12px/1 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ tile.u }}</span></div>
+                  <div style="margin-top:6px;font:500 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label3,rgba(235,235,245,.34))">{{ tile.l }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:12px;display:flex;align-items:flex-start;gap:9px;background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.28);border-radius:14px;padding:12px 13px">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#FF9F0A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.8h15.8a1.9 1.9 0 0 0 1.7-2.8L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+              <div style="font:500 12.5px/1.45 -apple-system;color:var(--label,#fff)">0 min de fuerza esta semana — tu meta #2. Mete 2–3 sesiones de pesas para proteger músculo a los 40.</div>
+            </div>
+          </div>
+
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTend }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 2px 16px">
+            <div style="font:700 30px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label,#fff)">Tendencias</div>
+          </div>
+          <div style="display:flex;gap:4px;background:var(--card2,rgba(255,255,255,.06));border:1px solid var(--card-border,rgba(255,255,255,.08));border-radius:14px;padding:4px;margin-bottom:16px">
+            <sc-for list="{{ periods }}" as="pr" hint-placeholder-count="4">
+              <div onClick="{{ pr.go }}" style="{{ pr.sty }}flex:1;text-align:center;border-radius:11px">{{ pr.p }}</div>
+            </sc-for>
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 4px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">Recuperación vs Esfuerzo</div>
+            <div style="margin:0 3px 12px;display:flex;align-items:center;gap:14px;font:500 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))"><span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;border-radius:2px;background:#30D158"></span>Recuperación</span><span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:0;border-top:2px dashed #0A84FF"></span>Esfuerzo</span></div>
+            {{ T.recStrain }}
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px;margin-bottom:13px;display:flex;align-items:center;gap:6px">
+            <div style="position:relative;width:138px;flex:none">{{ T.balance }}
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:680 30px/1 -apple-system;color:var(--label,#fff);font-variant-numeric:tabular-nums">60<span style="font-size:16px">%</span></span><span style="font:500 11px -apple-system;color:var(--label2,rgba(235,235,245,.62))">recovery</span></div>
+            </div>
+            <div style="flex:1;padding-left:6px"><div style="font:650 16px/1.2 -apple-system;color:var(--label,#fff)">Balance del periodo</div><div style="margin-top:6px;font:400 13px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))">Recuperación media del mes. Tu sueño corto es el techo: recupera el sueño y esto sube a 70%+.</div></div>
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">HRV (RMSSD)</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Base 57.1 ms · banda = rango normal</div>
+            {{ T.hrv }}
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">FC en reposo</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Más baja = mejor · base 50 lpm</div>
+            {{ T.rhr }}
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">Arquitectura del sueño</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Línea blanca = necesidad 8h · barras = etapas</div>
+            {{ T.sleep }}
+            <div style="display:flex;gap:14px;margin:10px 3px 0;flex-wrap:wrap;font:500 11px -apple-system;color:var(--label2,rgba(235,235,245,.62))"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:3px;background:#4B3FA8"></span>Profundo</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:3px;background:#9D78FF"></span>REM</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:3px;background:#2E7BE6"></span>Ligero</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:3px;background:rgba(150,150,175,.6)"></span>Despierto</span></div>
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">Consistencia de sueño</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Hora de dormir · meta = línea 00:00</div>
+            {{ T.consistency }}
+            <div style="margin:8px 3px 0;font:500 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Variabilidad <strong style="color:#FF9F0A">±83 min</strong> · alta — esto frena tu recuperación.</div>
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">SpO₂ nocturno</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Oxígeno en sangre · &lt;90% = vigilar (línea roja)</div>
+            {{ T.spo2 }}
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px;margin-bottom:13px">
+            <div style="margin:0 3px 3px;font:650 16px/1.2 -apple-system;color:var(--label,#fff)">Temp. de piel</div>
+            <div style="margin:0 3px 10px;font:400 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">Desviación vs base · picos = posible enfermedad</div>
+            {{ T.temp }}
+          </div>
+
+          <div style="margin:18px 3px 11px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Métricas clave · promedio del periodo</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px">
+            <sc-for list="{{ metrics }}" as="mt" hint-placeholder-count="12">
+              <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:18px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:14px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="width:7px;height:7px;border-radius:999px;background:{{ mt.d }}"></span><span style="font:600 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">{{ mt.l }}</span></div>
+                <div style="display:flex;align-items:baseline;gap:3px"><span style="font:680 24px/1 -apple-system;letter-spacing:-.02em;color:var(--label,#fff);font-variant-numeric:tabular-nums">{{ mt.v }}</span><span style="font:600 12px -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ mt.u }}</span></div>
+                <div style="margin-top:5px;font:400 11px -apple-system;color:var(--label3,rgba(235,235,245,.34))">{{ mt.s }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 8px 8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:7px;margin:0 10px 8px">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#FF9F0A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 0 1-12 0V4ZM6 6H4v1a3 3 0 0 0 2 2.8M18 6h2v1a3 3 0 0 1-2 2.8"/></svg>
+              <span style="font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Entrenamientos recientes</span>
+            </div>
+            <sc-for list="{{ workouts }}" as="w" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;border-radius:13px">
+                <div style="flex:1;min-width:0"><div style="font:590 14px/1.2 -apple-system;color:var(--label,#fff)">{{ w.n }}</div><div style="font:400 11px/1.2 -apple-system;color:var(--label3,rgba(235,235,245,.34))">{{ w.t }}</div></div>
+                <div style="text-align:right;min-width:48px"><div style="font:600 13px/1.2 -apple-system;color:var(--label,#fff);font-variant-numeric:tabular-nums">{{ w.min }}</div></div>
+                <div style="text-align:right;min-width:56px"><div style="font:500 12px/1.2 -apple-system;color:var(--label2,rgba(235,235,245,.62));font-variant-numeric:tabular-nums">{{ w.kcal }}</div></div>
+                <div style="text-align:right;min-width:50px"><div style="font:500 12px/1.2 -apple-system;color:var(--label2,rgba(235,235,245,.62));font-variant-numeric:tabular-nums">{{ w.bpm }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isCoach }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin:2px 2px 16px">
+            <div style="width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#30D158,#5E5CE6);box-shadow:0 4px 14px rgba(94,92,230,.4)">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z"/></svg>
+            </div>
+            <div style="font:700 30px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label,#fff)">Coach</div>
+          </div>
+
+          <!-- BRIEF -->
+          <div style="position:relative;overflow:hidden;border-radius:24px;padding:1.5px;background:linear-gradient(135deg,rgba(48,209,88,.6),rgba(94,92,230,.55),rgba(100,210,255,.5));margin-bottom:16px">
+            <div style="background:var(--card,rgba(30,30,34,.9));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border-radius:22.5px;padding:18px">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">
+                <span style="font:700 11px/1 -apple-system;letter-spacing:.06em;color:#30D158">BRIEF DE HOY</span>
+                <span style="font:500 11px/1 -apple-system;color:var(--label3,rgba(235,235,245,.34))">· 24 jun, 08:30</span>
+              </div>
+              <p style="font:500 16px/1.5 -apple-system;color:var(--label,#fff)">Cardio en élite, recuperación frenada por sueño corto. Hoy: <strong style="color:#30D158">mete tu primera sesión de fuerza</strong> y adelanta el sueño una hora.</p>
+              <div style="display:flex;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid var(--sep,rgba(255,255,255,.09))">
+                <div><div style="font:680 20px/1 -apple-system;color:#30D158;font-variant-numeric:tabular-nums">66<span style="font-size:12px">%</span></div><div style="font:500 11px -apple-system;color:var(--label2,rgba(235,235,245,.62));margin-top:3px">Recuperación</div></div>
+                <div><div style="font:680 20px/1 -apple-system;color:#5E5CE6;font-variant-numeric:tabular-nums">21</div><div style="font:500 11px -apple-system;color:var(--label2,rgba(235,235,245,.62));margin-top:3px">Edad corporal</div></div>
+                <div><div style="font:680 20px/1 -apple-system;color:#FF375F;font-variant-numeric:tabular-nums">0<span style="font-size:12px">min</span></div><div style="font:500 11px -apple-system;color:var(--label2,rgba(235,235,245,.62));margin-top:3px">Fuerza/sem</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- THREAD -->
+          <sc-for list="{{ messages }}" as="msg" hint-placeholder-count="2">
+            <div style="{{ msg.row }}">
+              <div style="{{ msg.bubble }}">{{ msg.text }}</div>
+            </div>
+          </sc-for>
+
+          <!-- SUGGESTIONS -->
+          <div style="margin:18px 2px 10px;font:600 12px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Sugerencias</div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">
+            <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:11px;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:16px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:14px 15px;cursor:pointer">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#5E5CE6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M12 3.5l1.4 3.8 3.8 1.4-3.8 1.4L12 14l-1.4-3.9L6.8 8.7l3.8-1.4z"/></svg>
+                <span style="flex:1;font:500 14px/1.3 -apple-system;color:var(--label,#fff)">{{ sg }}</span>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--label3,rgba(235,235,245,.34))" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M9 6l6 6-6 6"/></svg>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- COMPOSER -->
+          <div style="display:flex;align-items:center;gap:10px;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px)) saturate(1.5);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(1.5);border:1px solid var(--card-border,rgba(255,255,255,.12));border-radius:22px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:8px 8px 8px 16px">
+            <span style="flex:1;font:400 15px/1.3 -apple-system;color:var(--label3,rgba(235,235,245,.34))">Pregúntale a Vitals…</span>
+            <div style="width:38px;height:38px;border-radius:999px;background:linear-gradient(140deg,#30D158,#0A84FF);display:flex;align-items:center;justify-content:center;flex:none">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isMas }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="font:700 30px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label,#fff);margin:2px 2px 4px">Más</div>
+          <div style="font:500 14px/1.3 -apple-system;color:var(--label2,rgba(235,235,245,.62));margin:0 2px 18px">Ajustes · Sistema de diseño</div>
+
+          <!-- APPEARANCE -->
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:20px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:16px;margin-bottom:13px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font:590 15px -apple-system;color:var(--label,#fff)">Apariencia</span>
+              <div style="display:flex;gap:4px;background:var(--card2,rgba(255,255,255,.06));border-radius:12px;padding:4px">
+                <sc-for list="{{ masMode }}" as="mm" hint-placeholder-count="2"><div onClick="{{ mm.go }}" style="{{ mm.sty }}border-radius:9px">{{ mm.l }}</div></sc-for>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding-top:14px;border-top:1px solid var(--sep,rgba(255,255,255,.09))"><div><div style="font:590 15px -apple-system;color:var(--label,#fff)">Transparencia</div><div style="font:400 12px -apple-system;color:var(--label3,rgba(235,235,245,.34))">Liquid Glass más opaco = mayor legibilidad</div></div>
+              <div style="width:46px;height:28px;border-radius:999px;background:#30D158;position:relative;flex:none"><div style="position:absolute;top:2px;left:20px;width:24px;height:24px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div></div>
+            </div>
+          </div>
+
+          <!-- COLOR TOKENS -->
+          <div style="margin:18px 3px 10px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Acentos por métrica</div>
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:20px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:8px;margin-bottom:13px">
+            <sc-for list="{{ colorTokens }}" as="ct" hint-placeholder-count="8">
+              <div style="display:flex;align-items:center;gap:13px;padding:9px 10px">
+                <span style="width:30px;height:30px;border-radius:9px;flex:none;background:{{ ct.h }};box-shadow:0 0 10px {{ ct.h }}66"></span>
+                <span style="flex:1;font:590 14px -apple-system;color:var(--label,#fff)">{{ ct.n }}</span>
+                <span style="font:500 12px -apple-system;color:var(--label2,rgba(235,235,245,.62));font-variant-numeric:tabular-nums;text-transform:uppercase">{{ ct.h }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- MATERIALS -->
+          <div style="margin:18px 3px 10px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Materiales · Liquid Glass</div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:13px">
+            <sc-for list="{{ materialTokens }}" as="mat" hint-placeholder-count="3">
+              <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:18px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:15px;display:flex;align-items:center;gap:13px">
+                <div style="width:44px;height:44px;border-radius:13px;flex:none;background:rgba(255,255,255,.1);border:1px solid var(--card-hi,rgba(255,255,255,.18));box-shadow:inset 0 1px 0 rgba(255,255,255,.25)"></div>
+                <div style="flex:1"><div style="font:650 15px -apple-system;color:var(--label,#fff)">{{ mat.n }}</div><div style="font:400 12px -apple-system;color:var(--label3,rgba(235,235,245,.34))">{{ mat.d }}</div></div>
+                <div style="text-align:right"><div style="font:500 12px -apple-system;color:var(--label2,rgba(235,235,245,.62));font-variant-numeric:tabular-nums">blur {{ mat.blur }}</div><div style="font:500 12px -apple-system;color:var(--label3,rgba(235,235,245,.34));font-variant-numeric:tabular-nums">opac. {{ mat.op }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- TYPE -->
+          <div style="margin:18px 3px 10px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Tipografía · SF Pro</div>
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:20px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:6px 16px;margin-bottom:13px">
+            <sc-for list="{{ typeTokens }}" as="ty" hint-placeholder-count="5">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--sep,rgba(255,255,255,.07))">
+                <span style="color:var(--label,#fff);font-family:-apple-system;font-size:{{ ty.fs }};font-weight:{{ ty.fw }};letter-spacing:-.01em">{{ ty.n }}</span>
+                <span style="font:500 12px -apple-system;color:var(--label3,rgba(235,235,245,.34));white-space:nowrap">{{ ty.s }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- RADII -->
+          <div style="margin:18px 3px 10px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Radios · Squircle</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:8px">
+            <sc-for list="{{ radiusTokens }}" as="rd" hint-placeholder-count="4">
+              <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:18px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:15px;display:flex;align-items:center;gap:12px">
+                <div style="width:38px;height:38px;flex:none;background:rgba(94,92,230,.25);border:1.5px solid #5E5CE6;border-radius:{{ rd.rv }}"></div>
+                <div><div style="font:650 15px -apple-system;color:var(--label,#fff)">{{ rd.n }}</div><div style="font:500 12px -apple-system;color:var(--label3,rgba(235,235,245,.34));font-variant-numeric:tabular-nums">{{ rd.v }} px</div></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- MOTION -->
+          <div style="margin:18px 3px 10px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62))">Movimiento e interacción</div>
+          <div style="background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:20px;box-shadow:inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12));padding:6px 16px;margin-bottom:8px">
+            <sc-for list="{{ motionNotes }}" as="mn" hint-placeholder-count="5">
+              <div style="padding:13px 0;border-bottom:1px solid var(--sep,rgba(255,255,255,.07));display:flex;gap:11px;align-items:flex-start">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#30D158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="M3 12c3-7 6-7 9 0s6 7 9 0"/></svg>
+                <div><div style="font:600 14px/1.3 -apple-system;color:var(--label,#fff)">{{ mn.t }}</div><div style="margin-top:2px;font:400 13px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ mn.d }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- DETAIL OVERLAY -->
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;inset:0;z-index:9;background:var(--screen-bg,#000);overflow-y:auto;overflow-x:hidden;padding:54px 17px 40px">
+        <div style="{{ glowStyle }}"></div>
+        <div onClick="{{ closeDetail }}" style="position:relative;display:inline-flex;align-items:center;gap:4px;color:var(--accentDetail,#30D158);font:500 16px/1 -apple-system;cursor:pointer;margin-bottom:18px">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Hoy
+        </div>
+        <div style="position:relative">
+          <div style="font:700 32px/1.05 -apple-system;letter-spacing:-.02em;color:var(--label,#fff)">{{ detail.title }}</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
+            <span style="font:680 56px/1 -apple-system;letter-spacing:-.03em;color:{{ detail.accent }};font-variant-numeric:tabular-nums">{{ detail.val }}</span>
+            <span style="font:600 20px/1 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ detail.unit }}</span>
+          </div>
+          <div style="margin-top:4px;font:500 14px/1.2 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ detail.sub }}</div>
+
+          <div style="margin-top:20px;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:16px 14px">
+            <div style="font:600 12px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62));margin:2px 4px 10px">Últimos 30 días</div>
+            {{ detail.chartEl }}
+          </div>
+
+          <div style="margin-top:14px;background:var(--card,rgba(30,30,34,.82));backdrop-filter:blur(var(--blur,26px));-webkit-backdrop-filter:blur(var(--blur,26px));border:1px solid var(--card-border,rgba(255,255,255,.1));border-radius:24px;box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.5)),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.14));padding:18px">
+            <div style="font:600 12px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2,rgba(235,235,245,.62));margin-bottom:12px">Contexto</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ detail.ctx }}" as="line" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:999px;background:{{ detail.accent }};margin-top:7px;flex:none"></span><span style="font:400 14px/1.5 -apple-system;color:var(--label2,rgba(235,235,245,.62))">{{ line }}</span></div>
+              </sc-for>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--sep,rgba(255,255,255,.09));font:500 13px/1.4 -apple-system;color:var(--label3,rgba(235,235,245,.34))">{{ detail.norms }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- TAB BAR -->
+    <div style="position:absolute;left:14px;right:14px;bottom:16px;height:62px;display:flex;align-items:center;justify-content:space-around;padding:0 4px;background:var(--tabbar,rgba(28,28,32,.66));backdrop-filter:blur(34px) saturate(1.8);-webkit-backdrop-filter:blur(34px) saturate(1.8);border:1px solid var(--card-border,rgba(255,255,255,.12));border-radius:30px;box-shadow:0 14px 36px rgba(0,0,0,.45),inset 0 1px 0 var(--card-hi,rgba(255,255,255,.2));z-index:8">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <div onClick="{{ t.go }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:6px 0">
+          {{ t.iconEl }}
+          <span style="font:600 10px/1 -apple-system;color:{{ t.color }}">{{ t.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:453,&quot;height&quot;:960},&quot;glass&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Calmo&quot;,&quot;Vibrante&quot;],&quot;default&quot;:&quot;Calmo&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;motion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showStatusBar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { mode:'dark', tab:'hoy', detail:null, period:'30d' };
+  A = { green:'#30D158', indigo:'#5E5CE6', blue:'#0A84FF', cyan:'#64D2FF', red:'#FF375F', orange:'#FF9F0A', teal:'#40C8E0', purple:'#BF5AF2', purpLite:'#9D8DF5' };
+
+  rng(seed){ let s=seed%2147483647; if(s<=0)s+=2147483646; return ()=>{ s=(s*16807)%2147483647; return (s-1)/2147483646; }; }
+  clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  hexA(h,a){ const n=parseInt(h.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+  svgBox(html){ return React.createElement('div',{style:{width:'100%',lineHeight:0},dangerouslySetInnerHTML:{__html:html}}); }
+
+  smooth(pts){ if(pts.length<2) return pts.length?`M${pts[0][0]},${pts[0][1]}`:''; let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`; for(let i=0;i<pts.length-1;i++){ const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2; const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6,c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6; d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`; } return d; }
+
+  data(){ if(this._d) return this._d; const r=this.rng(7), N=30, cl=this.clamp.bind(this);
+    const recovery=[],strain=[],hrv=[],rhr=[],spo2=[],temp=[],breath=[],steps=[],vig=[],sleep=[],bed=[];
+    for(let i=0;i<N;i++){
+      recovery.push(Math.round(cl(60+13*Math.sin(i/2.1)+(r()-0.5)*24,28,95)));
+      strain.push(Math.round(cl(30+18*Math.sin(i/1.7+1)+(r()-0.5)*22,8,66)));
+      hrv.push(Math.round(cl(57+7*Math.sin(i/2.3)+(r()-0.5)*13,39,76)));
+      rhr.push(Math.round(cl(50+3*Math.sin(i/2+2)+(r()-0.5)*6,44,58)));
+      spo2.push(+cl(96.6+1.1*Math.sin(i/3)+(r()-0.5)*1.6,94,99).toFixed(1));
+      temp.push(+cl(-1+1.5*Math.sin(i/1.3)+(r()-0.5)*1.3,-2.8,0.6).toFixed(2));
+      breath.push(+cl(15.6+2.1*Math.sin(i/1.4)+(r()-0.5)*1.6,13.5,20).toFixed(1));
+      steps.push(Math.round(cl(12000+6500*Math.sin(i/1.6)+(r()-0.5)*9000,4000,25000)));
+      vig.push(Math.round(cl(15+26*Math.max(0,Math.sin(i/1.5))+(r()-0.5)*22,0,68)));
+      const tot=cl(7+1.0*Math.sin(i/2.5)+(r()-0.5)*1.9,5.5,9.9);
+      const deep=tot*0.22*(0.85+0.3*r()), rem=tot*0.23*(0.85+0.3*r()), awake=0.2+0.5*r(), light=Math.max(0.5,tot-deep-rem-awake);
+      sleep.push({deep:+deep.toFixed(2),rem:+rem.toFixed(2),light:+light.toFixed(2),awake:+awake.toFixed(2),tot:+tot.toFixed(2)});
+      bed.push(Math.round((r()-0.4)*300));
+    }
+    recovery[25]=93; recovery[26]=46; recovery[27]=28; rhr[5]=58; hrv[22]=75; hrv[25]=40; bed[5]=-120; bed[13]=315; bed[4]=-95;
+    this._d={recovery,strain,hrv,rhr,spo2,temp,breath,steps,vig,sleep,bed,N};
+    return this._d;
+  }
+  XL(){ return [{i:0,l:'26 may'},{i:4,l:'30 may'},{i:8,l:'03 jun'},{i:12,l:'07 jun'},{i:16,l:'11 jun'},{i:20,l:'15 jun'},{i:24,l:'19 jun'},{i:28,l:'23 jun'}]; }
+
+  buildChart(o){
+    const W=330,H=o.h,padL=o.padL==null?34:o.padL,padR=o.padR==null?10:o.padR,padT=o.padT==null?12:o.padT,padB=o.padB==null?20:o.padB;
+    const pw=W-padL-padR,ph=H-padT-padB,min=o.min,max=o.max,N=o.series[0].data.length;
+    const X=i=>padL+(N<=1?pw/2:i*pw/(N-1)), Y=v=>padT+(1-(v-min)/(max-min))*ph, id=o.id;
+    let defs='',body='';
+    (o.yTicks||[]).forEach(t=>{const y=Y(t.v); body+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" style="stroke:var(--grid)" stroke-width="1"/><text x="${padL-6}" y="${(y+3).toFixed(1)}" text-anchor="end" style="fill:var(--axis);font:500 9px -apple-system,sans-serif">${t.l}</text>`;});
+    if(o.band){const y1=Y(o.band.hi),y2=Y(o.band.lo); body+=`<rect x="${padL}" y="${y1.toFixed(1)}" width="${pw}" height="${(y2-y1).toFixed(1)}" style="fill:${o.band.color}"/>`; if(o.band.line!=null){const yb=Y(o.band.line); body+=`<line x1="${padL}" y1="${yb.toFixed(1)}" x2="${W-padR}" y2="${yb.toFixed(1)}" stroke-dasharray="4 4" style="stroke:var(--axis)" stroke-width="1"/>`;}}
+    if(o.threshold){const y=Y(o.threshold.v); body+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke-dasharray="${o.threshold.dash||'5 5'}" stroke="${o.threshold.color}" stroke-width="1.2"/>`;}
+    o.series.forEach((s,si)=>{ const pts=s.data.map((v,i)=>[X(i),Y(v)]); const line=this.smooth(pts);
+      if(s.fill){defs+=`<linearGradient id="${id}f${si}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity="${s.fillOp==null?0.3:s.fillOp}"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`; const area=line+` L${pts[pts.length-1][0].toFixed(1)},${(padT+ph).toFixed(1)} L${pts[0][0].toFixed(1)},${(padT+ph).toFixed(1)} Z`; body+=`<path d="${area}" fill="url(#${id}f${si})"/>`;}
+      body+=`<path d="${line}" fill="none" stroke="${s.color}" stroke-width="${s.sw||2.4}" stroke-linecap="round" stroke-linejoin="round" ${s.dash?`stroke-dasharray="${s.dash}"`:''} style="filter:drop-shadow(0 1px 4px ${this.hexA(s.color,0.4)})"/>`;
+      if(s.points){pts.forEach((p)=>{ body+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${s.ptR||2.4}" fill="${s.color}"/>`;});}
+    });
+    (o.xLabels||[]).forEach(xl=>{const x=X(xl.i); body+=`<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" style="fill:var(--axis);font:500 9px -apple-system,sans-serif">${xl.l}</text>`;});
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="overflow:visible;display:block">${defs?`<defs>${defs}</defs>`:''}${body}</svg>`;
+  }
+
+  spark(d,color){ const W=62,H=24,p=3,min=Math.min(...d),max=Math.max(...d); const X=i=>p+i*(W-2*p)/(d.length-1),Y=v=>p+(1-(v-min)/((max-min)||1))*(H-2*p); const pts=d.map((v,i)=>[X(i),Y(v)]); return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;overflow:visible"><path d="${this.smooth(pts)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${pts[pts.length-1][0].toFixed(1)}" cy="${pts[pts.length-1][1].toFixed(1)}" r="2.4" fill="${color}"/></svg>`; }
+
+  buildStacked(){ const W=330,H=182,padL=28,padR=8,padT=12,padB=22,D=this.data().sleep,N=D.length,max=10; const pw=W-padL-padR,ph=H-padT-padB,gap=pw/N,bw=gap*0.6,Y=v=>padT+(1-v/max)*ph; let body='';
+    [0,2,4,6,8,10].forEach(t=>{const y=Y(t); body+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" style="stroke:var(--grid)" stroke-width="1"/><text x="${padL-5}" y="${(y+3).toFixed(1)}" text-anchor="end" style="fill:var(--axis);font:500 9px -apple-system">${t}h</text>`;});
+    const yn=Y(7.8); body+=`<line x1="${padL}" y1="${yn.toFixed(1)}" x2="${W-padR}" y2="${yn.toFixed(1)}" stroke-dasharray="5 4" style="stroke:var(--label)" stroke-width="1.3" opacity="0.8"/>`;
+    const cols={deep:'#4B3FA8',rem:'#9D78FF',light:'#2E7BE6',awake:'rgba(150,150,175,0.4)'};
+    D.forEach((s,i)=>{ const x=padL+gap*i+(gap-bw)/2; let yb=padT+ph; [['deep',s.deep],['rem',s.rem],['light',s.light],['awake',s.awake]].forEach(([k,v])=>{ const h=v/max*ph; const yt=yb-h; body+=`<rect x="${x.toFixed(1)}" y="${yt.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="1.5" fill="${cols[k]}"/>`; yb=yt; }); });
+    this.XL().forEach(xl=>{const x=padL+gap*xl.i+gap/2; body+=`<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" style="fill:var(--axis);font:500 9px -apple-system">${xl.l}</text>`;});
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block;overflow:visible">${body}</svg>`;
+  }
+  buildScatter(){ const W=330,H=182,padL=40,padR=8,padT=10,padB=22,D=this.data().bed,N=D.length,min=-150,max=350; const pw=W-padL-padR,ph=H-padT-padB,X=i=>padL+i*pw/(N-1),Y=v=>padT+(1-(v-min)/(max-min))*ph; let body='';
+    [{v:-150,l:'21:30'},{v:-50,l:'23:10'},{v:0,l:'00:00'},{v:100,l:'01:40'},{v:200,l:'03:20'},{v:300,l:'05:00'}].forEach(t=>{const y=Y(t.v); body+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" style="stroke:var(--grid)" stroke-width="1"/><text x="${padL-5}" y="${(y+3).toFixed(1)}" text-anchor="end" style="fill:var(--axis);font:500 9px -apple-system">${t.l}</text>`;});
+    const y0=Y(0); body+=`<line x1="${padL}" y1="${y0.toFixed(1)}" x2="${W-padR}" y2="${y0.toFixed(1)}" stroke-dasharray="5 4" stroke="#30D158" stroke-width="1.4"/>`;
+    D.forEach((v,i)=>{ const red=Math.abs(v)>50,c=red?'#FF453A':'#30D158'; body+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="${c}" style="filter:drop-shadow(0 1px 2px ${this.hexA(c,0.5)})"/>`; });
+    this.XL().forEach(xl=>{const x=X(xl.i); body+=`<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" style="fill:var(--axis);font:500 9px -apple-system">${xl.l}</text>`;});
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block;overflow:visible">${body}</svg>`;
+  }
+  buildDonut(pct,color){ const r=54,c=2*Math.PI*r,dash=pct/100*c; return `<svg viewBox="0 0 140 140" width="138" height="138" style="display:block;overflow:visible"><circle cx="70" cy="70" r="${r}" fill="none" style="stroke:var(--ring-track)" stroke-width="13"/><circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 70 70)" style="filter:drop-shadow(0 0 5px ${this.hexA(color,0.5)})"/></svg>`; }
+
+  icon(name,color,s,sw){ s=s||18; sw=sw||1.9; const P={
+    heart:'M12 20.5C7 17 3.5 13.8 3.5 10.2 3.5 7.6 5.5 6 7.7 6c1.6 0 2.9.9 3.6 2 .7-1.1 2-2 3.6-2 2.2 0 4.2 1.6 4.2 4.2 0 3.6-3.5 6.8-8.5 10.3z',
+    wave:'M2 12h3l2-5 3 10 2.5-7 2 4h6.5',
+    wind:'M3 9h11a3 3 0 1 0-3-3M3 15h8a2.5 2.5 0 1 1-2.5 2.5',
+    drop:'M12 3.5s5.5 6 5.5 10.2a5.5 5.5 0 0 1-11 0C6.5 9.5 12 3.5 12 3.5z',
+    thermo:'M10.5 13.2V5.5a1.7 1.7 0 1 1 3.4 0v7.7a3.6 3.6 0 1 1-3.4 0z',
+    chart:'M3 17l5-5 3.5 3.5L20 6M16 6h4v4',
+    sparkles:'M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z',
+  }[name]; return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="${P}"/></svg>`; }
+  gridIcon(color,s){ s=s||18; return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="${color}" style="display:block"><rect x="3.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2.2"/></svg>`; }
+
+  ringsSVG(rec,sleep,strainFrac,anim){
+    const ring=(r,frac,grad,col,delay)=>{ const c=2*Math.PI*r, dash=Math.max(0.001,Math.min(1,frac))*c;
+      return `<circle cx="75" cy="75" r="${r}" fill="none" style="stroke:var(--ring-track)" stroke-width="12.5"/>`+
+      `<circle cx="75" cy="75" r="${r}" fill="none" stroke="url(#${grad})" stroke-width="12.5" stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${anim?dash.toFixed(2):0}" transform="rotate(-90 75 75)" style="filter:drop-shadow(0 0 5px ${this.hexA(col,0.55)})">${anim?`<animate attributeName="stroke-dashoffset" from="${dash.toFixed(2)}" to="0" dur="1.15s" begin="${delay}s" fill="freeze" calcMode="spline" keySplines="0.2 0.85 0.25 1" keyTimes="0;1"/>`:''}</circle>`; };
+    return `<svg viewBox="0 0 150 150" width="100%" style="display:block"><defs>
+      <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5BF07F"/><stop offset="1" stop-color="#28B84A"/></linearGradient>
+      <linearGradient id="rs" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C7AF5"/><stop offset="1" stop-color="#4A48D8"/></linearGradient>
+      <linearGradient id="rt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8FE0FF"/><stop offset="1" stop-color="#2AA4F0"/></linearGradient>
+    </defs>${ring(58,rec/100,'rg',this.A.green,0)}${ring(43.5,sleep/100,'rs',this.A.indigo,0.12)}${ring(29,strainFrac,'rt',this.A.cyan,0.24)}</svg>`;
+  }
+
+  theme(){
+    const dark = this.state.mode==='dark';
+    const glass = (this.props.glass||'Calmo')==='Vibrante';
+    const cardDark = glass?'rgba(30,30,34,0.55)':'rgba(30,30,34,0.82)';
+    const cardLight = glass?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.82)';
+    const blur = glass?'34px':'26px';
+    return dark ? {
+      '--app-bg':'#0a0a0c','--screen-bg':'#000000','--label':'#ffffff','--label2':'rgba(235,235,245,0.62)','--label3':'rgba(235,235,245,0.34)','--sep':'rgba(255,255,255,0.09)','--card':cardDark,'--card2':'rgba(255,255,255,0.06)','--card-border':'rgba(255,255,255,0.1)','--card-hi':'rgba(255,255,255,0.14)','--shadow':'0 14px 36px rgba(0,0,0,0.5)','--tabbar':glass?'rgba(28,28,32,0.5)':'rgba(28,28,32,0.66)','--blur':blur,'--ring-track':'rgba(255,255,255,0.08)','--grid':'rgba(255,255,255,0.06)','--axis':'rgba(235,235,245,0.4)','--tile':'rgba(255,255,255,0.05)'
+    } : {
+      '--app-bg':'#e6e6ec','--screen-bg':'#f3f2f8','--label':'#111114','--label2':'rgba(60,60,67,0.6)','--label3':'rgba(60,60,67,0.32)','--sep':'rgba(60,60,67,0.13)','--card':cardLight,'--card2':'rgba(120,120,128,0.08)','--card-border':'rgba(255,255,255,0.7)','--card-hi':'rgba(255,255,255,0.95)','--shadow':'0 12px 30px rgba(60,60,90,0.12)','--tabbar':glass?'rgba(255,255,255,0.58)':'rgba(255,255,255,0.72)','--blur':blur,'--ring-track':'rgba(0,0,0,0.07)','--grid':'rgba(0,0,0,0.055)','--axis':'rgba(60,60,67,0.5)','--tile':'rgba(120,120,128,0.07)'
+    };
+  }
+
+  detailFor(k){
+    const A=this.A, D=this.data(), XL=this.XL();
+    const cfg={
+      recovery:{title:'Recuperación',accent:A.green,val:'66',unit:'%',sub:'media · hoy',data:D.recovery,min:0,max:100,yT:[0,25,50,75,100],points:true,ctx:['HRV 61 ms (base 57.1) · FC reposo 56 lpm.','Dormiste 7h 38m · a la cama a las 00:23.','Tu recuperación está frenada por el sueño corto, no por el esfuerzo.'],norms:'Promedio 30 días: 58% · rango 28–93%'},
+      sleep:{title:'Sueño',accent:A.indigo,val:'7h 38m',unit:'',sub:'95% de tu necesidad',data:D.sleep.map(s=>s.tot),min:4,max:10,yT:[4,6,8,10],fillOp:0.34,ctx:['Profundo 67 min (22%) · REM 106 min (23%) — ambos sanos.','Eficiencia 90.8% (medida real, no estimada).','Necesitas ~8h: tu déficit medio es de ~1.8h por noche.'],norms:'Promedio 30 días: 6.2h · meta 7h+'},
+      strain:{title:'Esfuerzo',accent:A.cyan,val:'7.9',unit:'/ 21',sub:'moderado · hoy',data:D.strain.map(v=>+(v/100*21).toFixed(1)),min:0,max:21,yT:[0,7,14,21],points:true,ctx:['18 sesiones esta semana · 934 min totales.','64 min vigorosos (Z4–5) — intensidad élite.','Carga cardiovascular alta, pero 0 min de fuerza.'],norms:'Promedio 30 días: 6.6 / 21'},
+      hrv:{title:'HRV (RMSSD)',accent:A.green,val:'58',unit:'ms',sub:'estable · base 57',data:D.hrv,min:35,max:80,yT:[40,55,70],band:{lo:50,hi:64,color:this.hexA(A.green,0.08),line:57.1},ctx:['Tu HRV está dentro de tu rango personal normal (44.8–72).','Una HRV estable indica buena adaptación al entrenamiento.','Caídas sostenidas suelen anticipar fatiga o enfermedad.'],norms:'Línea base personal: 57.1 ms'},
+      rhr:{title:'FC en reposo',accent:A.orange,val:'52',unit:'lpm',sub:'↑ 1 vs base 51',data:D.rhr,min:42,max:60,yT:[44,50,56],fillOp:0.22,ctx:['50 lpm es casi atlético para tu edad.','Subidas pasajeras tras días de mucho esfuerzo o alcohol.','Más baja = mejor recuperación cardiovascular.'],norms:'Promedio 30 días: 50 lpm'},
+      breath:{title:'Respiración',accent:A.teal,val:'15.1',unit:'rpm',sub:'↓ base 16.3',data:D.breath,min:13,max:20,yT:[14,16,18,20],fillOp:0.22,ctx:['Estable durante el sueño — buena señal.','Picos sostenidos pueden indicar estrés o enfermedad.','Tu media de 16.3 rpm es saludable.'],norms:'Promedio 30 días: 16.3 /min'},
+      spo2:{title:'SpO₂ nocturno',accent:A.cyan,val:'96',unit:'%',sub:'sano · sin apnea',data:D.spo2,min:88,max:100,yT:[90,94,98],threshold:{v:90,color:'#FF453A'},fillOp:0.22,ctx:['Oxígeno en sangre estable sobre 95% — sin señales de apnea.','Caídas bajo 90% (línea roja) ameritan vigilancia.','Tu mínimo del periodo fue 94%.'],norms:'Promedio 30 días: 96.5% (>95 sano)'},
+      temp:{title:'Temp. de piel',accent:A.orange,val:'33.6',unit:'°',sub:'↓ vs base 35.1',data:D.temp,min:-3,max:1,yT:[-2,-1,0,1],threshold:{v:0,color:'rgba(150,150,150,.55)',dash:'4 4'},fillOp:0.2,ctx:['Desviación respecto a tu línea base personal.','Picos positivos sostenidos = posible enfermedad o mala recuperación.','Variación nocturna normal por ambiente y ciclo.'],norms:'Referencia: 0° = tu línea base'},
+      bodyage:{title:'Edad corporal',accent:A.purple,val:'21',unit:'años',sub:'fitness 20 · real 40',data:D.hrv,min:35,max:80,yT:[40,60,80],fillOp:0.2,isBody:true,ctx:['VO₂máx 52.9 (Excelente) → edad de fitness ~20 (validado NTNU).','Se ajusta con HRV y sueño: +0.9 años por dormir <7h.','Cierra ese gap durmiendo 7h+ de forma consistente.'],norms:'Fórmula: VO₂máx + HRV + sueño vs normas por edad'}
+    }[k];
+    const chart = this.svgBox(this.buildChart({id:'dt',h:210,min:cfg.min,max:cfg.max,yTicks:cfg.yT.map(v=>({v,l:String(v)})),xLabels:XL,band:cfg.band,threshold:cfg.threshold,series:[{data:cfg.data,color:cfg.accent,fill:true,fillOp:cfg.fillOp,points:cfg.points,sw:2.6}]}));
+    return {title:cfg.title,accent:cfg.accent,val:cfg.val,unit:cfg.unit,sub:cfg.sub,ctx:cfg.ctx,norms:cfg.norms,chartEl:chart};
+  }
+
+  renderVals(){
+    const A=this.A, D=this.data(), dark=this.state.mode==='dark';
+    const motion=this.props.motion!==false, showStatus=this.props.showStatusBar!==false;
+    const tab=this.state.tab;
+    const setTab=(t)=>this.setState({tab:t,detail:null});
+    const openDetail=(k)=>this.setState({detail:k});
+
+    const pillBase={padding:'6px 13px',borderRadius:'999px',font:'600 12px -apple-system',cursor:'pointer',transition:'all .2s',whiteSpace:'nowrap'};
+    const onSel={...pillBase,background:dark?'rgba(255,255,255,0.16)':'#ffffff',color:dark?'#fff':'#111',boxShadow:dark?'none':'0 1px 3px rgba(0,0,0,.12)'};
+    const offSel={...pillBase,background:'transparent',color:'var(--label2,rgba(235,235,245,.62))'};
+
+    const monitorRows=[
+      {key:'rhr',name:'FC reposo',value:'52',unit:'',base:'base 51 lpm',col:A.orange,sd:D.rhr.slice(-14)},
+      {key:'hrv',name:'HRV',value:'58',unit:'ms',base:'base 57 ms',col:A.green,sd:D.hrv.slice(-14)},
+      {key:'breath',name:'Respiración',value:'15.1',unit:'rpm',base:'base 16.3 rpm',col:A.teal,sd:D.breath.slice(-14)},
+      {key:'spo2',name:'SpO₂',value:'96',unit:'%',base:'base 96%',col:A.cyan,sd:D.spo2.slice(-14)},
+      {key:'temp',name:'Temp. piel',value:'33.6',unit:'°',base:'base 35.1°',col:A.orange,sd:D.temp.slice(-14)},
+    ].map(r=>({...r,tile:this.hexA(r.col,0.16),iconEl:this.svgBox(this.icon({rhr:'heart',hrv:'wave',breath:'wind',spo2:'drop',temp:'thermo'}[r.key],r.col,18)),sparkEl:this.svgBox(this.spark(r.sd,r.col)),onClick:()=>openDetail(r.key)}));
+
+    const chips=[
+      {t:'Edad corporal 21',c:A.green,bg:this.hexA(A.green,0.15),bd:this.hexA(A.green,0.32)},
+      {t:'Recuperación 66',c:A.orange,bg:this.hexA(A.orange,0.15),bd:this.hexA(A.orange,0.32)},
+      {t:'Fuerza 0 min/sem',c:A.red,bg:this.hexA(A.red,0.15),bd:this.hexA(A.red,0.32)},
+    ];
+    const loadTiles=[
+      {v:'18',u:'',l:'Sesiones',c:'var(--label,#fff)'},
+      {v:'934',u:'min',l:'Entreno total',c:'var(--label,#fff)'},
+      {v:'64',u:'min',l:'Vigorosos Z4–5',c:'var(--label,#fff)'},
+      {v:'0',u:'min',l:'Fuerza',c:A.red},
+    ];
+
+    const tabsDef=[{key:'hoy',label:'Hoy',ic:'heart'},{key:'tendencias',label:'Tendencias',ic:'chart'},{key:'coach',label:'Coach',ic:'sparkles'},{key:'mas',label:'Más',ic:'grid'}];
+    const tabs=tabsDef.map(td=>{ const active=tab===td.key; const color=active?A.green:'var(--label2,rgba(235,235,245,.62))'; const colHex=active?A.green:(dark?'rgba(235,235,245,0.55)':'rgba(60,60,67,0.5)'); const iconEl=this.svgBox(td.ic==='grid'?this.gridIcon(colHex,23):this.icon(td.ic,colHex,23,active?2.2:1.9)); return {label:td.label,color,iconEl,go:()=>setTab(td.key)}; });
+
+    const detail = this.state.detail ? this.detailFor(this.state.detail) : null;
+
+    const XL=this.XL();
+    let T=null;
+    if(tab==='tendencias'){
+      T={
+        recStrain:this.svgBox(this.buildChart({id:'rs',h:182,min:0,max:100,yTicks:[{v:0,l:'0'},{v:50,l:'50'},{v:100,l:'100'}],xLabels:XL,series:[{data:D.recovery,color:A.green,fill:true,fillOp:0.26,sw:2.6},{data:D.strain,color:A.blue,dash:'5 5',sw:2.2}]})),
+        balance:this.svgBox(this.buildDonut(60,A.orange)),
+        hrv:this.svgBox(this.buildChart({id:'hv',h:162,min:35,max:80,yTicks:[{v:40,l:'40'},{v:55,l:'55'},{v:70,l:'70'}],xLabels:XL,band:{lo:50,hi:64,color:this.hexA(A.green,0.07),line:57.1},series:[{data:D.hrv,color:'#9D7BFF',fill:true,fillOp:0.18,points:true,ptR:2,sw:2.4}]})),
+        rhr:this.svgBox(this.buildChart({id:'rh',h:162,min:42,max:60,yTicks:[{v:44,l:'44'},{v:50,l:'50'},{v:56,l:'56'}],xLabels:XL,series:[{data:D.rhr,color:A.orange,fill:true,fillOp:0.2,points:true,ptR:2,sw:2.4}]})),
+        sleep:this.svgBox(this.buildStacked()),
+        consistency:this.svgBox(this.buildScatter()),
+        spo2:this.svgBox(this.buildChart({id:'sp',h:162,min:88,max:100,yTicks:[{v:90,l:'90'},{v:94,l:'94'},{v:98,l:'98'}],xLabels:XL,threshold:{v:90,color:'#FF453A'},series:[{data:D.spo2,color:A.cyan,fill:true,fillOp:0.18,sw:2.4}]})),
+        temp:this.svgBox(this.buildChart({id:'tm',h:162,min:-3,max:1,yTicks:[{v:-2,l:'-2'},{v:-1,l:'-1'},{v:0,l:'0'},{v:1,l:'+1'}],xLabels:XL,threshold:{v:0,color:'rgba(150,150,150,.5)',dash:'4 4'},series:[{data:D.temp,color:A.orange,fill:true,fillOp:0.18,sw:2.4}]})),
+      };
+    }
+    const G='#30D158', Y='#FF9F0A';
+    const metrics=[
+      {l:'HRV base',v:'57.1',u:'ms',s:'rango 44.8–72',d:G},{l:'FC reposo',v:'50',u:'lpm',s:'casi atlético',d:G},
+      {l:'VO₂máx',v:'55',u:'est.',s:'demográfico',d:G},{l:'Sueño',v:'6.2',u:'h',s:'meta 7h+',d:Y},
+      {l:'Profundo',v:'67',u:'min',s:'22% · sano',d:G},{l:'REM',v:'106',u:'min',s:'23% · sano',d:G},
+      {l:'Respiración',v:'16.3',u:'/min',s:'estable',d:G},{l:'SpO₂ noct.',v:'96.5',u:'%',s:'>95 sano',d:G},
+      {l:'Pasos',v:'13.4k',u:'',s:'muy activo',d:G},{l:'Vigorosos',v:'13',u:'min',s:'al día',d:G},
+      {l:'Esfuerzo',v:'6.6',u:'/21',s:'carga diaria',d:G},{l:'Eficiencia',v:'90.8',u:'%',s:'real, no Fitbit',d:Y},
+    ];
+    const workouts=[
+      {n:'Sport',t:'24 jun · 15:36',min:'26 min',kcal:'147 kcal',bpm:'103 lpm',azm:'12 AZM'},
+      {n:'Tennis',t:'24 jun · 12:22',min:'—',kcal:'650 kcal',bpm:'97 lpm',azm:'—'},
+      {n:'Sport',t:'24 jun · 12:14',min:'63 min',kcal:'483 kcal',bpm:'114 lpm',azm:'57 AZM'},
+      {n:'Sport',t:'23 jun · 20:35',min:'26 min',kcal:'140 kcal',bpm:'96 lpm',azm:'8 AZM'},
+      {n:'Sport',t:'23 jun · 13:36',min:'70 min',kcal:'601 kcal',bpm:'120 lpm',azm:'64 AZM'},
+      {n:'Aerobic Workout',t:'23 jun · 10:24',min:'42 min',kcal:'244 kcal',bpm:'98 lpm',azm:'16 AZM'},
+    ];
+    const periods=['7d','30d','90d','Todo'].map(p=>({p,sty:this.state.period===p?onSel:offSel,go:()=>this.setState({period:p})}));
+
+    const suggestions=['¿Por qué bajó mi recuperación?','Arma mi sesión de fuerza','¿A qué hora me acuesto hoy?','Resumen de la semana'];
+    const messages=[
+      {role:'user',text:'¿Por qué mi recuperación es solo 66%?'},
+      {role:'assistant',text:'Tu HRV (58 ms) y FC en reposo (52) están sanos. Lo que te frena es el sueño: 6.6 h frente a tu necesidad de ~8 h. Recuperar esa hora y media te subiría a ~75%.'},
+    ].map(m=>{ const user=m.role==='user'; return {text:m.text,
+      row:{display:'flex',justifyContent:user?'flex-end':'flex-start',marginBottom:'10px'},
+      bubble:user
+        ? {maxWidth:'80%',background:'linear-gradient(135deg,#0A84FF,#0A6FE0)',color:'#fff',font:'400 14px/1.45 -apple-system',padding:'11px 15px',borderRadius:'20px 20px 6px 20px',boxShadow:'0 4px 14px rgba(10,132,255,.3)'}
+        : {maxWidth:'84%',background:'var(--card,rgba(30,30,34,.82))',backdropFilter:'blur(var(--blur,26px))',WebkitBackdropFilter:'blur(var(--blur,26px))',border:'1px solid var(--card-border,rgba(255,255,255,.1))',color:'var(--label,#fff)',font:'400 14px/1.5 -apple-system',padding:'13px 15px',borderRadius:'20px 20px 20px 6px',boxShadow:'inset 0 1px 0 var(--card-hi,rgba(255,255,255,.12))'} }; });
+
+    const colorTokens=[
+      {n:'Recuperación',h:'#30D158'},{n:'Sueño',h:'#5E5CE6'},{n:'Esfuerzo',h:'#64D2FF'},{n:'Corazón · HRV',h:'#FF375F'},
+      {n:'SpO₂',h:'#5AC8FA'},{n:'Temp. piel',h:'#FF9F0A'},{n:'Respiración',h:'#40C8E0'},{n:'Edad corporal',h:'#BF5AF2'},
+    ];
+    const materialTokens=[
+      {n:'Thick',d:'Tarjetas base',blur:'34px',op:'82%'},
+      {n:'Regular',d:'Tab bar · headers',blur:'26px',op:'72%'},
+      {n:'Thin',d:'Controles sobre vidrio',blur:'14px',op:'55%'},
+    ];
+    const typeTokens=[
+      {n:'Large Title',s:'34 / Bold',fs:'28px',fw:700},{n:'Title 1',s:'28 / Bold',fs:'24px',fw:700},
+      {n:'Title 3',s:'17 / Semibold',fs:'17px',fw:650},{n:'Body',s:'15 / Regular',fs:'15px',fw:400},
+      {n:'Caption',s:'12 / Medium',fs:'12px',fw:500},
+    ];
+    const radiusTokens=[{n:'Tarjeta',v:'24',rv:'12px'},{n:'Tile',v:'18',rv:'9px'},{n:'Control',v:'14',rv:'7px'},{n:'Pill',v:'999',rv:'999px'}];
+    const masMode=[{k:'light',l:'Claro'},{k:'dark',l:'Oscuro'}].map(o=>({l:o.l,sty:this.state.mode===o.k?onSel:offSel,go:()=>this.setState({mode:o.k})}));
+    const motionNotes=[
+      {t:'Anillos hero',d:'Se llenan con spring (0.2, 0.85, 0.25, 1) al entrar a Hoy; los tres escalonados +120 ms.'},
+      {t:'Refracción del vidrio',d:'Parallax sutil al hacer scroll: las capas de glass y los halos de color se desplazan a distinta velocidad.'},
+      {t:'Transición de tabs',d:'Cross-fade + scale 0.97→1; el ítem activo tiñe de verde con un spring corto.'},
+      {t:'Detalle de métrica',d:'Push lateral (translateX) estilo navegación iOS; regreso con gesto desde el borde.'},
+      {t:'Números hero',d:'Count-up de 0 al valor en ~0.9 s al cargar cada pantalla.'},
+    ];
+
+    return {
+      appStyle:{...this.theme(),display:'flex',flexDirection:'column',alignItems:'center',minHeight:'100vh',padding:'30px 16px 50px',background:'var(--app-bg)',fontFamily:'-apple-system,"SF Pro Display","SF Pro Text",system-ui,sans-serif',position:'relative'},
+      glowStyle:{position:'absolute',inset:0,pointerEvents:'none',background: dark
+        ? 'radial-gradient(50% 30% at 84% 3%, rgba(48,209,88,.16), transparent 70%), radial-gradient(56% 40% at 6% 88%, rgba(94,92,230,.18), transparent 72%)'
+        : 'radial-gradient(50% 30% at 84% 3%, rgba(48,209,88,.1), transparent 70%), radial-gradient(56% 40% at 6% 88%, rgba(94,92,230,.1), transparent 72%)'},
+      lightBtn: this.state.mode==='light'?onSel:offSel,
+      darkBtn: this.state.mode==='dark'?onSel:offSel,
+      setLight:()=>this.setState({mode:'light'}),
+      setDark:()=>this.setState({mode:'dark'}),
+      showStatus,
+      isHoy:tab==='hoy', isTend:tab==='tendencias', isCoach:tab==='coach', isMas:tab==='mas',
+      isDetail: !!detail, detail,
+      closeDetail:()=>this.setState({detail:null}),
+      accentDetail: detail?detail.accent:A.green,
+      heroRings:this.svgBox(this.ringsSVG(66,95,7.9/21, false)),
+      open:{recovery:()=>openDetail('recovery'),sleep:()=>openDetail('sleep'),strain:()=>openDetail('strain'),bodyage:()=>openDetail('bodyage')},
+      goCoach:()=>setTab('coach'),
+      monitorRows, chips, loadTiles, tabs,
+      T, metrics, workouts, periods,
+      suggestions, messages, colorTokens, materialTokens, typeTokens, radiusTokens, masMode, motionNotes,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+# Vitals — self-hosted WHOOP alternative
+
+[![CI](https://github.com/your-org/vitals-app/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/vitals-app/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen.svg)](#tests)
+
+**Your data. Your server. Your AI.**
+
+A personal recovery / strain / sleep / body-age dashboard — the kind of thing you'd
+pay a monthly subscription for — except it runs on hardware you own, reads from
+wearables you already have (Google Fit, Oura, WHOOP, Apple HealthKit), and never
+sends a byte of your health data to a third-party cloud.
+
+<!--
+  SCREENSHOT / GIF PLACEHOLDER
+  Replace this comment with a real screenshot or GIF before publishing:
+    ![Vitals dashboard](assets/demo/screenshot.png)
+  How to capture one:
+    1. `VITALS_DEMO=1 uvicorn main:app --port 8700` (synthetic data, no OAuth needed)
+    2. Open http://localhost:8700 in a browser sized ~390x844 (iPhone-ish) or desktop
+    3. Screenshot the "Today" tab (recovery ring + coach card) for the hero shot,
+       or record a 10-15s GIF scrolling through Today -> Trends -> Coach -> More.
+    4. Save under assets/demo/ and update the path above.
+-->
+
+---
+
+## Why Vitals
+
+Wearable dashboards (WHOOP, Oura, Fitbit Premium) are subscription products: your
+recovery, sleep, and HRV history live on someone else's server, gated behind a
+monthly fee, and the scoring logic is a black box.
+
+Vitals takes the opposite bet:
+
+- **Self-hosted, always** — Docker Compose or a plain Python venv on a box you
+  control (a spare Mac mini, a home server, a $5 VPS). No subscription, ever.
+- **Bring your own OAuth** — you create your own Google/Oura/WHOOP developer
+  credentials; Vitals never proxies your data through a shared backend.
+- **Transparent scoring** — recovery, strain, sleep performance, and body-age are
+  plain Python you can read in an afternoon. See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md)
+  for the exact formulas, weights, and — just as important — their honest limitations.
+- **AI-native, via MCP** — `vitals_mcp.py` exposes your health data as MCP tools,
+  so a local AI agent (Claude, OpenClaw/Alfred, or anything speaking MCP) can
+  reason over your recovery trend, flag an early illness signal, or answer
+  "should I train hard today?" without any of that data leaving your network.
+- **Multi-source, source-agnostic** — connect Google Health, Oura, WHOOP, or
+  Apple HealthKit (or several at once); the scoring engine normalizes whatever
+  comes in to one internal schema.
+
+If you've ever wanted your quantified-self data to actually be *yours* — inspectable,
+exportable, and running on infrastructure you control — this is that.
+
+---
+
+## Features
+
+| Area | What it does |
+|---|---|
+| **Today** | Recovery ring (HRV/RHR/sleep composite), strain, sleep breakdown, HRV/RHR vs. rolling baseline |
+| **Trends** | 7d/30d rolling views of recovery, HRV, sleep, training load (ACWR) |
+| **Coach** | Conversational AI coach (multi-conversation, ChatGPT/Claude-style) via your local `claude` CLI — no API key needed if you already run OpenClaw |
+| **Journal + Behavior Impact** | Daily habit tracker (~33 habits: supplements, alcohol, meditation, screens-in-bed, etc.) + a statistical engine that finds which habits *actually* move your recovery/HRV/sleep — Spearman correlation with Benjamini-Hochberg correction, not vibes |
+| **Narrative reports** | Weekly/monthly plain-language summaries of what changed and why |
+| **Labs** | Manual blood-test tracking (~20 common biomarkers) with reference ranges and out-of-range flags |
+| **Body-age & Healthspan** | VO2max-based fitness age (NTNU/Nes 2011 formula) plus a monthly body-age-vs-chronological-age trend |
+| **Household / multi-profile** | Track multiple people (family, partner) from one instance, each with isolated data |
+| **Push notifications** | ntfy/Telegram alerts for recovery drops, illness-risk signals, sleep debt |
+| **Offline-capable PWA** | Add to Home Screen on iOS/Android; service worker caches the shell |
+| **Female health module** | Opt-in cycle tracking (phase, fertile window, delay detection, peri/menopause signals) — zero data exposure unless explicitly enabled |
+| **ECG viewer** | Isolated viewer for Apple Watch ECG waveforms pushed from the iOS companion app |
+| **Data export** | Full JSON or flattened CSV export of your own history, any time |
+
+---
+
+## Supported data sources
+
+| Source | Auth | Notes |
+|---|---|---|
+| **Google Fit / Health Connect** | OAuth 2.0 (BYO client) | Fitbit, Pixel Watch, Garmin, and anything synced into Google Health Connect |
+| **Oura** | OAuth 2.0 (BYO client) | Oura Ring v2 API |
+| **WHOOP** | OAuth 2.0 (BYO client) | WHOOP v2 API — requires `offline` scope for refresh tokens |
+| **Apple HealthKit** | Push token (`INGEST_TOKEN`) | Companion iOS app reads HealthKit on-device and pushes to `/api/ingest` — no cloud round-trip |
+
+You can connect more than one source at once; the sync engine merges them into a
+single daily record per metric.
+
+---
+
+## Quick start
+
+### Docker (recommended)
+
+No Python setup, no venv — just Docker.
+
+```bash
+git clone https://github.com/your-org/vitals-app.git
+cd vitals-app
+cp .env.example .env        # fill in your credentials (see below), or skip for demo mode
+docker compose up -d
+# open http://localhost:8700
+```
+
+Want to try it before connecting any real credentials? Run it in **demo mode**
+instead — a deterministic synthetic dataset (150 days of realistic
+recovery/sleep/HRV/strain, plus sample journal entries and lab results) with
+no OAuth, no `.env`, no wearable required:
+
+```bash
+docker compose run --rm -e VITALS_DEMO=1 -p 8700:8700 vitals
+# open http://localhost:8700 — fully populated dashboard, no login
+```
+
+In demo mode, every write-y endpoint (sync, OAuth login, source connect/disconnect,
+HealthKit ingest) responds `200 {"status": "demo"}` instead of touching real
+credentials or `data/`. Journal/labs entries you add in demo mode go to a
+throwaway temp directory that's discarded when the process exits — nothing you
+do in demo mode can affect a real install running alongside it.
+
+### No Docker — one command (`install.py`)
+
+Prefer a plain Python venv over Docker? `install.py` is a single cross-platform
+script (Windows/Mac/Linux, stdlib only) that creates the venv, installs
+dependencies, generates `.env`, and launches the app — no manual steps.
+
+```bash
+git clone https://github.com/your-org/vitals-app.git
+cd vitals-app
+python install.py
+# open http://localhost:8700
+```
+
+It's idempotent — re-run it any time; it reuses an existing `.venv` and never
+overwrites an existing `.env`. Try demo mode the same way, with zero credentials:
+
+```bash
+python install.py --demo
+```
+
+#### Flags
+
+| Flag | What it does |
+|---|---|
+| *(none)* | Interactive wizard (all fields optional, Enter = default/skip), then launches the app |
+| `--demo` | Sets `VITALS_DEMO=1`, skips all credential prompts, launches straight into the demo dataset |
+| `--no-launch` | Only does setup (venv + deps + `.env`); prints how to start the app manually, doesn't launch it |
+| `-y`, `--yes` | Non-interactive: copies `.env.example` as-is (auto-generating `INGEST_TOKEN`), no prompts — for CI/scripts |
+| `--port N` | Port for uvicorn (default `8700`) |
+| `--help` | Full usage |
+
+`install.py` requires Python 3.9+ (same minimum as the rest of the project) and
+uses whichever interpreter you invoked it with (`python`, `python3`, or `py -3`
+on Windows) to create the venv — no need to guess the right command for your
+platform.
+
+### Manual setup (venv, no installer)
+
+If you'd rather run the steps yourself:
+
+```bash
+git clone https://github.com/your-org/vitals-app.git
+cd vitals-app
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # fill in your credentials (see below)
+uvicorn main:app --host 127.0.0.1 --port 8700 --reload
+# open http://localhost:8700
+```
+
+### Windows service (NSSM)
+
+For a persistent background service (not just a dev session), see
+`deploy_windows.ps1` for a step-by-step PowerShell script.
+Requires Python 3.9+, NSSM, and Tailscale (for remote HTTPS access).
+
+---
+
+## Setting up Google OAuth (BYO credentials)
+
+Vitals uses Google's OAuth 2.0 to read your health data.
+**Each person creates their own OAuth client** — there is no shared client ID.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**.
+2. Create a project (or use an existing one).
+3. Enable **Fitness API** and/or **Health Connect API**.
+4. Create an **OAuth 2.0 Client ID** (type: *Web application*).
+5. Add `http://localhost:8700/auth/callback` as an authorized redirect URI.
+   - For remote access add `https://your-box.your-tailnet.ts.net/auth/callback`.
+6. Copy `CLIENT_ID` and `CLIENT_SECRET` into your `.env`.
+
+> **Testing mode:** while your OAuth app is in *Testing* status, tokens expire every 7 days.
+> The dashboard shows a "Reconnect" banner when that happens — tap it to re-auth in one click.
+> Publish the app (Google verification is optional for personal use) to get a permanent refresh token.
+
+Oura and WHOOP work the same way — create a developer app on their respective
+portals and drop the client ID/secret into `.env` (see `.env.example` for the
+exact keys). Apple HealthKit doesn't use OAuth; see `docs/IOS-HEALTHKIT.md`.
+
+---
+
+## Configuration (`.env`)
+
+```bash
+cp .env.example .env
+```
+
+See [`.env.example`](.env.example) for the full list of variables with inline
+comments (OAuth credentials per source, profile defaults, `INGEST_TOKEN`,
+notification settings, Claude CLI path, and `VITALS_DEMO`).
+
+### Coach with a local LLM (Ollama, LM Studio, llama.cpp)
+
+By default the Coach (chat, headline, and narrative reports) shells out to
+your local `claude` CLI — no API key needed. If you'd rather run everything
+fully offline against a self-hosted model, set `COACH_BACKEND=openai_compat`
+in `.env` and point it at any OpenAI-compatible `/chat/completions` endpoint:
+
+```bash
+# .env
+COACH_BACKEND=openai_compat
+COACH_API_BASE=http://localhost:11434/v1   # Ollama default
+COACH_MODEL=llama3.1                        # must already be pulled/loaded
+COACH_API_KEY=                              # leave empty for local servers
+```
+
+This works with [Ollama](https://ollama.com) (`ollama pull llama3.1` first),
+[LM Studio](https://lmstudio.ai)'s local server, or any `llama.cpp`-based
+server that speaks the OpenAI chat-completions format. The request is a
+single stdlib `urllib` POST (no new pip dependency, no SDK) — same
+best-effort semantics as the CLI: a slow/unreachable server times out and
+falls back gracefully, it never blocks a request or crashes the app.
+`COACH_BACKEND` unset (or any unrecognized value) keeps the default
+`claude_cli` behavior — nothing changes if you don't touch this.
+
+### Dashboard login (`DASHBOARD_TOKEN`)
+
+By default, anyone who can reach the app's port can view your dashboard — no
+login screen. Set `DASHBOARD_TOKEN` in `.env` to require authentication:
+
+```bash
+# .env
+DASHBOARD_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+```
+
+Then log in once at `/login` (sets a long-lived cookie), or send
+`Authorization: Bearer <DASHBOARD_TOKEN>` on every request (handy for `curl`
+or Grafana). `/api/ingest` + `/api/ecg` (the iOS app's own push endpoints) and
+`/api/v1/*` (the public read-only API) keep their own independent auth either
+way — this only gates the dashboard itself. Full details, including the CSRF
+side-benefit, in `SECURITY.md`.
+
+---
+
+## Architecture / Tech stack
+
+- **Backend**: FastAPI (Python 3.9+), vanilla JS frontend (no build step), served
+  as a single process — `uvicorn main:app`.
+- **Persistence**: flat JSON files under `data/` (no database). Atomic writes
+  (`.tmp` + `os.replace`) everywhere; each domain (profile, journal, labs, cycle,
+  coach history) has its own file. Household/multi-profile mode namespaces these
+  under `data/users/<uid>/`.
+  See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) for how the raw per-source
+  payloads get normalized into the daily schema.
+- **Scheduler**: APScheduler background job for the daily sync (`SYNC_HOUR` in
+  `.env`), plus a best-effort sync on boot.
+  See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) for the scoring pipeline that
+  runs on every sync (recovery, strain, sleep performance, body-age).
+- **AI coach**: shells out to your local `claude` CLI (no API key required if
+  you already run [OpenClaw](https://openclaw.io)); degrades gracefully to a
+  deterministic fallback narrative if the CLI isn't available.
+- **MCP server**: `vitals_mcp.py` (separate process, Python 3.10+/`mcp` SDK)
+  exposes your data as MCP tools for any MCP-speaking agent.
+- **Mobile**: Capacitor-wrapped iOS app (`ios/`) for native HealthKit/ECG access,
+  talking to the same FastAPI backend over `/api/ingest`.
+- **Interactive API docs**: FastAPI auto-generates OpenAPI docs at
+  [`/docs`](http://localhost:8700/docs) once the server is running — every
+  endpoint, request/response schema, and a "Try it out" console, for free.
+
+---
+
+## Endpoints
+
+Full interactive reference at `/docs` once running. Complete list of all
+routes in `main.py`, with their auth model:
+
+- **none** — no auth of its own; open by design (login page, static PWA
+  assets) or intentionally public.
+- **dashboard** — protected by `DASHBOARD_TOKEN` when you set one (cookie or
+  `Authorization: Bearer`); wide open if you leave it empty (default). See
+  `SECURITY.md`.
+- **ingest-token** — requires the `X-Vitals-Token` header (`INGEST_TOKEN`),
+  independent of `DASHBOARD_TOKEN`.
+- **api-key** — requires `Authorization: Bearer vk_...` (a key you generate
+  under More → API), independent of `DASHBOARD_TOKEN`.
+
+| Method | Path | Description | Auth |
+|--------|------|--------------|------|
+| GET | `/` | Dashboard HTML | dashboard |
+| GET | `/manifest.webmanifest` | PWA manifest | none |
+| GET | `/service-worker.js` | PWA service worker | none |
+| GET | `/api/ingest-token` | Shows the current `INGEST_TOKEN` (for pairing) | dashboard |
+| GET | `/api/qr` | SVG QR code for pairing (embeds the token in the URL) | dashboard |
+| GET | `/login` | Dashboard login form | none |
+| POST | `/login` | Validate `DASHBOARD_TOKEN`, set session cookie | none |
+| GET | `/api/insights` | Rule-based insight cards | dashboard |
+| GET | `/api/coach/suggestions` | Suggested Coach questions | dashboard |
+| GET | `/api/drivers` | Statistical drivers of recovery | dashboard |
+| GET | `/api/report` | Weekly/monthly narrative report | dashboard |
+| GET | `/api/data` | JSON of your health data | dashboard |
+| GET | `/api/export` | Export full dataset (`?fmt=json\|csv`) | dashboard |
+| POST | `/api/sync` | Trigger a manual sync (no-op in demo mode) | dashboard |
+| POST | `/api/ingest` | HealthKit push ingestion (iOS app) | ingest-token |
+| POST | `/api/ecg` | ECG reading push ingestion (iOS app) | ingest-token |
+| GET | `/api/ecg` | List ECG readings (no voltages) | dashboard |
+| GET | `/api/ecg/{uuid}` | Full ECG reading incl. voltages | dashboard |
+| GET | `/auth/login` | Start OAuth flow (disabled in demo mode) | dashboard |
+| GET | `/api/profile` | Read profile | dashboard |
+| PUT | `/api/profile` | Update profile | dashboard |
+| POST | `/api/sources/{name}` | Connect a data source | dashboard |
+| DELETE | `/api/sources/{name}` | Disconnect a data source | dashboard |
+| GET | `/api/sources` | List connected sources | dashboard |
+| GET | `/api/cycle` | Cycle tracking state | dashboard |
+| POST | `/api/cycle/period` | Log a period | dashboard |
+| DELETE | `/api/cycle/period/{start}` | Delete a logged period | dashboard |
+| POST | `/api/cycle/symptom` | Log a cycle symptom | dashboard |
+| GET | `/api/journal` | Habit journal entries | dashboard |
+| PUT | `/api/journal/{date}` | Update a journal entry | dashboard |
+| POST | `/api/journal/custom` | Add a custom journal habit | dashboard |
+| GET | `/api/journal/impact` | Behavior Impact engine findings | dashboard |
+| GET | `/api/journal/dose-response` | Dose-response curve for a habit | dashboard |
+| GET | `/api/sleep-coach` | Sleep coach card | dashboard |
+| GET | `/api/programs` | Coach programs | dashboard |
+| GET | `/api/plan` | Active plan card | dashboard |
+| POST | `/api/plan` | Start/update a plan | dashboard |
+| DELETE | `/api/plan` | Clear the active plan | dashboard |
+| POST | `/api/plan/check` | Check off a plan step | dashboard |
+| GET | `/api/labs` | Blood-test entries | dashboard |
+| POST | `/api/labs` | Add a blood-test entry | dashboard |
+| POST | `/api/labs/import` | Import blood tests from CSV | dashboard |
+| DELETE | `/api/labs/{entry_id}` | Delete a blood-test entry | dashboard |
+| GET | `/api/healthspan` | Body-age-vs-chronological-age trend | dashboard |
+| GET | `/api/coach/conversations` | List Coach conversations | dashboard |
+| POST | `/api/coach/conversations` | Start a new Coach conversation | dashboard |
+| GET | `/api/coach/conversations/{cid}` | Read a Coach conversation | dashboard |
+| DELETE | `/api/coach/conversations/{cid}` | Delete a Coach conversation | dashboard |
+| POST | `/api/coach` | Ask the Coach (chat) | dashboard |
+| GET | `/api/coach/history` | Legacy Coach history | dashboard |
+| DELETE | `/api/coach/history` | Clear legacy Coach history | dashboard |
+| GET | `/api/users` | List household users | dashboard |
+| POST | `/api/users` | Create a household user | dashboard |
+| DELETE | `/api/users/{uid}` | Delete a household user | dashboard |
+| POST | `/api/keys` | Create a public read-only API key | dashboard |
+| GET | `/api/keys` | List your API keys (metadata only) | dashboard |
+| DELETE | `/api/keys/{key_id}` | Revoke an API key | dashboard |
+| GET | `/api/v1/data` | Public read-only API: full dataset | api-key |
+| GET | `/api/v1/insights` | Public read-only API: insight cards | api-key |
+| GET | `/auth/callback` | OAuth callback — saves your token | dashboard |
+
+---
+
+## API pública de solo lectura
+
+Roadmap P2 (F10): la comunidad self-hosted puede construir sobre sus propios
+datos (mismo patrón que [wger](https://wger.de)/Open Wearables) sin exponer
+`INGEST_TOKEN` (el secreto de escritura de HealthKit/ECG) a integraciones de
+terceros. Desde **Más → API**, genera una clave `vk_...` — se muestra **una
+sola vez**; guárdala, no se puede recuperar después.
+
+```bash
+curl -H "Authorization: Bearer vk_..." https://tu-instancia.example/api/v1/data
+curl -H "Authorization: Bearer vk_..." https://tu-instancia.example/api/v1/insights
+```
+
+- Claves por usuario, revocables, de **solo lectura** — no existe ningún
+  endpoint de escritura bajo `/api/v1/*`.
+- Solo se persiste el hash SHA-256 de la clave; la clave cruda nunca se
+  guarda ni se puede recuperar tras su creación.
+- Sin clave, clave inválida o revocada → `401` (nunca `500`).
+- Máximo 10 claves activas por usuario; revócalas desde la misma sección.
+
+---
+
+## Onboarding & profile
+
+On first launch, Vitals walks you through a short onboarding flow where you set your
+language, units (metric / imperial), and profile. You can update these later under
+the **More** tab → Profile.
+
+---
+
+## PWA — Add to Home Screen
+
+Open `http://localhost:8700` (or your HTTPS URL) in Safari or Chrome.
+Tap **Share → Add to Home Screen** (iOS) or the install prompt (Android/Chrome).
+Vitals runs as a full-screen, offline-capable app with no browser chrome.
+
+---
+
+## MCP server (optional — for OpenClaw / Alfred / any MCP client)
+
+If you run [OpenClaw](https://openclaw.io) or any other MCP-speaking agent, you
+can wire `vitals_mcp.py` as an MCP server so it can answer health questions
+directly from your data — locally, with nothing sent to a third party.
+
+```bash
+# Install extra deps (Python 3.10+ required for the mcp SDK)
+pip install -r requirements-mcp.txt
+
+# Run the MCP server (stdio transport — your agent will spawn it)
+python3 vitals_mcp.py
+```
+
+Available tools: `vitals_today`, `vitals_trends`, `vitals_insights`, `vitals_bodyage`,
+`vitals_morning_brief`, `vitals_ask_coach`.
+
+See the wiring instructions for your OpenClaw config in the `_dev/` folder (local only,
+not shipped in the public repo).
+
+---
+
+## Tests
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+1,300+ tests, all against **synthetic fixtures** — no real health data is required
+or shipped in the repo. CI runs the full suite on Python 3.9 and 3.12 on every
+push/PR (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+```bash
+python scripts/i18n_audit.py   # verifies all 4 locales (ES/EN/FR/PT) are in sync
+```
+
+---
+
+## Security & publishing your own fork
+
+See [`SECURITY.md`](SECURITY.md) for how to report a vulnerability, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md#before-you-publish) for the pre-publish
+checklist (never commit `.env` or `data/`, rotate credentials before making a
+fork public, etc.). `scripts/preflight_publish.sh` automates that check.
+
+---
+
+## License
+
+MIT © 2026 DocStream. See [LICENSE](LICENSE).

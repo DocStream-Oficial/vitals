@@ -1,0 +1,24 @@
+{
+  "name": "vitals-app",
+  "version": "1.0.0",
+  "description": "A personal health dashboard that pulls data from **Google Fit / Google Health Connect** (including Fitbit, Pixel Watch, Garmin, and any Google-connected wearable) and shows you a daily recovery, sleep, and body-age panel — similar to WHOOP, but running on **your own box**, with **your own Google OAuth credentials**.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5"
+  }
+}

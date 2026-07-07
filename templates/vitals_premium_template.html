@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals · Tablero de Salud — DocStream</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root{ color-scheme: dark; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#07090e;
+    color:#e6edf3;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:18px;
+    background-image:radial-gradient(1200px 600px at 20% -10%, rgba(22,199,132,.07), transparent),radial-gradient(1000px 500px at 100% 0%, rgba(77,159,255,.06), transparent);
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#16c784,#0f9d63);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:#04140d;box-shadow:0 6px 20px rgba(22,199,132,.35)}
+  h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+  .sub{color:#8b949e;font-size:12.5px;margin-top:2px}
+  .livebadge{font-size:11px;color:#ffb020;border:1px solid rgba(255,176,32,.35);background:rgba(255,176,32,.08);padding:4px 10px;border-radius:999px;font-weight:600}
+  .headtools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  .updated{font-size:11px;color:#8a93a6}
+  .syncbtn{font-size:12px;font-weight:700;color:#0b0e14;background:#4ea1ff;border:none;padding:7px 14px;border-radius:999px;cursor:pointer;transition:opacity .15s}
+  .syncbtn:hover{opacity:.85}
+  .syncbtn:disabled{opacity:.55;cursor:default}
+  @keyframes vspin{to{transform:rotate(360deg)}}
+  .syncbtn.spin .ic{display:inline-block;animation:vspin .8s linear infinite}
+  .daybar{display:flex;align-items:center;gap:10px;background:#0e131b;border:1px solid #1c2330;border-radius:14px;padding:8px 12px;margin-bottom:16px}
+  .daybar button{background:#161d28;border:1px solid #232c3a;color:#e6edf3;border-radius:9px;width:34px;height:34px;font-size:16px;cursor:pointer;transition:.15s}
+  .daybar button:hover{background:#1e2735;border-color:#2c3850}
+  .daybar .dlabel{font-weight:700;font-size:14px;flex:1;text-align:center}
+  .daybar .dlabel small{display:block;color:#8b949e;font-weight:500;font-size:11px}
+  .rings{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+  .ringcard{background:linear-gradient(180deg,#0f141d,#0c1118);border:1px solid #1c2330;border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden}
+  .ringcard h3{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#8b949e;margin-bottom:10px;font-weight:700}
+  .ringwrap{position:relative;width:160px;height:160px}
+  .ringwrap .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ringwrap .big{font-size:38px;font-weight:800;line-height:1}
+  .ringwrap .unit{font-size:13px;color:#8b949e;margin-top:3px}
+  .rstate{margin-top:12px;font-size:12.5px;font-weight:700;padding:5px 14px;border-radius:999px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .panel{background:linear-gradient(180deg,#0f141d,#0c1118);border:1px solid #1c2330;border-radius:18px;padding:16px 18px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#9aa4b2;margin-bottom:2px;font-weight:700}
+  .panel .ph-sub{font-size:11.5px;color:#6e7888;margin-bottom:12px}
+  .col-12{grid-column:span 12}.col-8{grid-column:span 8}.col-6{grid-column:span 6}.col-4{grid-column:span 4}
+  .chartbox{position:relative;height:230px}
+  .chartbox.tall{height:260px}
+  .insight{background:linear-gradient(135deg,rgba(22,199,132,.10),rgba(77,159,255,.08));border:1px solid #1c2330;border-radius:16px;padding:14px 18px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
+  .insight .ic{font-size:20px}
+  .insight b{color:#fff}
+  .insight p{font-size:13.5px;color:#c4ccd8;line-height:1.5}
+  .periodsel{display:flex;gap:6px}
+  .periodsel button{background:#11161f;border:1px solid #232c3a;color:#8b949e;border-radius:8px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;transition:.15s}
+  .periodsel button.on{background:#16c784;border-color:#16c784;color:#04140d}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .mcard{background:linear-gradient(180deg,#0f141d,#0c1118);border:1px solid #1c2330;border-radius:14px;padding:14px}
+  .mcard .lbl{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .mcard .val{font-size:26px;font-weight:800;margin-top:6px;line-height:1}
+  .mcard .val small{font-size:13px;color:#8b949e;font-weight:600}
+  .mcard .meta{font-size:11.5px;color:#6e7888;margin-top:5px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .g{background:#16c784}.y{background:#ffb020}.r{background:#ff4d4f}.b{background:#4d9fff}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:#8b949e;margin-top:10px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  footer{margin-top:18px;color:#6e7888;font-size:11.5px;line-height:1.6;border-top:1px solid #1c2330;padding-top:14px}
+  .sectitle{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6e7888;font-weight:700;margin:20px 4px 10px}
+  @media(max-width:820px){.rings{grid-template-columns:1fr}.col-8,.col-6,.col-4{grid-column:span 12}.cards{grid-template-columns:repeat(2,1fr)}}
+
+  /* COACH IA PREMIUM */
+  .coach{background:linear-gradient(135deg,#13241d,#10171f);border:1px solid #1f3b30;border-radius:18px;padding:18px 20px;margin-bottom:16px;position:relative;overflow:hidden}
+  .coach:before{content:"";position:absolute;inset:0;background:radial-gradient(600px 220px at 0% 0%,rgba(22,199,132,.13),transparent);pointer-events:none}
+  .coach-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:relative}
+  .coach-badge{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#16c784;background:rgba(22,199,132,.10);border:1px solid rgba(22,199,132,.35);padding:5px 12px;border-radius:999px}
+  .coach-date{font-size:11.5px;color:#6e7888}
+  .coach-body{font-size:14px;line-height:1.6;color:#dfe7f0;position:relative}
+  .coach-body b{color:#fff}
+  .coach-body p{margin:8px 0}
+  .coach-body h4{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:#9aa4b2;margin:12px 0 2px}
+  .coach-body .chips{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px}
+  .coach-body .chip{font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px}
+  .chip.g{background:rgba(22,199,132,.14);color:#16c784;border:1px solid rgba(22,199,132,.3)}
+  .chip.y{background:rgba(255,176,32,.14);color:#ffb020;border:1px solid rgba(255,176,32,.3)}
+  .chip.r{background:rgba(255,77,79,.14);color:#ff4d4f;border:1px solid rgba(255,77,79,.3)}
+  .chip.b{background:rgba(77,159,255,.14);color:#4d9fff;border:1px solid rgba(77,159,255,.3)}
+
+  /* AUTH BANNER */
+  .authbar{display:none;border-radius:12px;padding:9px 14px;margin-bottom:14px;font-size:12.5px;font-weight:600;line-height:1.5}
+  .authbar.ok{display:block;background:rgba(22,199,132,.08);border:1px solid rgba(22,199,132,.28);color:#16c784}
+  .authbar.warn{display:block;background:rgba(255,176,32,.10);border:1px solid rgba(255,176,32,.35);color:#ffb020}
+  .authbar.exp{display:block;background:rgba(255,77,79,.10);border:1px solid rgba(255,77,79,.42);color:#ff6163}
+  .authbar code{background:rgba(255,255,255,.10);padding:2px 7px;border-radius:5px;font-size:12px;color:#fff}
+  /* WORKOUTS */
+  .wlist{display:flex;flex-direction:column;gap:6px}
+  .wrow{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr;gap:8px;align-items:center;background:#0e131b;border:1px solid #1c2330;border-radius:10px;padding:9px 12px}
+  .wname{font-weight:700;font-size:13px;color:#e6edf3}
+  .wname small{display:block;color:#6e7888;font-weight:500;font-size:11px;margin-top:1px}
+  .wstat{font-size:12.5px;color:#9aa4b2;text-align:right}
+  .wempty{color:#6e7888;font-size:12.5px;padding:8px 0}
+  @media(max-width:820px){.wrow{grid-template-columns:1.6fr 1fr 1fr}.wrow .wstat:nth-child(4),.wrow .wstat:nth-child(5){display:none}}
+  /* EDAD CORPORAL */
+  .bodyage{background:linear-gradient(135deg,#1a1530,#0e1320);border:1px solid #2a2150;border-radius:18px;padding:18px 20px;margin-bottom:16px;position:relative;overflow:hidden}
+  .bodyage:before{content:"";position:absolute;inset:0;background:radial-gradient(600px 220px at 100% 0%,rgba(157,123,255,.16),transparent);pointer-events:none}
+  .ba-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;position:relative;flex-wrap:wrap;gap:6px}
+  .ba-badge{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#b69dff;background:rgba(157,123,255,.12);border:1px solid rgba(157,123,255,.4);padding:5px 12px;border-radius:999px}
+  .ba-sub{font-size:11.5px;color:#8b949e}
+  .ba-grid{display:flex;gap:28px;align-items:center;flex-wrap:wrap;position:relative}
+  .ba-num{display:flex;align-items:baseline;gap:10px}
+  .ba-big{font-size:46px;font-weight:800;line-height:1;color:#c9b8ff;text-shadow:0 0 24px rgba(157,123,255,.3)}
+  .ba-lbl{font-size:12.5px;color:#c4ccd8;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+  .ba-lbl small{display:block;color:#6e7888;font-weight:500;font-size:11px;text-transform:none;letter-spacing:0}
+  .ba-meta{flex:1;min-width:240px;font-size:12px;color:#9aa4b2;line-height:1.7}
+  .ba-meta b{color:#fff}
+  @media(max-width:820px){.ba-grid{gap:18px}.ba-big{font-size:38px}}
+  /* WHOOP-STYLE: monitor salud, bedtime, carga */
+  .hm{display:flex;flex-direction:column;gap:0}
+  .hm-row{display:grid;grid-template-columns:14px 1.4fr 1fr 1fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #161b22;font-size:13px}
+  .hm-name{color:#c4ccd8;font-weight:600}
+  .hm-cur{color:#e6edf3;font-weight:700;text-align:right}
+  .hm-cur i{font-style:normal;color:#8b949e;font-size:12px}
+  .hm-base{color:#6e7888;font-size:11px;text-align:right}
+  .btrec{text-align:center}
+  .bt-main{font-size:40px;font-weight:800;color:#b69dff;line-height:1.1;margin-top:2px;text-shadow:0 0 20px rgba(157,123,255,.3)}
+  .bt-lbl{font-size:11.5px;color:#8b949e;margin-bottom:12px}
+  .bt-row{font-size:12px;color:#9aa4b2;line-height:1.7;text-align:left}
+  .bt-row b{color:#fff}
+  .tw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .tw{background:#0e131b;border:1px solid #1c2330;border-radius:12px;padding:12px;text-align:center}
+  .tw-n{font-size:26px;font-weight:800;color:#e6edf3;line-height:1}
+  .tw-n small{font-size:12px;color:#8b949e;font-weight:600}
+  .tw-l{font-size:10.5px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-top:5px}
+  .tw-note{margin-top:10px;font-size:12.5px;color:#ffb020;background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.25);border-radius:10px;padding:9px 12px}
+  @media(max-width:820px){.tw-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">V</div>
+      <div>
+        <h1>Vitals — Tablero de Salud</h1>
+        <div class="sub">DocStream · Hombre, 40 · Fitbit + Apple Watch · datos en vivo vía Google Health API</div>
+      </div>
+    </div>
+    <div class="headtools">
+      <span class="updated" id="updatedTag"></span>
+      <button class="syncbtn" id="syncBtn" onclick="doSync()"><span class="ic">↻</span> Sincronizar ahora</button>
+    </div>
+  </div>
+
+  <div id="authBanner" class="authbar"></div>
+
+  <!-- COACH IA PREMIUM -->
+  <div class="coach">
+    <div class="coach-head">
+      <span class="coach-badge">✦ COACH IA · PREMIUM</span>
+      <span class="coach-date" id="coachDate"></span>
+    </div>
+    <div class="coach-body" id="coachBody">Tu coaching del día aparecerá aquí cada mañana.</div>
+  </div>
+
+  <!-- DAY SCRUBBER -->
+  <div class="daybar">
+    <button id="prevDay">‹</button>
+    <div class="dlabel" id="dayLabel">—<small id="daySmall"></small></div>
+    <button id="nextDay">›</button>
+  </div>
+
+  <!-- HERO RINGS -->
+  <div class="rings">
+    <div class="ringcard">
+      <h3>Recuperación</h3>
+      <div class="ringwrap"><svg width="160" height="160" id="ringRec"></svg>
+        <div class="ctr"><div class="big" id="recVal">–</div><div class="unit">recovery</div></div></div>
+      <div class="rstate" id="recState">—</div>
+    </div>
+    <div class="ringcard">
+      <h3>Sueño</h3>
+      <div class="ringwrap"><svg width="160" height="160" id="ringSlp"></svg>
+        <div class="ctr"><div class="big" id="slpVal">–</div><div class="unit" id="slpUnit">rendimiento</div></div></div>
+      <div class="rstate" id="slpState">—</div>
+    </div>
+    <div class="ringcard">
+      <h3>Esfuerzo (Strain)</h3>
+      <div class="ringwrap"><svg width="160" height="160" id="ringStr"></svg>
+        <div class="ctr"><div class="big" id="strVal">–</div><div class="unit">de 21</div></div></div>
+      <div class="rstate" id="strState">—</div>
+    </div>
+  </div>
+
+  <!-- INSIGHT -->
+  <div class="insight"><div class="ic">🧠</div><p id="insightText">—</p></div>
+
+  <!-- EDAD CORPORAL -->
+  <div class="bodyage">
+    <div class="ba-head"><span class="ba-badge">⏳ EDAD CORPORAL</span><span class="ba-sub">Estimada de tu condición física · se recalcula a diario</span></div>
+    <div class="ba-grid">
+      <div class="ba-num"><div class="ba-big" id="baFit">–</div><div class="ba-lbl">edad de fitness<small>VO₂máx · validada (NTNU)</small></div></div>
+      <div class="ba-num"><div class="ba-big" id="baBody">–</div><div class="ba-lbl">edad corporal<small>+ HRV y sueño</small></div></div>
+      <div class="ba-meta" id="baMeta"></div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-bottom:16px">
+    <div class="panel col-8">
+      <h2>🩺 Monitor de Salud</h2>
+      <div class="ph-sub">Promedio de 3 días vs tu base de 30 días · ↑↓ = dirección</div>
+      <div id="healthMonitor" class="hm"></div>
+    </div>
+    <div class="panel col-4">
+      <h2>🌙 Hora de dormir hoy</h2>
+      <div class="ph-sub">Para tus 7-8h y consistencia</div>
+      <div id="bedtimeRec" class="btrec"></div>
+    </div>
+    <div class="panel col-12">
+      <h2>🏋 Carga de entrenamiento (7 días)</h2>
+      <div class="ph-sub">Tu volumen semanal y tiempo de fuerza</div>
+      <div id="trainWeek"></div>
+    </div>
+  </div>
+
+  <!-- PERIOD SELECTOR -->
+  <div class="topbar" style="margin-bottom:10px">
+    <div class="sectitle" style="margin:0">Tendencias</div>
+    <div class="periodsel">
+      <button data-p="7">7d</button>
+      <button data-p="30" class="on">30d</button>
+      <button data-p="90">90d</button>
+      <button data-p="9999">Todo</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel col-8">
+      <h2>Recuperación vs Esfuerzo</h2>
+      <div class="ph-sub">¿Estás recuperando lo que gastas? Verde = recovery · Azul = strain</div>
+      <div class="chartbox"><canvas id="cRecStrain"></canvas></div>
+    </div>
+    <div class="panel col-4">
+      <h2>Balance del periodo</h2>
+      <div class="ph-sub">Promedios</div>
+      <div class="chartbox"><canvas id="cBalance"></canvas></div>
+    </div>
+
+    <div class="panel col-6">
+      <h2>HRV (RMSSD)</h2>
+      <div class="ph-sub">Tu línea base: <b id="hrvBaseLbl">59.5 ms</b> · banda = rango normal personal</div>
+      <div class="chartbox"><canvas id="cHrv"></canvas></div>
+    </div>
+    <div class="panel col-6">
+      <h2>Frecuencia cardiaca en reposo</h2>
+      <div class="ph-sub">Más baja = mejor · base <b id="rhrBaseLbl">51.3 lpm</b></div>
+      <div class="chartbox"><canvas id="cRhr"></canvas></div>
+    </div>
+
+    <div class="panel col-8">
+      <h2>Arquitectura del sueño</h2>
+      <div class="ph-sub">Línea blanca = necesidad de 8h · barras = etapas reales</div>
+      <div class="chartbox tall"><canvas id="cSleep"></canvas></div>
+      <div class="legend">
+        <span><i class="dot" style="background:#3b2f6b"></i> Profundo</span>
+        <span><i class="dot" style="background:#9d7bff"></i> REM</span>
+        <span><i class="dot" style="background:#4d9fff"></i> Ligero</span>
+        <span><i class="dot" style="background:#33415c"></i> Despierto</span>
+      </div>
+    </div>
+    <div class="panel col-4">
+      <h2>⚠ Consistencia de sueño</h2>
+      <div class="ph-sub">Tu punto rojo · meta = línea 00:00</div>
+      <div class="chartbox tall"><canvas id="cBed"></canvas></div>
+      <div class="legend"><span id="bedVarLbl"></span></div>
+    </div>
+
+    <div class="panel col-8">
+      <h2>Actividad diaria</h2>
+      <div class="ph-sub">Pasos (barras) y minutos vigorosos (línea)</div>
+      <div class="chartbox"><canvas id="cAct"></canvas></div>
+    </div>
+    <div class="panel col-4">
+      <h2>Respiración (sueño)</h2>
+      <div class="ph-sub">Respiraciones por minuto · estable = bien</div>
+      <div class="chartbox"><canvas id="cStress"></canvas></div>
+    </div>
+
+    <div class="panel col-6">
+      <h2>SpO2 nocturno</h2>
+      <div class="ph-sub">Oxígeno en sangre dormido · &lt;90% = vigilar (apnea)</div>
+      <div class="chartbox"><canvas id="cSpo2"></canvas></div>
+    </div>
+    <div class="panel col-6">
+      <h2>Temp. de piel (desviación)</h2>
+      <div class="ph-sub">Vs tu base · picos sostenidos = posible enfermedad/mala recuperación</div>
+      <div class="chartbox"><canvas id="cSkin"></canvas></div>
+    </div>
+
+    <div class="panel col-12">
+      <h2>🏋 Entrenamientos recientes</h2>
+      <div class="ph-sub">Tus sesiones (Google Health) · FC promedio y AZM = intensidad real</div>
+      <div id="workoutList" class="wlist"></div>
+    </div>
+  </div>
+
+  <!-- METRIC CARDS -->
+  <div class="sectitle">Métricas clave (promedio del periodo)</div>
+  <div class="cards" id="metricCards"></div>
+
+  <footer>
+    <b>Cómo se calculan los scores.</b> <u>Recuperación</u> (0–100, estilo WHOOP) = 55% HRV + 25% FC reposo (invertida) + 20% rendimiento de sueño, normalizado a tu propia línea base. <u>Sueño</u> = minutos dormidos ÷ necesidad de 8h. <u>Strain</u> (0–21) ponderado de minutos vigorosos, moderados y pasos. Umbrales: 🟢 ≥67 · 🟡 34–66 · 🔴 &lt;34.<br><br>
+    <b>Límites honestos.</b> VO2máx es estimación demográfica (no prueba de esfuerzo). Eficiencia de sueño mostrada es la real (dormido/en cama), no la cifra optimista de Fitbit. HRV/etapas por PPG (~70–80% vs clínico). No hay presión arterial, glucosa ni SpO2 en el export. El último día puede estar parcial. Educativo, no es diagnóstico médico.<br><br>
+    <b>Próximamente:</b> al conectar el MCP de Google Health, este tablero jalará tus datos en tiempo real automáticamente.
+  </footer>
+</div>
+
+<script>
+const DB = __DATA__;
+const COACH = __COACH__;
+const AUTH = __AUTH__;
+const days = DB.days;
+const S = DB.summary;
+let sel = days.length-1;     // selected day index
+let period = 30;
+
+const C = {green:'#16c784',yellow:'#ffb020',red:'#ff4d4f',blue:'#4d9fff',purple:'#9d7bff',deep:'#3b2f6b',light:'#4d9fff',awake:'#33415c',grid:'rgba(255,255,255,.05)',tick:'#6e7888'};
+const fmtD = s => { const [y,m,d]=s.split('-'); const mo=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][+m-1]; return d+' '+mo; };
+const fmtFull = s => { const dt=new Date(s+'T12:00'); return dt.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'}); };
+function recColor(v){ return v>=67?C.green:v>=34?C.yellow:C.red; }
+function recLabel(v){ return v>=67?'BUENA':v>=34?'MEDIA':'BAJA'; }
+
+// ---------- SVG RING ----------
+function ring(svgId, pct, color){
+  const svg=document.getElementById(svgId); svg.innerHTML='';
+  const cx=80,cy=80,r=66,circ=2*Math.PI*r;
+  const ns='http://www.w3.org/2000/svg';
+  const bg=document.createElementNS(ns,'circle');
+  bg.setAttribute('cx',cx);bg.setAttribute('cy',cy);bg.setAttribute('r',r);
+  bg.setAttribute('fill','none');bg.setAttribute('stroke','#1a212e');bg.setAttribute('stroke-width','12');
+  svg.appendChild(bg);
+  const fg=document.createElementNS(ns,'circle');
+  fg.setAttribute('cx',cx);fg.setAttribute('cy',cy);fg.setAttribute('r',r);
+  fg.setAttribute('fill','none');fg.setAttribute('stroke',color);fg.setAttribute('stroke-width','12');
+  fg.setAttribute('stroke-linecap','round');
+  fg.setAttribute('stroke-dasharray',circ);
+  fg.setAttribute('stroke-dashoffset',circ*(1-Math.max(0,Math.min(1,pct))));
+  fg.setAttribute('transform','rotate(-90 '+cx+' '+cy+')');
+  fg.style.transition='stroke-dashoffset .8s ease';
+  fg.style.filter='drop-shadow(0 0 6px '+color+'66)';
+  svg.appendChild(fg);
+}
+
+// ---------- HERO ----------
+function renderHero(){
+  const d=days[sel];
+  document.getElementById('dayLabel').firstChild.nodeValue = fmtFull(d.date);
+  document.getElementById('daySmall').textContent = (sel===days.length-1?'· día más reciente (puede ser parcial)':'');
+  // recovery
+  const rec=d.recovery; 
+  ring('ringRec',(rec||0)/100, recColor(rec||0));
+  document.getElementById('recVal').textContent = rec!=null?rec+'%':'–';
+  const rs=document.getElementById('recState'); rs.textContent=recLabel(rec||0);
+  rs.style.color=recColor(rec||0); rs.style.background=recColor(rec||0)+'1f';
+  // sleep
+  const sp=d.sleep_perf;
+  ring('ringSlp',(sp||0)/100, sp>=85?C.green:sp>=70?C.yellow:C.red);
+  document.getElementById('slpVal').textContent= sp!=null?sp+'%':'–';
+  const hrs=d.asleep?(Math.floor(d.asleep/60)+'h '+(d.asleep%60)+'m'):'';
+  document.getElementById('slpUnit').textContent= hrs||'rendimiento';
+  const ss=document.getElementById('slpState');
+  ss.textContent= sp!=null?(sp>=85?'COMPLETO':sp>=70?'CORTO':'MUY CORTO'):'—';
+  const sc= sp>=85?C.green:sp>=70?C.yellow:C.red; ss.style.color=sc; ss.style.background=sc+'1f';
+  // strain
+  const str=d.strain||0;
+  ring('ringStr',str/21, C.blue);
+  document.getElementById('strVal').textContent= d.strain!=null?str:'–';
+  const sts=document.getElementById('strState');
+  sts.textContent= str>=14?'ALTO':str>=8?'MODERADO':'LIGERO';
+  sts.style.color=C.blue; sts.style.background=C.blue+'1f';
+  renderInsight(d);
+}
+
+function renderInsight(d){
+  let t='';
+  const rec=d.recovery, sp=d.sleep_perf;
+  if(rec!=null){
+    if(rec>=67) t='<b>Recuperación buena ('+rec+'%).</b> ';
+    else if(rec>=34) t='<b>Recuperación media ('+rec+'%).</b> ';
+    else t='<b>Recuperación baja ('+rec+'%).</b> ';
+  }
+  if(d.hrv) t+='HRV '+d.hrv+' ms (base '+S.hrv_base+'). ';
+  if(d.rhr) t+='FC reposo '+d.rhr+' lpm. ';
+  if(d.asleep){
+    const h=Math.floor(d.asleep/60), m=d.asleep%60;
+    t+='Dormiste '+h+'h '+m+'m';
+    if(d.bedtime) t+=' (a la cama '+d.bedtime+')';
+    t+='. ';
+    if(d.asleep<420) t+='<b>Por debajo de tus 7h objetivo.</b> ';
+  }
+  if(d.bedtime){
+    const bm=d.bed_min;
+    if(Math.abs(bm)>45) t+='Te acostaste '+(bm>0?'tarde':'temprano')+' — la irregularidad es tu mayor freno. ';
+  }
+  document.getElementById('insightText').innerHTML = t||'Sin datos suficientes este día.';
+}
+
+// ---------- CHARTS ----------
+let charts={};
+function slice(){ return days.slice(Math.max(0,days.length-period)); }
+const baseOpts=(extra={})=>Object.assign({
+  responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false}},
+  scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxRotation:0,autoSkip:true,maxTicksLimit:8,font:{size:10}}},
+          y:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:10}}}}
+},extra);
+
+function buildCharts(){
+  Object.values(charts).forEach(c=>c&&c.destroy()); charts={};
+  const D=slice(); const lbl=D.map(d=>fmtD(d.date));
+
+  // Recovery vs Strain
+  charts.rs=new Chart(document.getElementById('cRecStrain'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'Recuperación',data:D.map(d=>d.recovery??null),yAxisID:'y',borderColor:C.green,backgroundColor:'rgba(22,199,132,.12)',fill:true,tension:.35,pointRadius:2,spanGaps:true,borderWidth:2},
+      {type:'line',label:'Strain',data:D.map(d=>d.strain!=null?d.strain/21*100:null),yAxisID:'y',borderColor:C.blue,backgroundColor:'transparent',tension:.35,pointRadius:0,borderDash:[5,4],spanGaps:true,borderWidth:2}
+    ]},
+    options:baseOpts({plugins:{legend:{display:true,labels:{color:'#9aa4b2',boxWidth:12,font:{size:11}}}},scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{min:0,max:100,grid:{color:C.grid},ticks:{color:C.tick,callback:v=>v+'%',font:{size:10}}}}})
+  });
+
+  // Balance doughnut (avg recovery components)
+  const avg=k=>{const a=D.map(d=>d[k]).filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.length:0;};
+  const ar=avg('recovery');
+  charts.bal=new Chart(document.getElementById('cBalance'),{
+    type:'doughnut',
+    data:{labels:['Recuperado','Restante'],datasets:[{data:[ar,100-ar],backgroundColor:[recColor(ar),'#1a212e'],borderWidth:0,cutout:'72%'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}}}
+  });
+  // center text via plugin-less overlay
+  drawCenter('cBalance', Math.round(ar)+'%','recovery prom.');
+
+  // HRV with baseline band
+  charts.hrv=new Chart(document.getElementById('cHrv'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'HRV',data:D.map(d=>d.hrv??null),borderColor:C.purple,backgroundColor:'rgba(157,123,255,.10)',fill:true,tension:.35,pointRadius:2,spanGaps:true,borderWidth:2},
+      {type:'line',label:'base',data:D.map(()=>S.hrv_base),borderColor:'#5a6473',borderDash:[4,4],pointRadius:0,borderWidth:1}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.tick,callback:v=>v+'ms',font:{size:10}}}}})
+  });
+
+  // RHR
+  charts.rhr=new Chart(document.getElementById('cRhr'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'FCR',data:D.map(d=>d.rhr??null),borderColor:C.yellow,backgroundColor:'rgba(255,176,32,.10)',fill:true,tension:.35,pointRadius:2,spanGaps:true,borderWidth:2}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.tick,callback:v=>v+'',font:{size:10}}}}})
+  });
+
+  // Sleep stacked
+  charts.slp=new Chart(document.getElementById('cSleep'),{
+    data:{labels:lbl,datasets:[
+      {type:'bar',label:'Profundo',data:D.map(d=>d.deep??null),backgroundColor:C.deep,stack:'s'},
+      {type:'bar',label:'REM',data:D.map(d=>d.rem??null),backgroundColor:C.purple,stack:'s'},
+      {type:'bar',label:'Ligero',data:D.map(d=>d.light??null),backgroundColor:'#2f5d99',stack:'s'},
+      {type:'bar',label:'Despierto',data:D.map(d=>d.awake??null),backgroundColor:C.awake,stack:'s'},
+      {type:'line',label:'Necesidad 8h',data:D.map(()=>480),borderColor:'#ffffff',borderDash:[6,4],pointRadius:0,borderWidth:1.5}
+    ]},
+    options:baseOpts({scales:{x:{stacked:true,grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{stacked:true,grid:{color:C.grid},ticks:{color:C.tick,callback:v=>Math.round(v/60)+'h',font:{size:10}}}}})
+  });
+
+  // Bedtime consistency
+  const bedData=D.map(d=>d.bed_min!=null?{x:fmtD(d.date),y:d.bed_min}:null).filter(Boolean);
+  const bdays=D.filter(d=>d.bed_min!=null);
+  charts.bed=new Chart(document.getElementById('cBed'),{
+    data:{labels:bdays.map(d=>fmtD(d.date)),datasets:[
+      {type:'line',label:'Hora de dormir',data:bdays.map(d=>d.bed_min),borderColor:C.red,backgroundColor:C.red,pointRadius:4,pointBackgroundColor:bdays.map(d=>Math.abs(d.bed_min)>45?C.red:C.green),showLine:false},
+      {type:'line',label:'Meta 00:00',data:bdays.map(()=>0),borderColor:C.green,borderDash:[5,4],pointRadius:0,borderWidth:1.5}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:6,font:{size:9}}},y:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:10},callback:v=>{let t=(v+1440)%1440;let h=Math.floor(t/60),m=t%60;return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;}}}}})
+  });
+  // variance label
+  const bm=bdays.map(d=>d.bed_min); const mean=bm.reduce((s,x)=>s+x,0)/bm.length;
+  const sd=Math.round(Math.sqrt(bm.reduce((s,x)=>s+(x-mean)**2,0)/bm.length));
+  document.getElementById('bedVarLbl').innerHTML='Variabilidad ±'+sd+' min '+(sd>40?'🔴 alta':sd>25?'🟡':'🟢');
+
+  // Activity
+  charts.act=new Chart(document.getElementById('cAct'),{
+    data:{labels:lbl,datasets:[
+      {type:'bar',label:'Pasos',data:D.map(d=>d.steps??null),backgroundColor:'rgba(77,159,255,.45)',yAxisID:'y'},
+      {type:'line',label:'Min vigorosos',data:D.map(d=>d.vigorous??null),borderColor:C.green,pointRadius:0,tension:.35,yAxisID:'y1',spanGaps:true,borderWidth:2}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.tick,callback:v=>(v/1000)+'k',font:{size:10}}},y1:{position:'right',grid:{display:false},ticks:{color:C.green,font:{size:10}}}}})
+  });
+
+  // Stress
+  charts.str=new Chart(document.getElementById('cStress'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'Respiración',data:D.map(d=>d.resp??null),borderColor:C.blue,backgroundColor:'rgba(77,159,255,.10)',fill:true,tension:.35,pointRadius:0,spanGaps:true,borderWidth:2}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:6,font:{size:9}}},y:{grid:{color:C.grid},ticks:{color:C.tick,callback:v=>v+' rpm',font:{size:10}}}}})
+  });
+
+  // SpO2 nocturno
+  charts.spo2=new Chart(document.getElementById('cSpo2'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'SpO2',data:D.map(d=>d.spo2??null),borderColor:'#4dd4ff',backgroundColor:'rgba(77,212,255,.10)',fill:true,tension:.35,pointRadius:0,spanGaps:true,borderWidth:2},
+      {type:'line',label:'90%',data:D.map(()=>90),borderColor:C.red,borderDash:[5,4],pointRadius:0,borderWidth:1}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{min:88,max:100,grid:{color:C.grid},ticks:{color:C.tick,callback:v=>v+'%',font:{size:10}}}}})
+  });
+
+  // Temp piel (desviación de la base personal)
+  const skinBase=(function(){const a=days.map(d=>d.skin_temp).filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.length:0;})();
+  charts.skin=new Chart(document.getElementById('cSkin'),{
+    data:{labels:lbl,datasets:[
+      {type:'line',label:'\u0394\u00B0C',data:D.map(d=>d.skin_temp!=null?+(d.skin_temp-skinBase).toFixed(2):null),borderColor:'#ff9d4d',backgroundColor:'rgba(255,157,77,.10)',fill:true,tension:.35,pointRadius:0,spanGaps:true,borderWidth:2},
+      {type:'line',label:'base',data:D.map(()=>0),borderColor:'#5a6473',borderDash:[4,4],pointRadius:0,borderWidth:1}
+    ]},
+    options:baseOpts({scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,maxTicksLimit:8,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.tick,callback:v=>(v>0?'+':'')+v+'\u00B0',font:{size:10}}}}})
+  });
+}
+
+// center text for doughnut
+function drawCenter(canvasId,big,small){
+  const cv=document.getElementById(canvasId);
+  let ov=cv.parentNode.querySelector('.dnut-ctr');
+  if(!ov){ov=document.createElement('div');ov.className='dnut-ctr';ov.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none';cv.parentNode.appendChild(ov);}
+  ov.innerHTML='<div style="font-size:30px;font-weight:800">'+big+'</div><div style="font-size:11px;color:#8b949e">'+small+'</div>';
+}
+
+function renderWorkouts(){
+  var el=document.getElementById('workoutList'); if(!el) return;
+  var ex=(DB.exercises||[]).slice(-12).reverse();
+  if(!ex.length){el.innerHTML='<div class="wempty">Sin entrenamientos registrados en el periodo.</div>';return;}
+  el.innerHTML=ex.map(function(e){
+    var dur=e.dur_min!=null?e.dur_min+' min':'\u2014';
+    var kcal=e.kcal!=null?e.kcal+' kcal':'\u2014';
+    var hr=e.avg_hr!=null?e.avg_hr+' lpm':'\u2014';
+    var azm=e.azm!=null?e.azm+' AZM':'\u2014';
+    return '<div class="wrow"><div class="wname">'+e.name+'<small>'+fmtD(e.date)+(e.start?' \u00B7 '+e.start:'')+'</small></div>'+
+      '<div class="wstat">'+dur+'</div><div class="wstat">'+kcal+'</div><div class="wstat">'+hr+'</div><div class="wstat">'+azm+'</div></div>';
+  }).join('');
+}
+
+function renderBodyAge(){
+  var b=(DB.summary&&DB.summary.bodyage); if(!b) return;
+  document.getElementById('baFit').textContent=b.fitness_age;
+  document.getElementById('baBody').textContent=b.body_age;
+  var m='VO\u2082m\u00e1x <b>'+b.vo2max+'</b> ('+b.category+') \u00b7 tu edad real <b>'+b.age+'</b> \u00b7 FC reposo '+b.rhr+' \u00b7 cintura '+b.waist+'cm \u00b7 HRV '+(b.hrv||'\u2013')+' \u00b7 sue\u00f1o '+(b.sleep_h||'\u2013')+'h';
+  if(b.penalty>0) m+='<br><span style="color:#ffb020">+'+b.penalty+' a\u00f1o(s) por recuperaci\u00f3n (sue\u00f1o &lt;7h)</span>';
+  else m+='<br><span style="color:#16c784">Recuperaci\u00f3n no te suma edad \u2014 bien.</span>';
+  document.getElementById('baMeta').innerHTML=m;
+}
+
+function hmRow(label,key,dir,unit,dec){
+  var a=days.map(function(d){return d[key];}).filter(function(x){return x!=null;});
+  if(a.length<5) return '';
+  var base=a.reduce(function(s,x){return s+x;},0)/a.length;
+  var sd=Math.sqrt(a.reduce(function(s,x){return s+(x-base)*(x-base);},0)/a.length)||1;
+  var c3=a.slice(-3); var cur=c3.reduce(function(s,x){return s+x;},0)/c3.length;
+  var z=(cur-base)/sd;
+  var good = dir==='low'? -z : dir==='high'? z : -Math.abs(z);
+  var st = good>=-1?'g':good>=-2?'y':'r';
+  var arrow = cur>base+sd*0.3?'\u2191': cur<base-sd*0.3?'\u2193':'\u2192';
+  dec=dec||0;
+  return '<div class="hm-row"><span class="dot '+st+'"></span><span class="hm-name">'+label+'</span>'+
+    '<span class="hm-cur">'+cur.toFixed(dec)+unit+' <i>'+arrow+'</i></span>'+
+    '<span class="hm-base">base '+base.toFixed(dec)+unit+'</span></div>';
+}
+function renderHealthMonitor(){
+  var el=document.getElementById('healthMonitor'); if(!el) return;
+  el.innerHTML=hmRow('FC reposo','rhr','low','',0)+hmRow('HRV','hrv','high','ms',0)+
+    hmRow('Respiraci\u00f3n','resp','stable','rpm',1)+hmRow('SpO2','spo2','high','%',0)+
+    hmRow('Temp. piel','skin_temp','low','\u00b0',1);
+}
+function _hm(m){m=Math.round(((m%1440)+1440)%1440);var h=Math.floor(m/60),mm=m%60;var ap=h<12?'am':'pm';var h12=h%12;if(h12===0)h12=12;return h12+':'+(mm<10?'0':'')+mm+' '+ap;}
+function renderBedtime(){
+  var el=document.getElementById('bedtimeRec'); if(!el) return;
+  var wk=days.filter(function(d){return d.waketime;}).slice(-14).map(function(d){var p=d.waketime.split(':');return +p[0]*60+ +p[1];});
+  if(!wk.length){el.innerHTML='<div class="bt-row">Sin datos de sue\u00f1o.</div>';return;}
+  var wake=Math.round(wk.reduce(function(s,x){return s+x;},0)/wk.length);
+  var rec=days.map(function(d){return d.recovery;}).filter(function(x){return x!=null;}).slice(-7);
+  var ravg=rec.length?rec.reduce(function(s,x){return s+x;},0)/rec.length:60;
+  var need=480+15+(ravg<50?30:0);
+  var bt=((wake-need)%1440+1440)%1440;
+  bt=Math.floor(bt/30)*30;  // redondear la recomendación hacia abajo a la media hora
+  var bm=days.filter(function(d){return d.bed_min!=null;}).slice(-7).map(function(d){return d.bed_min;});
+  var act=bm.length?Math.round(bm.reduce(function(s,x){return s+x;},0)/bm.length):null;
+  var actStr=act!=null?_hm(act):'\u2013';
+  var btCentered = bt>720?bt-1440:bt;
+  var gap = act!=null? Math.round(act-btCentered) : null;
+  var gapTxt = gap==null?'':(Math.abs(gap)>20?' <span style="color:#ffb020">(te acuestas '+(gap>0?gap+'min tarde':Math.abs(gap)+'min temprano')+')</span>':' <span style="color:#16c784">(en meta \u2713)</span>');
+  el.innerHTML='<div class="bt-main">'+_hm(bt)+'</div><div class="bt-lbl">acu\u00e9state a esta hora hoy</div>'+
+    '<div class="bt-row">Despiertas ~'+_hm(wake)+' \u00b7 necesitas ~8h en cama'+(ravg<50?' (+30min por recuperaci\u00f3n baja)':'')+'</div>'+
+    '<div class="bt-row" style="margin-top:6px">Tu bedtime reciente: <b>'+actStr+'</b>'+gapTxt+'</div>';
+}
+function renderTraining(){
+  var el=document.getElementById('trainWeek'); if(!el) return;
+  var ex=DB.exercises||[];
+  var lastDate=days.length?days[days.length-1].date:'';
+  var cd=new Date(lastDate+'T12:00'); cd.setDate(cd.getDate()-7); var cut=cd.toISOString().slice(0,10);
+  var rec=ex.filter(function(e){return e.date>=cut;});
+  var totMin=Math.round(rec.reduce(function(s,e){return s+(e.dur_min||0);},0));
+  var strMin=Math.round(rec.filter(function(e){return /(weight|strength|fuerza)/i.test((e.type||'')+(e.name||''));}).reduce(function(s,e){return s+(e.dur_min||0);},0));
+  var vig=days.filter(function(d){return d.date>=cut;}).reduce(function(s,d){return s+(d.vigorous||0);},0);
+  el.innerHTML='<div class="tw-grid">'+
+    '<div class="tw"><div class="tw-n">'+rec.length+'</div><div class="tw-l">sesiones</div></div>'+
+    '<div class="tw"><div class="tw-n">'+totMin+'<small>min</small></div><div class="tw-l">entreno total</div></div>'+
+    '<div class="tw"><div class="tw-n">'+vig+'<small>min</small></div><div class="tw-l">vigorosos (Z4-5)</div></div>'+
+    '<div class="tw"><div class="tw-n" style="color:'+(strMin>0?'#16c784':'#ff4d4f')+'">'+strMin+'<small>min</small></div><div class="tw-l">FUERZA</div></div>'+
+    '</div>'+(strMin===0?'<div class="tw-note">\u26A0 0 min de fuerza esta semana \u2014 tu meta #2. Mete 2-3 sesiones de pesas para proteger m\u00fasculo a los 40.</div>':'');
+}
+
+// ---------- METRIC CARDS ----------
+function avgOf(k){const a=days.map(d=>d[k]).filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.length:null;}
+function renderCards(){
+  const cards=[
+    {lbl:'HRV base',val:S.hrv_base,unit:'ms',light:'g',meta:'rango '+S.hrv_range[0]+'–'+S.hrv_range[1]},
+    {lbl:'FC reposo',val:S.rhr_base,unit:'lpm',light:'g',meta:'casi atlético'},
+    {lbl:'VO₂máx',val:55,unit:'est.',light:'g',meta:'demográfico ⚠'},
+    {lbl:'Sueño prom.',val:(avgOf('asleep')/60).toFixed(1),unit:'h',light:'y',meta:'meta 7h+'},
+    {lbl:'Profundo',val:Math.round(avgOf('deep')),unit:'min',light:'g',meta:'22% · sano'},
+    {lbl:'REM',val:Math.round(avgOf('rem')),unit:'min',light:'g',meta:'23% · sano'},
+    {lbl:'Respiración',val:avgOf('resp').toFixed(1),unit:'/min',light:'g',meta:'estable'},
+    {lbl:'SpO2 noct.',val:(avgOf('spo2')||0).toFixed(1),unit:'%',light:'g',meta:'>95 sano'},
+    {lbl:'Pasos prom.',val:Math.round(avgOf('steps')/1000*10)/10+'k',unit:'',light:'g',meta:'muy activo'},
+    {lbl:'Min vigorosos',val:Math.round(avgOf('vigorous')),unit:'min',light:'g',meta:'al día'},
+    {lbl:'Esfuerzo prom.',val:(avgOf('strain')||0).toFixed(1),unit:'/21',light:'g',meta:'carga diaria'},
+    {lbl:'Eficiencia sueño',val:avgOf('eff').toFixed(1),unit:'%',light:'y',meta:'real, no Fitbit'},
+    {lbl:'Recovery prom.',val:Math.round(avgOf('recovery')),unit:'%',light:'y',meta:'frenado x sueño'}
+  ];
+  document.getElementById('metricCards').innerHTML = cards.map(c=>
+    '<div class="mcard"><div class="lbl"><span class="dot '+c.light+'"></span>'+c.lbl+'</div>'+
+    '<div class="val">'+c.val+' <small>'+c.unit+'</small></div><div class="meta">'+c.meta+'</div></div>'
+  ).join('');
+}
+
+// ---------- EVENTS ----------
+document.getElementById('prevDay').onclick=()=>{sel=Math.max(0,sel-1);renderHero();};
+document.getElementById('nextDay').onclick=()=>{sel=Math.min(days.length-1,sel+1);renderHero();};
+document.querySelectorAll('.periodsel button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.periodsel button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); period=+b.dataset.p; buildCharts();
+});
+
+document.getElementById('hrvBaseLbl').textContent=S.hrv_base+' ms';
+document.getElementById('rhrBaseLbl').textContent=S.rhr_base+' lpm';
+function renderCoach(){try{document.getElementById('coachBody').innerHTML=COACH;var u=(DB.summary&&DB.summary.updated)||'';document.getElementById('coachDate').textContent=u?('Actualizado '+u):'';}catch(e){}}
+function renderAuth(){try{var b=document.getElementById('authBanner');if(!AUTH)return;var d=AUTH.days_left;if(AUTH.status==='expired'){b.className='authbar exp';b.innerHTML='\uD83D\uDD34 Acceso a Google Health expirado o datos detenidos \u2014 <a href="/auth/login" style="color:#fff;font-weight:700;text-decoration:underline;">Reconectar con Google</a>';}else if(d<=2){b.className='authbar warn';b.innerHTML='\u26A0\uFE0F Tu acceso vence en '+d+' d\u00EDa(s). <a href="/auth/login" style="color:#fff;font-weight:700;text-decoration:underline;">Reconectar ahora</a>';}else{b.className='authbar ok';b.innerHTML='\uD83D\uDD13 Acceso activo \u00B7 renueva en '+d+' d\u00EDas (l\u00EDmite del modo Testing de Google) \u00B7 <a href="/auth/login" style="color:#fff;font-weight:700;text-decoration:underline;">Reconectar</a>';}}catch(e){}}
+function setUpdated(){try{var u=(DB.summary&&DB.summary.updated)||'';document.getElementById('updatedTag').textContent=u?('Últ. actualización: '+u):'';}catch(e){}}
+function doSync(){
+  var btn=document.getElementById('syncBtn');var orig=btn.innerHTML;
+  btn.disabled=true;btn.classList.add('spin');btn.innerHTML='<span class="ic">⟳</span> Sincronizando…';
+  fetch('/api/sync',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.status==='ok'){btn.innerHTML='✓ Listo, recargando…';location.reload();return;}
+    btn.disabled=false;btn.classList.remove('spin');btn.innerHTML=orig;
+    if(d&&(d.status==='no_token'||d.status==='expired')){alert('Tu acceso a Google venció. Usa el botón Reconectar del banner.');}
+    else{alert('No se pudo sincronizar: '+((d&&d.status)||'error'));}
+  }).catch(function(){btn.disabled=false;btn.classList.remove('spin');btn.innerHTML=orig;alert('Error de red al sincronizar.');});
+}
+renderHero(); buildCharts(); renderCards(); renderCoach(); renderAuth(); renderWorkouts(); renderBodyAge(); renderHealthMonitor(); renderBedtime(); renderTraining(); setUpdated();
+</script>
+</body>
+</html>
