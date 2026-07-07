@@ -226,8 +226,13 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
             rhr=bodyage.get("rhr", summary.get("rhr_base", "")),
             hrv=bodyage.get("hrv", summary.get("hrv_base", "")),
         ) + penalty_str
+        # Rango degenerado (fitness_age == body_age): "~20–20 años" → "~20 años"
+        if fitness_age == body_age:
+            title = tr("bullet_body_age_title_single", locale, body_age=body_age)
+        else:
+            title = tr("bullet_body_age_title", locale, fitness_age=fitness_age, body_age=body_age)
         bullets.append({
-            "title": tr("bullet_body_age_title", locale, fitness_age=fitness_age, body_age=body_age),
+            "title": title,
             "body": body_body,
         })
 

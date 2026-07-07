@@ -31,6 +31,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "chip_strength_zero": "Fuerza 0 min/sem",
         # coach.py — coach_card bullets
         "bullet_body_age_title": "Tu cuerpo rinde como ~{fitness_age}–{body_age} años.",
+        "bullet_body_age_title_single": "Tu cuerpo rinde como ~{body_age} años.",
         "bullet_body_age_body": "VO₂máx ~{vo2max} ({category}) · tu edad real {real_age} · FC reposo {rhr} · HRV {hrv}.",
         "bullet_body_age_penalty": " Solo te suma ~{penalty} año(s) dormir {sleep_h_avg}h — sube a 7h+ y tocas el piso.",
         "bullet_strength_title": "Lo urgente:",
@@ -399,6 +400,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "chip_strength_zero": "Strength 0 min/wk",
         # coach.py — coach_card bullets
         "bullet_body_age_title": "Your body performs like ~{fitness_age}–{body_age} years old.",
+        "bullet_body_age_title_single": "Your body performs like ~{body_age} years old.",
         "bullet_body_age_body": "VO₂max ~{vo2max} ({category}) · real age {real_age} · resting HR {rhr} · HRV {hrv}.",
         "bullet_body_age_penalty": " Sleeping {sleep_h_avg}h adds ~{penalty} year(s) — get to 7h+ and you hit the floor.",
         "bullet_strength_title": "The urgent item:",
@@ -767,6 +769,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "chip_strength_zero": "Musculation 0 min/sem",
         # coach.py — coach_card bullets
         "bullet_body_age_title": "Votre corps performe comme ~{fitness_age}–{body_age} ans.",
+        "bullet_body_age_title_single": "Votre corps performe comme ~{body_age} ans.",
         "bullet_body_age_body": "VO₂max ~{vo2max} ({category}) · âge réel {real_age} · FC repos {rhr} · VFC {hrv}.",
         "bullet_body_age_penalty": " Dormir {sleep_h_avg}h ajoute ~{penalty} an(s) — montez à 7h+ pour atteindre le plancher.",
         "bullet_strength_title": "L'urgent :",
@@ -1135,6 +1138,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "chip_strength_zero": "Musculação 0 min/sem",
         # coach.py — coach_card bullets
         "bullet_body_age_title": "Seu corpo performa como ~{fitness_age}–{body_age} anos.",
+        "bullet_body_age_title_single": "Seu corpo performa como ~{body_age} anos.",
         "bullet_body_age_body": "VO₂máx ~{vo2max} ({category}) · idade real {real_age} · FC repouso {rhr} · VFC {hrv}.",
         "bullet_body_age_penalty": " Dormir {sleep_h_avg}h adiciona ~{penalty} ano(s) — chegue a 7h+ e você toca o piso.",
         "bullet_strength_title": "O urgente:",

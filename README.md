@@ -12,17 +12,11 @@ pay a monthly subscription for — except it runs on hardware you own, reads fro
 wearables you already have (Google Fit, Oura, WHOOP, Apple HealthKit), and never
 sends a byte of your health data to a third-party cloud.
 
-<!--
-  SCREENSHOT / GIF PLACEHOLDER
-  Replace this comment with a real screenshot or GIF before publishing:
-    ![Vitals dashboard](assets/demo/screenshot.png)
-  How to capture one:
-    1. `VITALS_DEMO=1 uvicorn main:app --port 8700` (synthetic data, no OAuth needed)
-    2. Open http://localhost:8700 in a browser sized ~390x844 (iPhone-ish) or desktop
-    3. Screenshot the "Today" tab (recovery ring + coach card) for the hero shot,
-       or record a 10-15s GIF scrolling through Today -> Trends -> Coach -> More.
-    4. Save under assets/demo/ and update the path above.
--->
+<p align="center">
+  <img src="assets/demo/vitals-today-desktop.png" alt="Vitals — Today tab (desktop)" width="68%">
+  <img src="assets/demo/vitals-today-mobile.png" alt="Vitals — Today tab (mobile PWA)" width="26%">
+</p>
+<p align="center"><sub>Screenshots from demo mode (<code>VITALS_DEMO=1</code>) — 100% synthetic data, no real user involved.</sub></p>
 
 ---
 
