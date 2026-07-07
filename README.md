@@ -54,6 +54,11 @@ Vitals takes the opposite bet:
 - **Multi-source, source-agnostic** — connect Google Health, Oura, WHOOP, or
   Apple HealthKit (or several at once); the scoring engine normalizes whatever
   comes in to one internal schema.
+- **One install, your whole family** — Vitals is multi-profile out of the box.
+  Each person (partner, kids, parents) gets their own fully isolated data,
+  scores, and coach. WHOOP and Oura charge *per person* — a family of 5 is
+  ~$150/month. One $5 VPS running Vitals is **~$1/person/month**, and it's
+  the same math whether you're 2 people or 8.
 
 If you've ever wanted your quantified-self data to actually be *yours* — inspectable,
 exportable, and running on infrastructure you control — this is that.
@@ -71,7 +76,7 @@ exportable, and running on infrastructure you control — this is that.
 | **Narrative reports** | Weekly/monthly plain-language summaries of what changed and why |
 | **Labs** | Manual blood-test tracking (~20 common biomarkers) with reference ranges and out-of-range flags |
 | **Body-age & Healthspan** | VO2max-based fitness age (NTNU/Nes 2011 formula) plus a monthly body-age-vs-chronological-age trend |
-| **Household / multi-profile** | Track multiple people (family, partner) from one instance, each with isolated data |
+| **Household / multi-profile** | One install serves your whole family — each person (partner, kids, parents) gets fully isolated data, scores & coach. Split a $5 VPS 5 ways = ~$1/person/month vs. ~$30/person on WHOOP or Oura |
 | **Push notifications** | ntfy/Telegram alerts for recovery drops, illness-risk signals, sleep debt |
 | **Offline-capable PWA** | Add to Home Screen on iOS/Android; service worker caches the shell |
 | **Native iOS app (BYO dev account)** | Capacitor shell with a native HealthKit plugin: Apple Watch HRV, sleep stages, VO₂max, ECG — built and signed by you, distributed via TestFlight |
