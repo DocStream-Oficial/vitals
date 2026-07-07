@@ -29,6 +29,52 @@ sends a byte of your health data to a third-party cloud.
 
 ---
 
+## Agent-first install
+
+**Already have an AI agent and a machine that's always on?** Don't install anything
+by hand. Paste the prompt below to **Claude Code, OpenClaw, Hermes, or any agent
+that can run shell commands** — it clones the repo, installs and launches Vitals,
+and wires *itself* in over MCP so it can read your recovery, sleep, and HRV. From
+zero to a working, agent-connected health server in one message:
+
+```text
+Set up Vitals for me end-to-end on this machine, then connect yourself to it over MCP.
+Vitals is a self-hosted health dashboard: https://github.com/DocStream-Oficial/vitals
+
+1. Clone it and remember the absolute path as REPO:
+   git clone https://github.com/DocStream-Oficial/vitals.git
+
+2. Install it (needs Python 3.10+). Run the non-interactive setup so it doesn't block:
+     cd REPO && python install.py --no-launch --yes
+   Then start the app in the background using the venv install.py just created
+   (it prints the exact uvicorn command; venv is .venv/bin on macOS/Linux,
+   .venv\Scripts on Windows). Confirm the dashboard responds at http://localhost:8700.
+   To preview it before I add real credentials, launch with demo data instead:
+     python install.py --demo --yes
+
+3. Wire up the MCP server so YOU can query my data:
+     pip install -r REPO/requirements-mcp.txt
+   Register REPO/vitals_mcp.py as a stdio MCP server named "vitals" in your MCP
+   config, then reload your MCP connections.
+
+4. Verify: confirm the 9 vitals_* tools loaded, call vitals_today, and give me
+   today's recovery, sleep and strain in one line.
+
+5. Then tell me the one manual step left: which OAuth credentials to add to
+   REPO/.env to connect my real wearables (Google / Oura / WHOOP) and where to
+   get them — follow the repo README.
+
+6. Ongoing: send me vitals_morning_brief each morning and vitals_bedtime_brief at
+   night, and alert me proactively whenever recovery drops below 40% or an
+   illness-risk insight appears in vitals_insights.
+```
+
+That's the whole point of Vitals being MCP-native: your agent doesn't just *use*
+it, it *installs* it. No agent yet? Jump to [Quick start](#quick-start) for the
+one-command manual install.
+
+---
+
 ## Why Vitals
 
 Wearable dashboards (WHOOP, Oura, Fitbit Premium) are subscription products: your
@@ -49,8 +95,8 @@ Vitals takes the opposite bet:
   [Hermes](https://hermes-agent.nousresearch.com), Claude, or anything speaking
   MCP) can reason over your recovery trend, flag an early illness signal, or
   answer "should I train hard today?" without any of that data leaving your
-  network. There's even a [copy-paste prompt](#zero-effort-setup-just-ask-your-agent)
-  your agent can run to wire itself up.
+  network. Your agent can even [install the whole thing itself](#agent-first-install)
+  from a single copy-paste prompt.
 - **Multi-source, source-agnostic** — connect Google Health, Oura, WHOOP, or
   Apple HealthKit (or several at once); the scoring engine normalizes whatever
   comes in to one internal schema.
@@ -456,10 +502,11 @@ Available tools: `vitals_today`, `vitals_trends`, `vitals_insights`, `vitals_bod
 `vitals_morning_brief`, `vitals_bedtime_brief`, `vitals_drivers`, `vitals_cycle_summary`,
 `vitals_ask_coach`.
 
-### Zero-effort setup: just ask your agent
+### Already running Vitals? Just add the MCP
 
-Copy-paste this to your agent (OpenClaw, Hermes, Claude Code — anything that can
-run commands and edit its own MCP config) and it will wire everything up itself:
+If you installed manually and Vitals is already up, this shorter prompt wires only
+the MCP layer (the [Agent-first install](#agent-first-install) prompt at the top
+does the full clone-install-connect flow from scratch):
 
 ```text
 I run a self-hosted Vitals instance (https://github.com/DocStream-Oficial/vitals).
