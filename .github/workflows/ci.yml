@@ -38,6 +38,15 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      # 41 tests corren contra el golden dataset en data/health_compact.json
+      # (gitignored — en local es el dataset real del usuario). En CI se siembra
+      # el dataset demo determinista (mismo esquema, generado por
+      # scripts/gen_demo_data.py) para que la suite sea hermética.
+      - name: Seed golden dataset (demo fixture)
+        run: |
+          mkdir -p data
+          cp tests/fixtures/demo_dataset.json data/health_compact.json
+
       - name: Run tests (pytest)
         run: pytest -q
 

@@ -33,6 +33,28 @@
       "strain": "trimp-hybrid-v2",
       "recovery_scale": "rolling-90d",
       "sleep_target_min": 480
+    },
+    "bodyage": {
+      "vo2max": 53.6,
+      "fitness_age": 20,
+      "body_age": 20,
+      "category": "Superior",
+      "rhr": 52.5,
+      "hrv": 60.2,
+      "sleep_h": 7.6,
+      "pa_index": 13,
+      "waist": 82.0,
+      "age": 38,
+      "penalty": 0.0,
+      "confidence": {
+        "rhr_days": 14,
+        "hrv_days": 14,
+        "sleep_days": 14,
+        "exercise_sessions": 18,
+        "level": "high"
+      },
+      "vo2max_percentile": 77,
+      "vo2max_label": "Excelente"
     }
   },
   "days": [

@@ -401,6 +401,12 @@ def main():
     # Fecha fija (no "hoy") para que el fixture sea reproducible byte-a-byte.
     ds["summary"]["updated"] = _END_DATE.isoformat()
 
+    # El pipeline real (app/sync.py) escribe bodyage DENTRO de summary — todos
+    # los consumidores (mcp_tools, coach, changes, /api/data) leen
+    # summary["bodyage"], nunca la clave top-level. Sin esto, el modo demo (y
+    # CI) muestran "sin datos" en body-age.
+    ds["summary"]["bodyage"] = bodyage
+
     out = {
         "_comment": (
             "Dataset DEMO (Fase 8A) — 100% sintético, generado por "
