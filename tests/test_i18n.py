@@ -22,6 +22,15 @@ from unittest.mock import patch
 import pytest
 
 _TEMPLATE = Path(__file__).parent.parent / "templates" / "vitals_ios.html"
+# Fase 9-B: STRINGS y los helpers de i18n/unidades se movieron de <script>
+# inline en el template a static/js/app-i18n-helpers.js. Mismo contrato
+# (paridad de claves ×4 locales, constantes de conversión), nueva ubicación.
+_I18N_JS = Path(__file__).parent.parent / "static" / "js" / "app-i18n-helpers.js"
+_DASHBOARD_JS = Path(__file__).parent.parent / "static" / "js" / "app-dashboard.js"
+
+
+def _frontend_js_source() -> str:
+    return _I18N_JS.read_text(encoding="utf-8") + _DASHBOARD_JS.read_text(encoding="utf-8")
 
 # Constantes de conversión — IDÉNTICAS a las del template JS.
 CM_PER_IN = 2.54
@@ -159,23 +168,22 @@ def test_conversion_anchor_values():
 
 
 def test_template_uses_expected_constants():
-    """El template debe usar exactamente 2.54 y 2.20462 (no otras aproximaciones)."""
-    src = _TEMPLATE.read_text(encoding="utf-8")
-    assert "2.54" in src, "Falta la constante 2.54 (cm/in) en el template"
-    assert "2.20462" in src, "Falta la constante 2.20462 (lb/kg) en el template"
+    """El frontend debe usar exactamente 2.54 y 2.20462 (no otras aproximaciones)."""
+    src = _frontend_js_source()
+    assert "2.54" in src, "Falta la constante 2.54 (cm/in) en el JS"
+    assert "2.20462" in src, "Falta la constante 2.20462 (lb/kg) en el JS"
 
 
 # ── (c) Paridad de claves STRINGS en los 4 idiomas ────────────────────────────
 
 def _extract_strings_keys():
     """
-    Parsea el bloque `var STRINGS = { ... };` del template y devuelve
-    {locale: set(keys)} para es/en/fr/pt.
-    STRINGS vive solo en el HTML, así que lo extraemos con regex.
+    Parsea el bloque `var STRINGS = { ... };` de static/js/app-i18n-helpers.js
+    y devuelve {locale: set(keys)} para es/en/fr/pt.
     """
-    src = _TEMPLATE.read_text(encoding="utf-8")
+    src = _I18N_JS.read_text(encoding="utf-8")
     m = re.search(r"var STRINGS = \{(.*?)\n\};", src, re.S)
-    assert m, "No se encontró el bloque 'var STRINGS = { ... };' en el template"
+    assert m, "No se encontró el bloque 'var STRINGS = { ... };' en static/js/app-i18n-helpers.js"
     body = m.group(1)
 
     loc_starts = [(mm.group(1), mm.start())

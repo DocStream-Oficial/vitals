@@ -17,19 +17,28 @@ diff` sobre esos archivos es vacío. Contrato de API congelado: OpenAPI y
 golden files idénticos al baseline pre-refactor (salvo `GET /`, que cambió
 por la extracción de CSS, ver abajo). 1,661 tests verdes antes y después.
 
-`templates/vitals_ios.html`: se extrajo el bloque `<style>` completo (1,541
-líneas) a `static/css/vitals.css` (10,150 → 8,609 líneas). La extracción de
-los dos `<script>` inline (~7,600 líneas de JS) a `static/js/` **NO se
-hizo**: la suite de tests existente (`tests/test_endpoints.py`,
-`tests/test_i18n.py`) afirma contra literales de código JS (nombres de
-función como `renderTend`/`sendCoach`/`ORDER_SCOPES`, y el bloque completo
-`var STRINGS = {...}`) directamente sobre el HTML servido o el archivo en
-disco — mover ese JS a un archivo externo rompe esas aserciones
-categóricamente, no por un descuido de implementación sino porque los tests
-verifican "el JS vive inline" como parte del contrato. Deshacer eso requeriría
-editar tests, fuera del alcance de un refactor estructural puro. Documentado
-como desviación del roadmap original (que apuntaba a ~1,500 líneas de
-esqueleto); ver informe de Fase 9 para detalle completo.
+`templates/vitals_ios.html`: **10,150 → 1,016 líneas** (esqueleto HTML puro,
+bajo el objetivo de ~1,500). Se extrajo:
+- El bloque `<style>` completo (1,541 líneas) → `static/css/vitals.css`.
+- Los 3 bloques `<script>` inline restantes (~7,600 líneas de JS) →
+  `static/js/sw-register.js` (registro del service-worker),
+  `static/js/app-i18n-helpers.js` (`var STRINGS` ×4 locales + `t()` + helpers
+  de i18n/unidades) y `static/js/app-dashboard.js` (lógica del dashboard).
+  Las 9 asignaciones de datos inyectados (`var DB = __DATA__` … `var CYCLE =
+  __CYCLE__`) permanecen en un bloque `<script>` inline mínimo, porque
+  `render.py` las reemplaza por string; el resto del JS las lee como globales.
+  Orden de carga preservado: bootstrap de datos → i18n/helpers → dashboard →
+  scripts de features.
+
+Los tests que verificaban presencia de funciones/constantes JS
+(`tests/test_endpoints.py`, `tests/test_i18n.py`: `renderTend`, `sendCoach`,
+`ORDER_SCOPES`, `var STRINGS`, constantes de conversión) se **adaptaron a la
+nueva ubicación** — ahora verifican contra el JS externo en `static/js/`
+en vez del HTML servido. Mismo contrato (paridad i18n ×4, presencia de
+funciones), nueva ubicación del código; ninguna aserción se debilitó ni se
+eliminó. Contrato de API sin cambios: los 7 endpoints `/api/*` del oráculo
+golden quedan byte-idénticos (aislado HEAD-vs-working-tree); solo `GET /`
+cambia, y solo por el `<script>`/`<link>` externalizados. 1,661 tests verdes.
 
 ## Fase 8A — GitHub launch packaging (unreleased)
 

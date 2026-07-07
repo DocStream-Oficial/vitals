@@ -11,6 +11,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+# Fase 9-B: los <script> inline con JS de la app se movieron a static/js/
+# (app-i18n-helpers.js, app-dashboard.js). Los tests que verificaban "la
+# función/constante X está en el JS servido" contra resp.text/html ahora
+# verifican contra body/html + este JS externo -- mismo contrato, nueva
+# ubicación del código.
+def _external_js_source() -> str:
+    base = Path(__file__).parent.parent / "static" / "js"
+    return (
+        (base / "app-i18n-helpers.js").read_text(encoding="utf-8")
+        + (base / "app-dashboard.js").read_text(encoding="utf-8")
+    )
+
 
 def _get_client(tmp_path: Path, with_data: bool = True) -> TestClient:
     """Devuelve un TestClient con scheduler mockeado y DATA_DIR en tmp_path."""
@@ -239,7 +251,7 @@ def test_tendencias_no_placeholder(client):
     assert tend_start != -1, "No se encontró #screenTend"
     tend_block = body[tend_start:tend_end] if tend_end != -1 else body[tend_start:]
     assert "Próximamente" not in tend_block, "El bloque Tendencias todavía contiene 'Próximamente'"
-    assert "renderTend" in body, "Falta la función renderTend en el JS"
+    assert "renderTend" in body + _external_js_source(), "Falta la función renderTend en el JS"
 
 
 def test_tendencias_no_hardcoded_values(client):
@@ -508,7 +520,7 @@ def test_coach_screen_present_no_placeholder(client):
     # Debe tener el composer y las sugerencias
     assert "coachInput" in coach_block, "Falta el composer #coachInput en #screenCoach"
     assert "coachSuggestions" in coach_block, "Falta el contenedor de sugerencias"
-    assert "sendCoach" in body, "Falta la función sendCoach en el JS"
+    assert "sendCoach" in body + _external_js_source(), "Falta la función sendCoach en el JS"
 
 
 def test_mas_screen_present_no_placeholder(client):
@@ -704,15 +716,20 @@ def test_golden_render_key_texts():
         trends,
     )
 
+    # Fase 9-B: parte de estos textos (ACWR/percentil/señal) viven en el JS
+    # externo (static/js/), no en el HTML renderizado; 'Palancas' sigue en el
+    # HTML del template. Verificamos contra html + JS externo (mismo contrato).
+    frontend = html + _external_js_source()
+
     # Tier 1: percentil bodyage y ACWR
-    assert "percentil" in html, "Falta 'percentil' — bodyage percentile no inyectado"
-    assert "ACWR" in html, "Falta 'ACWR' — tile de carga no inyectado"
+    assert "percentil" in frontend, "Falta 'percentil' — bodyage percentile no inyectado"
+    assert "ACWR" in frontend, "Falta 'ACWR' — tile de carga no inyectado"
 
     # Tier 3: tarjeta Palancas
-    assert "Palancas" in html, "Falta 'Palancas' — tarjeta de drivers no inyectada"
+    assert "Palancas" in frontend, "Falta 'Palancas' — tarjeta de drivers no inyectada"
 
     # Tier 1: señales de recuperación (recovery_n)
-    assert "señal" in html, "Falta texto de señales — recovery_n no inyectado"
+    assert "señal" in frontend, "Falta texto de señales — recovery_n no inyectado"
 
 
 # ── Card reorder tests (popup + 2 scopes) ────────────────────────────────────
@@ -732,7 +749,7 @@ def test_card_reorder_functions_present(client):
     """GET / contiene las funciones JS generalizadas de reordenamiento."""
     resp = client.get("/")
     assert resp.status_code == 200
-    body = resp.text
+    body = resp.text + _external_js_source()
     assert "openOrderPopup" in body, "Falta la función openOrderPopup en el JS"
     assert "applyOrder" in body, "Falta la función applyOrder en el JS"
     assert "ORDER_SCOPES" in body, "Falta la constante ORDER_SCOPES en el JS"
@@ -801,16 +818,21 @@ def test_golden_render_card_reorder():
         trends,
     )
 
-    assert "orderOverlay" in html, "Falta orderOverlay en el render del golden"
-    assert "Acomodar tarjetas" in html, "Falta 'Acomodar tarjetas' en el render del golden"
-    assert "openOrderPopup" in html, "Falta openOrderPopup en el render del golden"
-    assert "applyOrder" in html, "Falta applyOrder en el render del golden"
-    assert "vitals-tend-order" in html, "Falta vitals-tend-order en el render del golden"
-    assert "tendHrvCard" in html, "Falta tendHrvCard en el render del golden"
+    # Fase 9-B: los ids/funciones de reorder viven ahora en el JS externo
+    # (ORDER_SCOPES, openOrderPopup...); orderOverlay/"Acomodar tarjetas"
+    # siguen en el HTML. Verificamos contra html + JS externo (mismo contrato).
+    frontend = html + _external_js_source()
+
+    assert "orderOverlay" in frontend, "Falta orderOverlay en el render del golden"
+    assert "Acomodar tarjetas" in frontend, "Falta 'Acomodar tarjetas' en el render del golden"
+    assert "openOrderPopup" in frontend, "Falta openOrderPopup en el render del golden"
+    assert "applyOrder" in frontend, "Falta applyOrder en el render del golden"
+    assert "vitals-tend-order" in frontend, "Falta vitals-tend-order en el render del golden"
+    assert "tendHrvCard" in frontend, "Falta tendHrvCard en el render del golden"
     # New reorder-complete ids
-    assert "tendMetricsCard" in html, "Falta tendMetricsCard en el render del golden"
-    assert "tendWorkoutsCard" in html, "Falta tendWorkoutsCard en el render del golden"
-    assert "insightCards" in html, "Falta insightCards en el render del golden"
+    assert "tendMetricsCard" in frontend, "Falta tendMetricsCard en el render del golden"
+    assert "tendWorkoutsCard" in frontend, "Falta tendWorkoutsCard en el render del golden"
+    assert "insightCards" in frontend, "Falta insightCards en el render del golden"
     assert "Alertas" in html, "Falta nombre 'Alertas' en el render del golden"
     assert "Métricas clave" in html, "Falta nombre 'Métricas clave' en el render del golden"
     assert "Entrenamientos" in html, "Falta nombre 'Entrenamientos' en el render del golden"
