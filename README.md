@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="assets/VitalsIcon.icon/Assets/vitals-trazos-1000.png" alt="Vitals logo" width="150">
+</p>
+
 # Vitals — self-hosted WHOOP / Google Health alternative
 
-[![CI](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml)
+[![CI](https://github.com/DocStream-Oficial/vitals/actions/workflows/ci.yml/badge.svg)](https://github.com/DocStream-Oficial/vitals/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-1661%20passing-brightgreen.svg)](#tests)
@@ -99,8 +103,8 @@ single daily record per metric.
 No Python setup, no venv — just Docker.
 
 ```bash
-git clone https://github.com/DocStream-Oficial/vitals-app.git
-cd vitals-app
+git clone https://github.com/DocStream-Oficial/vitals.git
+cd vitals
 cp .env.example .env        # fill in your credentials (see below), or skip for demo mode
 docker compose up -d
 # open http://localhost:8700
@@ -129,8 +133,8 @@ script (Windows/Mac/Linux, stdlib only) that creates the venv, installs
 dependencies, generates `.env`, and launches the app — no manual steps.
 
 ```bash
-git clone https://github.com/DocStream-Oficial/vitals-app.git
-cd vitals-app
+git clone https://github.com/DocStream-Oficial/vitals.git
+cd vitals
 python install.py
 # open http://localhost:8700
 ```
@@ -163,8 +167,8 @@ platform.
 If you'd rather run the steps yourself:
 
 ```bash
-git clone https://github.com/DocStream-Oficial/vitals-app.git
-cd vitals-app
+git clone https://github.com/DocStream-Oficial/vitals.git
+cd vitals
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env        # fill in your credentials (see below)
@@ -453,7 +457,7 @@ Copy-paste this to your agent (OpenClaw, Hermes, Claude Code — anything that c
 run commands and edit its own MCP config) and it will wire everything up itself:
 
 ```text
-I run a self-hosted Vitals instance (https://github.com/DocStream-Oficial/vitals-app).
+I run a self-hosted Vitals instance (https://github.com/DocStream-Oficial/vitals).
 The repo is cloned at <PATH-TO-REPO> and the app runs at <MY-VITALS-URL>.
 Set up its MCP server so you can read my health data:
 
