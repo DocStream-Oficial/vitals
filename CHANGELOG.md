@@ -3,6 +3,34 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Fase 9 — Des-monolitizar routing (unreleased)
+
+Refactor estructural: sin cambios funcionales. `main.py` (2,271 → 438 líneas)
+troceado en 16 routers de dominio bajo `app/routes/*.py` (pwa, export,
+journal, cycle, labs, sources, ecg, profile, coach, report, insights, sync,
+auth, programs, healthspan, household, keys) + `app/deps.py` (pegamento
+compartido: `_data_path`, `_load_dataset`, `_KNOWN_SOURCES`,
+`_clean_str_list`, etc.) + `app/routes/_models.py` (modelos Pydantic de
+request). Ningún motor de cómputo (`app/cycle.py`, `app/coach.py`,
+`app/sleep_*.py`, `app/journal.py`, `app/report.py`, etc.) se tocó — `git
+diff` sobre esos archivos es vacío. Contrato de API congelado: OpenAPI y
+golden files idénticos al baseline pre-refactor (salvo `GET /`, que cambió
+por la extracción de CSS, ver abajo). 1,661 tests verdes antes y después.
+
+`templates/vitals_ios.html`: se extrajo el bloque `<style>` completo (1,541
+líneas) a `static/css/vitals.css` (10,150 → 8,609 líneas). La extracción de
+los dos `<script>` inline (~7,600 líneas de JS) a `static/js/` **NO se
+hizo**: la suite de tests existente (`tests/test_endpoints.py`,
+`tests/test_i18n.py`) afirma contra literales de código JS (nombres de
+función como `renderTend`/`sendCoach`/`ORDER_SCOPES`, y el bloque completo
+`var STRINGS = {...}`) directamente sobre el HTML servido o el archivo en
+disco — mover ese JS a un archivo externo rompe esas aserciones
+categóricamente, no por un descuido de implementación sino porque los tests
+verifican "el JS vive inline" como parte del contrato. Deshacer eso requeriría
+editar tests, fuera del alcance de un refactor estructural puro. Documentado
+como desviación del roadmap original (que apuntaba a ~1,500 líneas de
+esqueleto); ver informe de Fase 9 para detalle completo.
+
 ## Fase 8A — GitHub launch packaging (unreleased)
 
 - **Demo mode** (`VITALS_DEMO=1`): serves a deterministic 150-day synthetic
