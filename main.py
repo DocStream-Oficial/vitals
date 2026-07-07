@@ -60,18 +60,15 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 DATA_PATH: Optional[Path] = None  # override SOLO para tests (patch.object); None = runtime
 
-# Fase 9 (paso A1): _active_source/_data_path/_load_dataset/_load_demo_dataset/
-# _demo_blocked_response viven ahora en app/deps.py (pegamento compartido entre
-# routers) — se importan aquí con el MISMO nombre para que main_mod._data_path()
-# etc. sigan siendo válidos (decenas de tests los llaman/parchean por nombre).
-# _data_path() lee main.DATA_PATH vía import diferido dentro de app/deps.py,
-# así que el sentinel DE ARRIBA sigue siendo la única fuente de verdad.
+# Fase 9: pegamento compartido movido a app/deps.py (importado aquí por
+# nombre — decenas de tests parchean main_mod._data_path()/DATA_PATH etc.).
 from app.deps import (  # noqa: E402
     _active_source,
     _data_path,
     _load_dataset,
     _load_demo_dataset,
     _demo_blocked_response,
+    _KNOWN_SOURCES,
 )
 
 STATIC_DIR = settings.ROOT_DIR / "static"
@@ -80,18 +77,9 @@ STATIC_DIR = settings.ROOT_DIR / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Fase 9 (paso A2): manifest/service-worker/ingest-token/qr viven ahora en
-# app/routes/pwa.py — se registran vía include_router más abajo (después de
-# definir la app y el mount de estáticos, igual que antes).
+# Fase 9: manifest/service-worker/ingest-token/qr -> app/routes/pwa.py
 from app.routes.pwa import router as _pwa_router  # noqa: E402
 app.include_router(_pwa_router)
-
-# Fase 9 (paso A2): _oauth_states (CSRF state store) se mudó junto con
-# /auth/login y /auth/callback a app/routes/auth.py — ver ahí.
-
-# Fase 9 (paso A2): _KNOWN_SOURCES centralizado en app/deps.py — usado por la
-# validación de /api/profile (aquí) y por /api/sources* (app/routes/sources.py).
-from app.deps import _KNOWN_SOURCES  # noqa: E402
 
 
 # ---------------------------------------------------------------- lifecycle
@@ -169,9 +157,7 @@ async def on_shutdown():
 
 # ---------------------------------------------------------------- middleware (Fase 8D, paso D3)
 
-# Fase 9 (paso A2): _USER_COOKIE_NAME centralizado en app/deps.py — usado por
-# este middleware (aquí) y por POST /api/users (app/routes/household.py).
-from app.deps import _USER_COOKIE_NAME  # noqa: E402
+from app.deps import _USER_COOKIE_NAME  # noqa: E402  # Fase 9: compartido con app/routes/household.py
 
 
 @app.middleware("http")
@@ -199,9 +185,7 @@ async def _userctx_middleware(request: Request, call_next):
 
 # ---------------------------------------------------------------- middleware (R2 pre-publicación)
 
-# Fase 9 (paso A2): _DASHBOARD_COOKIE_NAME centralizado en app/deps.py —
-# usado por este middleware (aquí) y por /login (app/routes/auth.py).
-from app.deps import _DASHBOARD_COOKIE_NAME  # noqa: E402
+from app.deps import _DASHBOARD_COOKIE_NAME  # noqa: E402  # Fase 9: compartido con app/routes/auth.py
 
 # Paths exentos del auth de dashboard (prefijos o exactos) — cada uno tiene su
 # propio modelo de auth (o ninguno, por diseño: PWA estático / login mismo):
@@ -295,9 +279,7 @@ async def _dashboard_auth_middleware(request: Request, call_next):
     return JSONResponse({"detail": "dashboard token required"}, status_code=401)
 
 
-# Fase 9 (paso A2): _LOGIN_PAGE_TEMPLATE/_render_login_page y GET+POST /login
-# viven ahora en app/routes/auth.py (se registran más abajo junto con
-# /auth/login y /auth/callback).
+# Fase 9: GET+POST /login -> app/routes/auth.py (registrado más abajo).
 
 
 # ---------------------------------------------------------------- rutas
@@ -415,134 +397,42 @@ async def dashboard():
     return HTMLResponse(content=html, status_code=200)
 
 
-# Fase 9 (paso A2): /api/insights y /api/drivers viven ahora en
-# app/routes/insights.py.
-from app.routes.insights import router as _insights_router  # noqa: E402
-app.include_router(_insights_router)
-
-# Fase 9 (paso A2): /api/coach/suggestions vive ahora en app/routes/coach.py
-# (registrado más abajo junto con el resto de rutas del coach, después de que
-# ask_coach/load_history/clear_history ya estén definidos arriba en este
-# módulo — el router los lee dinámicamente vía `import main`).
-
-# Fase 9 (paso A2): GET /api/report vive ahora en app/routes/report.py.
-from app.routes.report import router as _report_router  # noqa: E402
-app.include_router(_report_router)
-
-
-# Fase 9 (paso A2): GET /api/data y GET /api/export viven ahora en
-# app/routes/export.py. _csv_safe se re-importa aquí con el MISMO nombre
-# porque tests/test_export.py hace `from main import _csv_safe` (import
-# directo por nombre) — debe seguir resolviendo a la misma función.
-from app.routes.export import router as _export_router, _csv_safe  # noqa: E402
-app.include_router(_export_router)
-
-
-# Fase 9 (paso A2): POST /api/sync y POST /api/ingest viven ahora en
-# app/routes/sync.py. api_ingest se re-importa aquí con el MISMO nombre
-# porque tests/test_healthkit.py llama a `main_mod.api_ingest(...)` DIRECTO
-# (no vía TestClient/HTTP) para probar el caso de header no-ASCII que un
-# cliente HTTP real no puede enviar — debe seguir resolviendo a la misma
-# función.
-from app.routes.sync import router as _sync_router, api_ingest  # noqa: E402
-app.include_router(_sync_router)
-
-
-# Fase 9 (paso A2): /api/ecg* vive ahora en app/routes/ecg.py.
-from app.routes.ecg import router as _ecg_router  # noqa: E402
-app.include_router(_ecg_router)
-
-
-# Fase 9 (paso A2): GET/POST /login, GET /auth/login, GET /auth/callback
-# viven ahora en app/routes/auth.py.
-from app.routes.auth import router as _auth_router  # noqa: E402
-app.include_router(_auth_router)
-
-
-# Fase 9 (paso A1): modelos Pydantic de request movidos a
-# app/routes/_models.py (pegamento compartido entre routers). Importados aquí
-# TAL CUAL, mismos nombres — ningún test los referencia por import directo de
-# main, así que no hace falta shim de compat adicional.
+# ---------------------------------------------------------------- routers (Fase 9)
+# Todas las rutas /api/* + /login + /auth/* viven ahora en app/routes/*.py
+# (mover código, no reescribir — ver ROADMAP-vitals-fase9-desmonolitizar.md).
+# Modelos Pydantic compartidos en app/routes/_models.py.
 from app.routes._models import (  # noqa: E402
-    CoachRequest,
-    ConversationCreate,
-    ProfileUpdate,
-    CyclePeriodCreate,
-    CycleSymptomCreate,
-    JournalUpdate,
-    JournalCustomCreate,
-    PlanStart,
-    PlanCheck,
-    LabEntryCreate,
-    UserCreate,
-    ApiKeyCreate,
+    CoachRequest, ConversationCreate, ProfileUpdate, CyclePeriodCreate,
+    CycleSymptomCreate, JournalUpdate, JournalCustomCreate, PlanStart,
+    PlanCheck, LabEntryCreate, UserCreate, ApiKeyCreate,
 )
-
-# Fase 9 (paso A2): GET/PUT /api/profile viven ahora en
-# app/routes/profile.py. _clean_str_list/_CLINICAL_FIELDS ya no se usan
-# directamente aquí (solo dentro del router) pero se re-exportan por si algún
-# otro módulo los referencia vía main.
 from app.deps import _clean_str_list, _CLINICAL_FIELDS  # noqa: E402
+
+from app.routes.insights import router as _insights_router  # noqa: E402
+from app.routes.report import router as _report_router  # noqa: E402
+# _csv_safe re-importado: tests/test_export.py hace `from main import _csv_safe`.
+from app.routes.export import router as _export_router, _csv_safe  # noqa: E402
+# api_ingest re-importado: tests/test_healthkit.py llama main_mod.api_ingest(...) directo.
+from app.routes.sync import router as _sync_router, api_ingest  # noqa: E402
+from app.routes.ecg import router as _ecg_router  # noqa: E402
+from app.routes.auth import router as _auth_router  # noqa: E402
 from app.routes.profile import router as _profile_router  # noqa: E402
-app.include_router(_profile_router)
-
-
-# Fase 9 (paso A2): /api/sources* vive ahora en app/routes/sources.py.
 from app.routes.sources import router as _sources_router  # noqa: E402
-app.include_router(_sources_router)
-
-
-# Fase 9 (paso A2): /api/cycle* vive ahora en app/routes/cycle.py.
 from app.routes.cycle import router as _cycle_router  # noqa: E402
-app.include_router(_cycle_router)
-
-
-# Fase 9 (paso A2): /api/journal* vive ahora en app/routes/journal.py.
 from app.routes.journal import router as _journal_router  # noqa: E402
-app.include_router(_journal_router)
-
-
-# Fase 9 (paso A2): /api/sleep-coach vive ahora en app/routes/coach.py.
-
-
-# Fase 9 (paso A2): /api/programs y /api/plan* viven ahora en
-# app/routes/programs.py.
 from app.routes.programs import router as _programs_router  # noqa: E402
-app.include_router(_programs_router)
-
-
-# Fase 9 (paso A2): /api/labs* vive ahora en app/routes/labs.py.
 from app.routes.labs import router as _labs_router  # noqa: E402
-app.include_router(_labs_router)
-
-
-# Fase 9 (paso A2): GET /api/healthspan vive ahora en app/routes/healthspan.py.
 from app.routes.healthspan import router as _healthspan_router  # noqa: E402
-app.include_router(_healthspan_router)
-
-
-# Fase 9 (paso A2): /api/coach/suggestions, /api/sleep-coach,
-# /api/coach/conversations*, /api/coach, /api/coach/history viven ahora en
-# app/routes/coach.py. ask_coach/load_history/clear_history siguen
-# importados arriba en este módulo (from app.coach_chat import ask_coach /
-# from app.coach_store import load_history, clear as clear_history) — el
-# router los lee vía `import main` diferido porque decenas de tests parchean
-# main.ask_coach / main.load_history / main.clear_history por nombre.
+# coach.py lee ask_coach/load_history/clear_history vía `import main` diferido
+# (tests parchean main.ask_coach etc. por nombre — ver app/routes/coach.py).
 from app.routes.coach import router as _coach_router  # noqa: E402
-app.include_router(_coach_router)
-
-
-# Fase 9 (paso A2): /api/users* (household) vive ahora en
-# app/routes/household.py.
 from app.routes.household import router as _household_router  # noqa: E402
-app.include_router(_household_router)
-
-
-# Fase 9 (paso A2): /api/keys* y /api/v1/* (F10, API pública de lectura)
-# viven ahora en app/routes/keys.py.
 from app.routes.keys import router as _keys_router  # noqa: E402
-app.include_router(_keys_router)
 
-
-# Fase 9 (paso A2): GET /auth/callback vive ahora en app/routes/auth.py
-# (registrado arriba junto con /login y /auth/login).
+for _router in (
+    _insights_router, _report_router, _export_router, _sync_router,
+    _ecg_router, _auth_router, _profile_router, _sources_router,
+    _cycle_router, _journal_router, _programs_router, _labs_router,
+    _healthspan_router, _coach_router, _household_router, _keys_router,
+):
+    app.include_router(_router)
