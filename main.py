@@ -58,31 +58,22 @@ app = FastAPI(title="Vitals Web App")
 # deja pasar respuestas chicas (JSON de status, etc.) sin overhead.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-
-def _active_source():
-    """La fuente de datos activa según el perfil (default google_health). Fase 5A."""
-    return get_source(_profile.effective("source") or "google_health")
-
 DATA_PATH: Optional[Path] = None  # override SOLO para tests (patch.object); None = runtime
 
+# Fase 9 (paso A1): _active_source/_data_path/_load_dataset/_load_demo_dataset/
+# _demo_blocked_response viven ahora en app/deps.py (pegamento compartido entre
+# routers) — se importan aquí con el MISMO nombre para que main_mod._data_path()
+# etc. sigan siendo válidos (decenas de tests los llaman/parchean por nombre).
+# _data_path() lee main.DATA_PATH vía import diferido dentro de app/deps.py,
+# así que el sentinel DE ARRIBA sigue siendo la única fuente de verdad.
+from app.deps import (  # noqa: E402
+    _active_source,
+    _data_path,
+    _load_dataset,
+    _load_demo_dataset,
+    _demo_blocked_response,
+)
 
-def _data_path() -> Path:
-    """Ruta a health_compact.json del usuario ACTIVO del request (Fase 8D,
-    paso D3: household). El middleware de userctx (ver abajo) fija el
-    contextvar en TODO request real, pero should_use_household_paths()
-    exige ADEMÁS que exista data/users/ (instancia ya migrada o con ≥1
-    usuario creado) — instalaciones/tests sin household resuelven contra
-    settings.DATA_DIR EN RUNTIME (patrón sentinel, mismo diseño que
-    sync.DATA_OUT/auth.TOKEN_PATH): un reload no puede dejar esta ruta
-    apuntando a data real. Nunca lanza."""
-    try:
-        if _userctx.should_use_household_paths():
-            return _userctx.current_data_dir() / "health_compact.json"
-    except Exception:
-        pass
-    if DATA_PATH is not None:  # override explícito de un test
-        return DATA_PATH
-    return settings.DATA_DIR / "health_compact.json"
 STATIC_DIR = settings.ROOT_DIR / "static"
 
 # ---------------------------------------------------------------- PWA / static
@@ -437,56 +428,6 @@ async def login_submit(request: Request):
         return response
 
     return HTMLResponse(content=_render_login_page(locale, error=True), status_code=401)
-
-
-# ---------------------------------------------------------------- helpers
-
-_DEMO_DATASET_FILE = settings.ROOT_DIR / "tests" / "fixtures" / "demo_dataset.json"
-_demo_dataset_cache: dict | None = None
-
-
-def _load_demo_dataset() -> dict | None:
-    """Fase 8A (paso A1): dataset 100% sintético servido cuando VITALS_DEMO=1
-    (ver scripts/gen_demo_data.py). Cacheado en memoria del proceso — se lee
-    UNA vez de tests/fixtures/demo_dataset.json (nunca de data/ real). Si el
-    fixture no existe (repo sin correr gen_demo_data.py todavía) degrada a
-    None -> el dashboard cae al shimmer de "sin datos", nunca 500."""
-    global _demo_dataset_cache
-    if _demo_dataset_cache is not None:
-        return _demo_dataset_cache
-    try:
-        text = _DEMO_DATASET_FILE.read_text(encoding="utf-8")
-        data = json.loads(text)
-        if isinstance(data, dict):
-            _demo_dataset_cache = data
-            return data
-    except Exception as exc:
-        logger.warning("No pude cargar el dataset demo (%s): %s", _DEMO_DATASET_FILE, exc)
-    return None
-
-
-def _load_dataset() -> dict | None:
-    if settings.VITALS_DEMO:
-        return _load_demo_dataset()
-    path = _data_path()
-    if path.exists():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-    return None
-
-
-def _demo_blocked_response() -> JSONResponse:
-    """Respuesta uniforme (200, nunca 500/401) para cualquier endpoint de
-    escritura sensible (auth/sync/ingest/sources) cuando VITALS_DEMO=1 — el
-    roadmap Fase 8A exige que estos devuelvan 200 con nota 'demo mode' sin
-    efectos, para que un frontend que no conoce el flag no truene con un
-    error inesperado al probar el botón de sync/conectar en la demo pública."""
-    return JSONResponse(
-        {"status": "demo", "message": "Demo mode: esta acción está deshabilitada. Los datos son sintéticos."},
-        status_code=200,
-    )
 
 
 # ---------------------------------------------------------------- rutas
@@ -1039,110 +980,24 @@ async def auth_login(source: str = "google_health"):
     return RedirectResponse(url=url, status_code=302)
 
 
-class CoachRequest(BaseModel):
-    question: str
-    history: Optional[List[dict]] = None  # deprecado: ya no se usa como contexto (ver /api/coach)
-    conversation_id: Optional[str] = None
-
-
-class ConversationCreate(BaseModel):
-    title: Optional[str] = None
-
-
-class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    birthdate: Optional[str] = None
-    sex: Optional[str] = None
-    waist_cm: Optional[float] = None
-    height_cm: Optional[float] = None
-    weight_kg: Optional[float] = None
-    # Ronda 5: umbral único de sueño (minutos). default 480, validado 300-600.
-    sleep_target_min: Optional[int] = None
-    # Tarjeta de Pasos en Hoy: meta diaria de pasos. default 8000, validado 1000-50000.
-    steps_target: Optional[int] = None
-    locale: Optional[str] = None
-    units: Optional[str] = None
-    onboarded: Optional[bool] = None
-    source: Optional[str] = None  # DEPRECATED: usar sources (Fase 6A). Se sigue aceptando por compat.
-    sources: Optional[List[str]] = None  # Fase 6A: lista de fuentes conectadas; gana sobre 'source' si viene.
-    # Ronda 4: intake clínico. Cualquier tipo raro (no-lista) se rechaza con 422
-    # controlado en _clean_str_list — Any para que pydantic no rechace antes de tiempo
-    # con su propio error (queremos NUESTRO mensaje, no el genérico de pydantic).
-    goals: Optional[Any] = None
-    injuries: Optional[Any] = None
-    conditions: Optional[Any] = None
-    medications: Optional[Any] = None
-    # Fase 7: toggle opt-in del módulo de salud femenina. Funciona con
-    # cualquier 'sex' (inclusivo, nunca forzado). bool -> pydantic ya valida el tipo.
-    cycle_tracking: Optional[bool] = None
-    # Fase 8C (paso C3): config de notificaciones push (ntfy/Telegram). Any
-    # para validar nosotros mismos (mismo motivo que goals/injuries/etc.:
-    # queremos NUESTRO mensaje 422, no el genérico de pydantic) — MERGE
-    # parcial sobre el dict existente (togglear un campo no borra los demás).
-    notifications: Optional[Any] = None
-
-
-class CyclePeriodCreate(BaseModel):
-    start: str
-    end: Optional[str] = None
-    flow: Optional[str] = None
-
-
-class CycleSymptomCreate(BaseModel):
-    date: str
-    tags: Optional[Any] = None
-    note: Optional[str] = None
-
-
-class JournalUpdate(BaseModel):
-    """Fase 8B: PUT /api/journal/{date}. habits = {key: bool|float} — MERGE
-    sobre la entry existente del día (togglear un chip no borra los demás).
-
-    Roadmap P2 (F9, paso 7, criterio 16): Union[bool, float] en vez de bool
-    — Pydantic ya no rechaza números en el body para los 3 hábitos
-    cuantificables (alcohol/meditation/breathwork). Validación de RANGO vive
-    en app.journal.set_entry (no aquí), mismo patrón que hoy: este endpoint
-    solo valida que las keys existan en el catálogo (ver abajo), la
-    coerción/clamp del valor es responsabilidad del motor."""
-    habits: Dict[str, Union[bool, float]]
-
-
-class JournalCustomCreate(BaseModel):
-    """Fase 8B: POST /api/journal/custom — alta de hábito custom por label."""
-    label: str
-
-
-class PlanStart(BaseModel):
-    """Roadmap P1 (F4, paso 6): POST /api/plan — iniciar un programa."""
-    program_id: str
-
-
-class PlanCheck(BaseModel):
-    """Roadmap P1 (F4, paso 6): POST /api/plan/check — marcar día cumplido
-    manual. date opcional, default hoy (el endpoint valida ISO 8601)."""
-    date: Optional[str] = None
-
-
-class LabEntryCreate(BaseModel):
-    """Fase 8D (paso D1): POST /api/labs — entrada manual de laboratorio."""
-    date: str
-    marker: str
-    value: float
-    unit: Optional[str] = None
-    note: Optional[str] = None
-
-
-class UserCreate(BaseModel):
-    """Fase 8D (paso D3, household): POST /api/users — alta de usuario."""
-    name: str
-    color: Optional[str] = None
-
-
-class ApiKeyCreate(BaseModel):
-    """Roadmap P2 (F10, paso 2): POST /api/keys — alta de API key de lectura."""
-    label: Optional[str] = None
-
+# Fase 9 (paso A1): modelos Pydantic de request movidos a
+# app/routes/_models.py (pegamento compartido entre routers). Importados aquí
+# TAL CUAL, mismos nombres — ningún test los referencia por import directo de
+# main, así que no hace falta shim de compat adicional.
+from app.routes._models import (  # noqa: E402
+    CoachRequest,
+    ConversationCreate,
+    ProfileUpdate,
+    CyclePeriodCreate,
+    CycleSymptomCreate,
+    JournalUpdate,
+    JournalCustomCreate,
+    PlanStart,
+    PlanCheck,
+    LabEntryCreate,
+    UserCreate,
+    ApiKeyCreate,
+)
 
 _CLINICAL_FIELDS = ("goals", "injuries", "conditions", "medications")
 _CLINICAL_MAX_ITEMS = 10
