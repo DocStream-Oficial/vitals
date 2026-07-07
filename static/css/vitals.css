@@ -1,0 +1,1540 @@
+/* ── RESET ── */
+*{box-sizing:border-box;margin:0;padding:0}
+::-webkit-scrollbar{width:0;height:0}
+html{-webkit-font-smoothing:antialiased;}
+
+/* ── CSS VARS — dark (default) ── */
+:root{
+  --app-bg:#0a0a0c;
+  --screen-bg:#000000;
+  --bg:#07090e;
+  --label:#ffffff;
+  --label2:rgba(235,235,245,.62);
+  --label3:rgba(235,235,245,.34);
+  --sep:rgba(255,255,255,.09);
+  --card:rgba(30,30,34,.82);
+  --card2:rgba(255,255,255,.06);
+  --card-border:rgba(255,255,255,.1);
+  --card-hi:rgba(255,255,255,.14);
+  --shadow:0 14px 36px rgba(0,0,0,.5);
+  --tabbar:rgba(28,28,32,.66);
+  --blur:26px;
+  --ring-track:rgba(255,255,255,.08);
+  --grid:rgba(255,255,255,.06);
+  --axis:rgba(235,235,245,.4);
+  --tile:rgba(255,255,255,.05);
+  /* roadmap P0 paso 6: --label3 solo tiene ~2.8:1 sobre --card (falla WCAG AA).
+     --advice es SOLO para .insight-rec (consejo accionable) — 5.7:1 medido. */
+  --advice:rgba(235,235,245,.58);
+}
+body.light{
+  --app-bg:#e6e6ec;
+  --screen-bg:#f3f2f8;
+  --bg:#f3f2f8;
+  --label:#111114;
+  --label2:rgba(60,60,67,.6);
+  --label3:rgba(60,60,67,.32);
+  --sep:rgba(60,60,67,.13);
+  --card:rgba(255,255,255,.82);
+  --card2:rgba(120,120,128,.08);
+  --card-border:rgba(255,255,255,.7);
+  --card-hi:rgba(255,255,255,.95);
+  --shadow:0 12px 30px rgba(60,60,90,.12);
+  --tabbar:rgba(255,255,255,.72);
+  --ring-track:rgba(0,0,0,.07);
+  --grid:rgba(0,0,0,.055);
+  --axis:rgba(60,60,67,.5);
+  --tile:rgba(120,120,128,.07);
+  /* roadmap P0 paso 6: 5.6:1 medido sobre --card claro (falla con --label3, ~1.8:1). */
+  --advice:rgba(60,60,67,.78);
+}
+
+/* ── LAYOUT ── */
+body{
+  background:var(--app-bg);
+  font-family:-apple-system,"SF Pro Display","SF Pro Text",system-ui,"Segoe UI",sans-serif;
+  min-height:100vh;
+  padding:env(safe-area-inset-top) 0 120px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ── THEME TOGGLE (en el header) ── */
+.head-actions{display:flex;align-items:center;gap:10px}
+#themeBtn{
+  width:38px;height:38px;border-radius:999px;flex:none;cursor:pointer;
+  background:var(--card2);border:1px solid var(--card-border);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  display:flex;align-items:center;justify-content:center;color:var(--label);
+  transition:opacity .2s;
+}
+#themeBtn:hover{opacity:.8}
+
+/* ── APP (contenedor responsive) ── */
+.app{
+  position:relative;z-index:1;
+  width:100%;max-width:460px;margin:0 auto;
+  padding:24px 16px 0;
+}
+@media(min-width:760px){ .app{ max-width:760px; padding:34px 22px 0; } }
+@media(min-width:1180px){ .app{ max-width:1140px; } }
+@media(max-width:420px){ .order-row{ gap:6px; } .order-row button{ width:36px;height:36px;font-size:18px; } }
+
+/* ── GRID DE TARJETAS (responsive) ──
+   Roadmap P2 paso 1/2: consolidado a UN breakpoint (≥900px → 2 columnas). A
+   375px (mobile-first) esto es invisible en cualquier caso
+   (grid-template-columns:1fr siempre por debajo de 900px), así que el cambio
+   es mobile-safe por construcción — regla 2 del roadmap. En #screenMas TODOS
+   los hijos directos de .cards son span-all (auditado 2026-07-05), así que el
+   2-col no tiene efecto visual ahí: cada fila sigue ocupando el ancho
+   completo.
+   Roadmap P3 Fase A: se retiró grid-auto-flow:dense (violaba el orden manual
+   del usuario al rellenar huecos jalando tarjetas posteriores) por un sistema
+   de MASONRY: row-flow normal (sparse, respeta el orden hacia adelante) +
+   grid-auto-rows fino (8px) donde cada tarjeta recibe su propio
+   grid-row-end:span N calculado por JS según su altura real (ver
+   layoutMasonry). Esto balancea las 2 columnas sin dejar huecos verticales
+   grandes cuando una card corta antecede a una alta. row-gap:0 porque el gap
+   vertical ya se absorbe en el cálculo del span (ver GAP en layoutMasonry);
+   column-gap se mantiene en 14px como el gap de 1-col. */
+.cards{ display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
+@media(min-width:900px){
+  .cards{ grid-template-columns:1fr 1fr; grid-auto-rows:8px; row-gap:0; column-gap:14px; }
+}
+.cards .span-all{ grid-column:1 / -1; }
+.cards .card{ margin-bottom:0; }
+/* Roadmap P2 paso 1: journalCard (resumen colapsado, P0 paso 3) cabe en media
+   columna en desktop — su contenido es una sola línea de chips. Se le quita
+   span-all SOLO desde 900px; a 375px sigue full-width como P0/P1. */
+@media(min-width:900px){ #journalCard.span-all{ grid-column:auto; } }
+
+/* ── GLOW (fondo ambiental fijo) ── */
+#glow{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(38% 22% at 88% 0%, rgba(48,209,88,.15), transparent 70%),
+    radial-gradient(44% 28% at 2% 100%, rgba(94,92,230,.17), transparent 72%);
+}
+body.light #glow{
+  background:
+    radial-gradient(50% 30% at 84% 3%, rgba(48,209,88,.1), transparent 70%),
+    radial-gradient(56% 40% at 6% 88%, rgba(94,92,230,.1), transparent 72%);
+}
+
+/* ── STATUS BAR (mockup — oculta en la app real) ── */
+#statusBar{display:none}
+
+/* ── CONTENT (flujo normal) ── */
+#scrollArea{position:static}
+
+/* ── CARD ── */
+.card{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur)) saturate(1.4);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
+  border:1px solid var(--card-border);border-radius:26px;
+  box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
+  margin-bottom:14px;
+}
+
+/* ── SECTION LABEL ── */
+.sec-lbl{
+  font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--label2);
+}
+
+/* ── C2 (Fase 8C): SKELETON LOADERS ── */
+/* Shimmer genérico para cards de Hoy en la primera carga (antes de que DB
+   tenga datos reales). Se aplica agregando la clase .skeleton a un .card;
+   .skeleton-line simula texto/valores dentro. Progressive enhancement: si
+   JS no llega a quitarla, el shimmer sigue viéndose (nunca contenido roto). */
+@keyframes skeleton-shimmer{
+  0%{background-position:-200% 0}
+  100%{background-position:200% 0}
+}
+.skeleton .skeleton-line,
+.skeleton.skeleton-line{
+  display:block;border-radius:8px;
+  background:linear-gradient(90deg, var(--card2) 25%, var(--card-hi) 50%, var(--card2) 75%);
+  background-size:200% 100%;
+  animation:skeleton-shimmer 1.4s ease-in-out infinite;
+  color:transparent!important;
+}
+.skeleton .skeleton-line{height:14px;margin-bottom:8px;width:60%}
+.skeleton .skeleton-line.w-full{width:100%}
+.skeleton .skeleton-line.w-40{width:40%}
+.skeleton .skeleton-line.h-big{height:32px;width:45%}
+.skeleton *{visibility:hidden}
+.skeleton .skeleton-line{visibility:visible}
+
+/* ── C2: TOAST de error con reintentar (showRetryToast) ── */
+#retryToastHost{
+  position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(16px);
+  z-index:400;display:flex;align-items:center;gap:10px;
+  padding:12px 14px 12px 16px;border-radius:16px;
+  background:rgba(28,28,32,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 30px rgba(0,0,0,.45);
+  font:500 13px/1.3 -apple-system;color:var(--label);
+  opacity:0;pointer-events:none;transition:opacity .22s ease, transform .22s ease;
+  max-width:min(360px,calc(100% - 32px));
+}
+#retryToastHost.visible{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+#retryToastHost .retry-toast-msg{flex:1}
+#retryToastHost .retry-toast-btn{
+  flex:none;background:rgba(10,132,255,.18);border:1px solid rgba(10,132,255,.35);
+  color:#0A84FF;font:600 12px/1 -apple-system;padding:7px 12px;border-radius:999px;cursor:pointer;
+}
+#retryToastHost .retry-toast-btn:active{opacity:.7}
+
+/* ── TABS ── */
+#tabBar{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:18px;
+  width:min(440px,calc(100% - 32px));height:62px;
+  display:flex;align-items:center;justify-content:space-around;padding:0 4px;
+  background:var(--tabbar);
+  backdrop-filter:blur(34px) saturate(1.8);-webkit-backdrop-filter:blur(34px) saturate(1.8);
+  border:1px solid var(--card-border);border-radius:30px;
+  box-shadow:0 14px 36px rgba(0,0,0,.45),inset 0 1px 0 var(--card-hi);
+  z-index:50;
+}
+.tab-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;padding:6px 0;
+}
+.tab-item span{font:600 10px/1 -apple-system}
+
+/* ── SCREEN PANELS ── */
+.screen{display:none}
+.screen.active{display:block}
+
+/* ── PLACEHOLDER (tabs no activos) ── */
+.placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:400px;text-align:center;gap:12px;
+  color:var(--label3);font:500 15px/1.5 -apple-system;
+}
+.placeholder svg{opacity:.4}
+
+/* ── HEADER ── */
+#todayHeader{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin:2px 2px 16px;
+}
+#todayTitle{font:700 34px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}
+#todayDate{margin-top:5px;font:500 15px/1.2 -apple-system;color:var(--label2)}
+.avatar{
+  width:40px;height:40px;border-radius:999px;
+  background:linear-gradient(140deg,#30D158,#0A84FF);
+  display:flex;align-items:center;justify-content:center;
+  font:700 16px -apple-system;color:#fff;
+  position:relative;box-shadow:0 4px 14px rgba(10,132,255,.35);
+  flex:none;
+}
+.avatar-dot{
+  position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;
+  border-radius:999px;background:#30D158;border:2.5px solid var(--screen-bg);
+}
+
+/* ── SCRUBBER ── */
+#scrubber{
+  display:flex;align-items:center;justify-content:center;gap:20px;
+  margin:-6px 0 14px;
+}
+.scrub-btn{
+  background:var(--card2);border:1px solid var(--card-border);
+  border-radius:999px;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--label2);font:600 18px -apple-system;
+  user-select:none;transition:opacity .15s;
+}
+.scrub-btn:disabled{opacity:.28;cursor:default}
+#scrubDate{font:500 13px/1 -apple-system;color:var(--label2);min-width:120px;text-align:center}
+
+/* ── SUEÑO (tab dedicado, roadmap tab Sueño) — header + selector de noche
+   propio, mismo patrón visual que #tendHeader/#scrubber. ── */
+.sleep-head{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 10px}
+#sleepHeadTitle{font:700 30px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}
+#sleepNightSel{display:flex;align-items:center;justify-content:center;gap:20px;margin:0 0 16px}
+#sleepSelDate{font:500 13px/1 -apple-system;color:var(--label2);min-width:120px;text-align:center}
+
+/* ── HERO RINGS ── */
+#heroCard{padding:18px;display:flex;gap:6px;align-items:center}
+#ringWrap{width:142px;flex:none;display:flex;align-items:center;justify-content:center}
+#ringLabels{flex:1;display:flex;flex-direction:column;gap:14px;padding-left:4px}
+.ring-row{cursor:pointer}
+.ring-tag{display:flex;align-items:center;gap:7px}
+.ring-dot{width:9px;height:9px;border-radius:3px}
+.ring-tag-lbl{font:600 11px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2)}
+.ring-val{margin-top:3px;font:680 27px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+.ring-sub{font-size:15px;color:var(--label2);margin-left:2px}
+
+/* ── COACH IA ── */
+#coachCard{position:relative;overflow:hidden;padding:18px}
+.coach-glow{
+  position:absolute;top:-40px;right:-30px;width:160px;height:160px;border-radius:999px;
+  background:radial-gradient(circle,rgba(48,209,88,.22),transparent 70%);pointer-events:none;
+}
+.coach-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;position:relative}
+.coach-badge{
+  display:flex;align-items:center;gap:7px;background:rgba(48,209,88,.16);
+  border:1px solid rgba(48,209,88,.32);padding:5px 11px;border-radius:999px;
+}
+.coach-badge-lbl{font:700 11px/1 -apple-system;letter-spacing:.06em;color:#30D158}
+.coach-date{font:500 11px/1 -apple-system;color:var(--label3)}
+#coachHeadline{font:600 16px/1.35 -apple-system;color:var(--label);margin-bottom:13px;position:relative;letter-spacing:-.01em}
+#coachChips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;position:relative}
+.chip{font:600 12px/1 -apple-system;padding:6px 11px;border-radius:999px}
+#coachBullets{display:flex;flex-direction:column;gap:11px;position:relative}
+.bullet{font:400 14px/1.5 -apple-system;color:var(--label2)}
+.bullet strong{color:var(--label);font-weight:600}
+#coachPlanBtn{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:7px;
+  background:linear-gradient(180deg,#3BDC63,#28C24F);border:none;color:#fff;
+  font:700 14px/1 -apple-system;padding:13px;border-radius:999px;cursor:pointer;position:relative;
+  box-shadow:0 6px 16px rgba(48,209,88,.32),inset 0 1px 0 rgba(255,255,255,.28);
+  transition:opacity .15s,transform .15s;
+}
+#coachPlanBtn:active{opacity:.88;transform:scale(.985)}
+
+/* ── EDAD CORPORAL ── */
+#bodyAgeCard{cursor:pointer;position:relative;overflow:hidden;padding:18px}
+.ba-glow{
+  position:absolute;top:-50px;left:-30px;width:170px;height:170px;border-radius:999px;
+  background:radial-gradient(circle,rgba(94,92,230,.22),transparent 70%);pointer-events:none;
+}
+.ba-lbl-row{display:flex;align-items:center;gap:7px;margin-bottom:16px;position:relative}
+.ba-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.ba-nums{display:flex;align-items:flex-start;gap:26px;position:relative;margin-bottom:14px}
+.ba-num{font:680 46px/1 -apple-system;letter-spacing:-.03em;color:#9D8DF5;font-variant-numeric:tabular-nums}
+.ba-num-lbl{margin-top:5px;font:600 11px/1.3 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2)}
+.ba-num-sub{font:400 11px/1.3 -apple-system;color:var(--label3)}
+.ba-detail{position:relative;font:400 13px/1.6 -apple-system;color:var(--label2)}
+.ba-detail strong{color:var(--label);font-weight:600}
+.ba-penalty{position:relative;margin-top:9px;font:500 12.5px/1.4 -apple-system;color:#FF9F0A}
+
+/* ── MONITOR DE SALUD ── */
+#healthCard{padding:18px 6px 8px}
+.hm-hdr{display:flex;align-items:center;gap:7px;margin:0 12px 6px}
+.hm-hdr-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.hm-hdr-sub{margin-left:auto;font:500 11px/1 -apple-system;color:var(--label3)}
+.hm-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:14px;cursor:pointer}
+.hm-icon{width:32px;height:32px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.hm-info{flex:1;min-width:0}
+.hm-name{font:590 15px/1.2 -apple-system;color:var(--label)}
+.hm-base{font:400 12px/1.2 -apple-system;color:var(--label3)}
+.hm-spark{width:62px;flex:none;opacity:.9}
+.hm-val-wrap{display:flex;align-items:baseline;gap:3px;min-width:62px;justify-content:flex-end}
+.hm-val{font:640 17px/1 -apple-system;color:var(--label);font-variant-numeric:tabular-nums}
+.hm-unit{font:500 11px/1 -apple-system;color:var(--label2)}
+.trend-dot{width:8px;height:8px;flex:none;border-radius:999px}
+/* roadmap P0 paso 5: dot neutro (sin dato) — nunca verde por default */
+.trend-dot.dot-nodata{background:var(--label3);box-shadow:none;opacity:.6}
+
+/* ── PASOS ── */
+#stepsCard{padding:18px}
+.steps-hdr{display:flex;align-items:center;gap:7px;margin-bottom:12px}
+.steps-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.steps-top-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.steps-val{font:680 34px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+.steps-spark{flex:none;opacity:.9}
+.steps-bar{position:relative;width:100%;height:8px;border-radius:999px;background:var(--tile);overflow:hidden;margin-top:12px}
+.steps-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;transition:width .3s ease}
+.steps-sub{margin-top:8px;font:500 12.5px/1.4 -apple-system;color:var(--label2)}
+
+/* ── HORA DE DORMIR ── */
+#bedCard{position:relative;overflow:hidden;padding:18px}
+.bed-glow{
+  position:absolute;top:-40px;right:-20px;width:150px;height:150px;border-radius:999px;
+  background:radial-gradient(circle,rgba(94,92,230,.2),transparent 70%);pointer-events:none;
+}
+.bed-lbl-row{display:flex;align-items:center;gap:7px;margin-bottom:12px;position:relative}
+.bed-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.bed-time-row{display:flex;align-items:baseline;gap:14px;position:relative}
+.bed-time{font:680 52px/1 -apple-system;letter-spacing:-.03em;color:#9D8DF5;font-variant-numeric:tabular-nums}
+.bed-hint{font:500 13px/1.4 -apple-system;color:var(--label2)}
+.bed-info{margin-top:14px;display:flex;flex-direction:column;gap:5px;position:relative}
+.bed-row{font:400 13px/1.4 -apple-system;color:var(--label2)}
+.bed-row strong{color:var(--label);font-weight:600}
+
+/* ── CARGA 7 DÍAS ── */
+#loadCard{padding:18px;margin-bottom:8px}
+.load-hdr{display:flex;align-items:center;gap:7px;margin-bottom:14px}
+.load-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.load-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.load-tile{
+  background:var(--tile);border:1px solid var(--card-border);
+  border-radius:16px;padding:14px;
+}
+.load-val{font:680 26px/1 -apple-system;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.load-unit{font:600 12px/1 -apple-system;color:var(--label2)}
+.load-lbl2{margin-top:6px;font:500 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label3)}
+.load-warn{
+  margin-top:12px;display:flex;align-items:flex-start;gap:9px;
+  background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.28);
+  border-radius:14px;padding:12px 13px;
+}
+.load-warn-txt{font:500 12.5px/1.45 -apple-system;color:var(--label)}
+
+/* ── JOURNAL DE HÁBITOS (Fase 8B) — card "Diario" en Hoy ── */
+#journalCard{padding:18px}
+.journal-hdr{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.journal-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.journal-hdr-sub{margin-left:auto;font:500 11px/1 -apple-system;color:var(--label3)}
+.journal-daysel{display:flex;gap:6px;margin:10px 0 14px}
+.journal-daysel-btn{
+  flex:1;text-align:center;padding:7px 4px;border-radius:11px;
+  font:600 13px/1 -apple-system;cursor:pointer;color:var(--label2);
+  background:var(--card2);border:1px solid var(--card-border);transition:all .15s;
+}
+.journal-daysel-btn.active{
+  background:var(--tile);color:var(--label);
+  box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 var(--card-hi);
+}
+.journal-cat-group{margin-bottom:12px}
+.journal-cat-lbl{font:600 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label3);margin:0 2px 7px}
+.journal-chips{display:flex;gap:7px;flex-wrap:wrap}
+.journal-chip{
+  font:600 12.5px/1 -apple-system;padding:8px 13px;border-radius:999px;cursor:pointer;
+  background:var(--tile);border:1px solid var(--card-border);color:var(--label2);
+  transition:all .12s;user-select:none;-webkit-user-select:none;
+}
+.journal-chip:active{transform:scale(.96)}
+.journal-chip.on{
+  background:rgba(48,209,88,.16);border-color:rgba(48,209,88,.4);color:#30D158;
+}
+.journal-chip.custom{border-style:dashed}
+
+/* ── Journal cuantitativo (Roadmap P2, F9): stepper para los 3 hábitos con
+   cantidad (alcohol/meditation/breathwork) — mismos colores/altura que
+   .journal-chip para no desentonar visualmente en la fila de chips. ── */
+.journal-qty{
+  display:flex;align-items:center;gap:8px;font:600 12.5px/1 -apple-system;
+  padding:6px 10px;border-radius:999px;background:var(--tile);
+  border:1px solid var(--card-border);color:var(--label2);user-select:none;
+}
+.journal-qty.active{background:rgba(48,209,88,.16);border-color:rgba(48,209,88,.4);color:#30D158}
+.journal-qty-lbl{white-space:nowrap}
+.journal-qty-ctrl{display:flex;align-items:center;gap:6px}
+.journal-qty-btn{
+  width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+  background:var(--card2);color:var(--label);font:700 14px/1 -apple-system;cursor:pointer;flex:none;
+}
+.journal-qty-btn:active{transform:scale(.9)}
+.journal-qty-val{min-width:34px;text-align:center;font-variant-numeric:tabular-nums;color:var(--label)}
+.journal-qty-unit{color:var(--label3);font-weight:500}
+.journal-addbtn{
+  font:600 12.5px/1 -apple-system;padding:8px 13px;border-radius:999px;cursor:pointer;
+  background:none;border:1px dashed var(--card-border);color:var(--label3);
+}
+.journal-addbtn:active{opacity:.6}
+.journal-week-count{margin-top:14px;font:500 12px/1.4 -apple-system;color:var(--label3)}
+
+/* ── JOURNAL: resumen colapsado en la card de Hoy (roadmap P0 paso 3) ── */
+.journal-summary-line{
+  margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:26px;
+}
+.journal-summary-chip{
+  font:600 12px/1 -apple-system;padding:6px 11px;border-radius:999px;
+  background:rgba(48,209,88,.16);border:1px solid rgba(48,209,88,.4);color:#30D158;
+}
+.journal-summary-more{
+  font:600 12px/1 -apple-system;padding:6px 9px;border-radius:999px;
+  background:var(--tile);border:1px solid var(--card-border);color:var(--label3);
+}
+.journal-summary-hint{font:400 13px/1.4 -apple-system;color:var(--label3)}
+
+/* ── JOURNAL: sheet de detalle íntegro (roadmap P0 paso 3) ── */
+#journalDetailModal{
+  position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#journalDetailModal.hidden{display:none}
+#journalDetailSheet{
+  width:100%;max-width:500px;max-height:85vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+#journalDetailHeader{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+#journalDetailTitle{font:700 17px/1.2 -apple-system;color:var(--label)}
+#journalDetailClose{
+  margin-left:auto;background:none;border:none;cursor:pointer;padding:4px;
+  color:var(--label3);display:flex;align-items:center;justify-content:center;
+}
+#journalDetailClose:active{opacity:.6}
+
+/* ── JOURNAL: modal de alta de hábito custom ── */
+#journalAddModal{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#journalAddModal.hidden{display:none}
+#journalAddModalSheet{
+  width:100%;max-width:500px;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.pm-input{
+  width:100%;box-sizing:border-box;padding:13px 14px;border-radius:14px;
+  background:var(--card2);border:1px solid var(--card-border);color:var(--label);
+  font:500 15px/1.3 -apple-system;outline:none;
+}
+.pm-input:focus{border-color:#30D158}
+.pm-save-btn{
+  width:100%;margin-top:14px;padding:13px;border-radius:14px;border:none;cursor:pointer;
+  background:#30D158;color:#04140a;font:700 15px/1 -apple-system;
+}
+.pm-save-btn:active{opacity:.85}
+
+/* ── IMPACTO DE HÁBITOS — card en Tendencias ── */
+.jimpact-row{padding:10px 0}
+.jimpact-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.jimpact-headline{font:500 13px/1.45 -apple-system;color:var(--label)}
+.jimpact-sub{margin-top:3px;font:400 11.5px/1.3 -apple-system;color:var(--label3);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.jimpact-delta{font:650 13px/1 -apple-system;font-variant-numeric:tabular-nums}
+.jimpact-delta.good{color:#30D158}
+.jimpact-delta.bad{color:#FF375F}
+.jimpact-badge{
+  font:600 10px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;background:rgba(94,92,230,.14);color:#9D8DF5;
+}
+.jimpact-empty{font:400 13px/1.4 -apple-system;color:var(--label3);padding:4px 0}
+/* Dosis-respuesta (Roadmap P2, F9): badge distinto (naranja) del "significativo"
+   morado de analyze_journal — se ven en la misma card pero son distinguibles. */
+.jimpact-badge.dose{background:rgba(255,159,10,.16);color:#FF9F0A}
+.jimpact-section-lbl{
+  font:600 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--label3);margin:14px 0 6px;padding-top:10px;border-top:1px solid var(--sep);
+}
+
+/* ── API pública de solo lectura — sección en Más + modal de clave nueva
+   (Roadmap P2, F10, paso 3) ── */
+.api-key-row{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:14px;padding:12px 14px;margin-bottom:8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.api-key-row.revoked{opacity:.5}
+.api-key-label{font:500 14px/1.25 -apple-system;color:var(--label)}
+.api-key-meta{font:400 11.5px/1.3 -apple-system;color:var(--label3);margin-top:2px}
+.api-key-revoke-btn{
+  flex:none;font:600 12px/1 -apple-system;padding:7px 12px;border-radius:999px;cursor:pointer;
+  background:rgba(255,55,95,.14);color:#FF375F;
+}
+.api-key-revoked-pill{
+  flex:none;font:600 11px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;
+  padding:5px 10px;border-radius:999px;background:var(--card2);color:var(--label3);
+}
+.api-key-empty{font:400 13px/1.4 -apple-system;color:var(--label3);padding:4px 0 8px}
+#apiKeyNewModal{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#apiKeyNewModal.hidden{display:none}
+#apiKeyNewModalSheet{
+  width:100%;max-width:500px;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.api-key-new-warning{font:500 12.5px/1.4 -apple-system;color:#FF9F0A;margin-bottom:12px}
+.api-key-new-value{
+  font:600 13px/1.4 monospace;color:var(--label);word-break:break-all;
+  background:var(--card2);border:1px solid var(--card-border);border-radius:12px;
+  padding:12px 14px;margin-bottom:12px;user-select:all;
+}
+
+/* ── Arquetipo de sueño mensual — card en el modal de Informe (Roadmap P2, F8) ── */
+.archetype-card{
+  background:var(--tile);border:1px solid var(--card-border);border-radius:16px;
+  padding:14px 16px;margin:12px 0 18px;
+}
+.archetype-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.archetype-badge{
+  font:700 10px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;background:rgba(94,92,230,.18);color:#9D8DF5;
+}
+.archetype-name{font:680 15px/1.2 -apple-system;color:var(--label)}
+.archetype-desc{font:400 12.5px/1.4 -apple-system;color:var(--label2);margin-bottom:10px}
+.archetype-metrics{display:flex;flex-direction:column;gap:5px}
+.archetype-metric-row{
+  display:flex;justify-content:space-between;gap:12px;
+  font:500 12.5px/1.3 -apple-system;color:var(--label2);
+}
+.archetype-metric-row span:last-child{color:var(--label);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ── INFORME NARRATIVO — card + modal en Tendencias ── */
+#reportCard{padding:18px;cursor:pointer}
+.report-hdr{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.report-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.report-period-toggle{margin-left:auto;display:flex;gap:4px}
+.report-period-btn{
+  font:600 11px/1 -apple-system;padding:5px 9px;border-radius:999px;cursor:pointer;
+  color:var(--label3);background:var(--card2);border:1px solid var(--card-border);
+}
+.report-period-btn.active{background:var(--tile);color:var(--label)}
+.report-preview{font:400 13px/1.45 -apple-system;color:var(--label2);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#reportModal{
+  position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#reportModal.hidden{display:none}
+#reportModalSheet{
+  width:100%;max-width:500px;max-height:80vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.report-narrative{font:400 14.5px/1.6 -apple-system;color:var(--label);margin:12px 0 18px;white-space:pre-line}
+.report-metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.report-metric-tile{background:var(--tile);border:1px solid var(--card-border);border-radius:14px;padding:12px}
+.report-metric-val{font:680 22px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+.report-metric-lbl{margin-top:4px;font:500 11px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;color:var(--label3)}
+.report-metric-delta{margin-top:3px;font:600 11.5px/1 -apple-system}
+.report-metric-delta.good{color:#30D158}
+.report-metric-delta.bad{color:#FF375F}
+.report-extras{grid-column:1/-1;margin-top:6px;display:flex;flex-direction:column;gap:7px}
+.report-extra-row{display:flex;justify-content:space-between;gap:12px;font:500 12.5px/1.4 -apple-system;color:var(--label2)}
+.report-extra-row span:last-child{color:var(--label);font-variant-numeric:tabular-nums;text-align:right}
+.report-extra-range{color:var(--label3);font-size:11.5px;justify-content:flex-start}
+.report-extra-insight span:last-child{font-weight:400;font-size:12px}
+
+/* ── JOURNAL: modal de hábito custom ── */
+#journalAddModal{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#journalAddModal.hidden{display:none}
+#journalAddModalSheet{
+  width:100%;max-width:420px;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.journal-add-savebtn{
+  width:100%;background:linear-gradient(180deg,#3BDC63,#28C24F);border:none;color:#fff;
+  font:700 15px/1 -apple-system;padding:14px;border-radius:14px;cursor:pointer;
+  box-shadow:0 6px 16px rgba(48,209,88,.28),inset 0 1px 0 rgba(255,255,255,.28);
+}
+.journal-add-savebtn:active{opacity:.88}
+
+/* ── HOUSEHOLD (Fase 8D, paso D3) — switcher en Más + modal de alta ── */
+.household-row{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}
+.household-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.household-avatar{
+  width:34px;height:34px;border-radius:999px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font:700 14px -apple-system;color:#fff;
+}
+.household-name{flex:1;font:600 14px/1.3 -apple-system;color:var(--label)}
+.household-active-badge{
+  font:650 10px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;background:rgba(48,209,88,.16);color:#30D158;
+}
+.household-del{color:var(--label3);cursor:pointer;flex:none;padding:4px}
+#householdAddModal{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#householdAddModal.hidden{display:none}
+#householdAddModalSheet{
+  width:100%;max-width:420px;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+
+/* ── LABORATORIOS (Fase 8D, paso D1) — card en Más + modal ── */
+.labs-summary-hint{font:400 12.5px/1.4 -apple-system;color:var(--label3);margin-bottom:2px}
+#labsModal{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#labsModal.hidden{display:none}
+#labsModalSheet{
+  width:100%;max-width:520px;max-height:85vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.labs-tabs{display:flex;gap:6px;margin:6px 0 16px}
+.labs-tab-btn{
+  flex:1;text-align:center;padding:8px 6px;border-radius:11px;cursor:pointer;
+  font:600 12.5px/1 -apple-system;color:var(--label2);
+  background:var(--card2);border:1px solid var(--card-border);transition:all .15s;
+}
+.labs-tab-btn.active{background:var(--tile);color:var(--label);box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 var(--card-hi)}
+.labs-marker-row{
+  display:flex;align-items:center;gap:10px;padding:11px 0;cursor:pointer;
+}
+.labs-marker-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.labs-marker-info{flex:1;min-width:0}
+.labs-marker-name{font:600 13.5px/1.3 -apple-system;color:var(--label)}
+.labs-marker-latest{margin-top:2px;font:500 12px/1.3 -apple-system;color:var(--label3);font-variant-numeric:tabular-nums}
+.labs-marker-latest .oor{color:#FF9F0A;font-weight:700}
+.labs-marker-spark{flex:none;width:70px;height:28px}
+.labs-oob-badge{
+  flex:none;font:650 10px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;
+  padding:3px 7px;border-radius:999px;background:rgba(255,159,10,.16);color:#FF9F0A;
+}
+.labs-empty{font:400 13px/1.4 -apple-system;color:var(--label3);padding:8px 0}
+.labs-detail-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.labs-detail-title{font:650 16px/1.2 -apple-system;color:var(--label)}
+.labs-detail-range{font:500 12px/1.3 -apple-system;color:var(--label3);margin-bottom:10px}
+.labs-history-row{display:flex;justify-content:space-between;gap:8px;padding:7px 0;font:500 12.5px/1.4 -apple-system;color:var(--label2)}
+.labs-history-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.labs-history-row .oor{color:#FF9F0A;font-weight:700}
+.labs-history-del{color:var(--label3);cursor:pointer;flex:none}
+.labs-form-row{margin-bottom:10px}
+.labs-form-row label{display:block;font:600 11px/1 -apple-system;letter-spacing:.03em;text-transform:uppercase;color:var(--label3);margin-bottom:6px}
+.labs-import-hint{font:400 11.5px/1.4 -apple-system;color:var(--label3);margin:8px 0}
+.labs-import-result{font:500 12px/1.4 -apple-system;color:var(--label2);margin-top:8px;white-space:pre-line}
+.labs-back-btn{cursor:pointer;color:var(--label3);flex:none}
+
+/* ── HEALTHSPAN / PACE OF AGING (Fase 8D, paso D2) — card en Tendencias ── */
+#healthspanPaceRow{display:flex;align-items:baseline;gap:8px;margin:10px 0 2px}
+#healthspanPaceVal{font:700 34px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+#healthspanPaceLbl{font:500 13px/1 -apple-system;color:var(--label3)}
+#healthspanPaceNote{font:400 12.5px/1.4 -apple-system;color:var(--label2);margin-bottom:10px}
+#healthspanChartSvg{margin:6px 0}
+#healthspanDeltaRow{font:500 12px/1.4 -apple-system;color:var(--label3)}
+#healthspanDeltaRow .good{color:#30D158;font-weight:650}
+#healthspanDeltaRow .bad{color:#FF9F0A;font-weight:650}
+.healthspan-empty{font:400 13px/1.4 -apple-system;color:var(--label3);padding:6px 0}
+
+/* ── TENDENCIAS ── */
+#tendHeader{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 16px}
+#tendTitle{font:700 30px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}
+.tend-period-bar{
+  display:flex;gap:4px;
+  background:var(--card2);border:1px solid var(--card-border);
+  border-radius:14px;padding:4px;margin-bottom:16px;
+}
+.tend-period-btn{
+  flex:1;text-align:center;padding:7px 4px;border-radius:11px;
+  font:600 13px/1 -apple-system;cursor:pointer;
+  color:var(--label2);transition:all .15s;
+}
+.tend-period-btn.active{
+  background:var(--card);color:var(--label);
+  box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 var(--card-hi);
+}
+.tend-card{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  border:1px solid var(--card-border);border-radius:24px;
+  box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
+  padding:16px 14px;margin-bottom:13px;
+}
+.tend-card-title{margin:0 3px 4px;font:650 16px/1.2 -apple-system;color:var(--label)}
+.tend-card-sub{margin:0 3px 12px;font:400 12px -apple-system;color:var(--label2)}
+/* Roadmap P0 paso 8: a 375px el subtítulo de "Arquitectura del sueño" puede
+   wrappear a 2 líneas y se encima con el tick superior del eje Y (que en
+   stackedBars() nace muy cerca del borde del SVG, padT=10, y el SVG tiene
+   overflow:visible — el glyph de "600" asoma por encima del propio borde
+   del <svg>). padding-top en el contenedor del chart le da aire sin tocar
+   el layout de las demás tend-cards (que usan charts con menos ticks /
+   subtítulos más cortos y no lo necesitan). Medido con preview_inspect:
+   6px seguía solapando ~3px -> 16px deja ~7px de aire libre. */
+#tendChartSleep{padding-top:16px}
+.tend-legend{display:flex;gap:14px;margin:10px 3px 0;flex-wrap:wrap;font:500 11px -apple-system;color:var(--label2)}
+.tend-legend-item{display:flex;align-items:center;gap:5px}
+.tend-legend-dot{width:9px;height:9px;border-radius:3px}
+.tend-legend-dash{width:14px;height:0;border-top:2px dashed currentColor}
+.tend-legend-line{width:14px;height:3px;border-radius:2px}
+/* variabilidad badge */
+.tend-badge{margin:8px 3px 0;font:500 12px -apple-system;color:var(--label2)}
+/* Comparativa semanal (Ronda 4) */
+.wcmp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 3px}
+.wcmp-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.wcmp-lbl{font:500 13px/1.2 -apple-system;color:var(--label2)}
+.wcmp-vals{display:flex;align-items:baseline;gap:6px;font:600 14px/1.2 -apple-system;color:var(--label)}
+.wcmp-prev{font:400 12px/1.2 -apple-system;color:var(--label3)}
+.wcmp-delta{font:600 12px/1.2 -apple-system;display:flex;align-items:center;gap:2px}
+.wcmp-delta.up{color:#30D158}
+.wcmp-delta.down{color:#FF375F}
+.wcmp-delta.flat{color:var(--label3)}
+.wcmp-insufficient{font:400 13px/1.4 -apple-system;color:var(--label3);padding:6px 3px}
+/* balance donut wrapper */
+.tend-balance-wrap{display:flex;align-items:center;gap:6px}
+.tend-donut-wrap{position:relative;width:130px;flex:none}
+.tend-donut-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+}
+.tend-donut-val{font:680 30px/1 -apple-system;color:var(--label);font-variant-numeric:tabular-nums}
+.tend-donut-lbl{font:500 11px -apple-system;color:var(--label2)}
+.tend-balance-text{flex:1;padding-left:6px}
+.tend-balance-title{font:650 16px/1.2 -apple-system;color:var(--label);margin-bottom:6px}
+.tend-balance-desc{font:400 13px/1.5 -apple-system;color:var(--label2)}
+/* metrics grid */
+#tendMetricsLabel{margin:18px 3px 11px;font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+#tendMetricsGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px}
+/* Roadmap P2 paso 2: tendMetricsCard es span-all (ocupa el ancho completo del
+   grid de 2 columnas en desktop) — su grid interno de tiles sube a 4 columnas
+   para aprovechar ese ancho. A 375/768px sigue en 2 columnas (sin cambio). */
+@media(min-width:900px){ #tendMetricsGrid{ grid-template-columns:1fr 1fr 1fr 1fr; } }
+.tend-metric{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  border:1px solid var(--card-border);border-radius:18px;
+  box-shadow:inset 0 1px 0 var(--card-hi);padding:14px;
+}
+.tend-metric-lbl-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.tend-metric-dot{width:7px;height:7px;border-radius:999px}
+.tend-metric-lbl{font:600 11px/1 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2)}
+.tend-metric-val-row{display:flex;align-items:baseline;gap:3px}
+.tend-metric-val{font:680 24px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+.tend-metric-unit{font:600 12px -apple-system;color:var(--label2)}
+.tend-metric-sub{margin-top:5px;font:400 11px -apple-system;color:var(--label3)}
+/* workouts */
+.tend-workouts-card{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  border:1px solid var(--card-border);border-radius:24px;
+  box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
+  padding:16px 8px 8px;margin-bottom:8px;
+}
+.tend-workouts-hdr{display:flex;align-items:center;gap:7px;margin:0 10px 8px}
+.tend-workouts-lbl{font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;color:var(--label2)}
+.tend-workout-row{display:flex;align-items:center;gap:10px;padding:11px 10px;border-radius:13px}
+.tend-workout-info{flex:1;min-width:0}
+.tend-workout-name{font:590 14px/1.2 -apple-system;color:var(--label)}
+.tend-workout-date{font:400 11px/1.2 -apple-system;color:var(--label3)}
+.tend-workout-min{text-align:right;min-width:48px;font:600 13px/1.2 -apple-system;color:var(--label);font-variant-numeric:tabular-nums}
+.tend-workout-kcal{text-align:right;min-width:56px;font:500 12px/1.2 -apple-system;color:var(--label2);font-variant-numeric:tabular-nums}
+.tend-workout-bpm{text-align:right;min-width:50px;font:500 12px/1.2 -apple-system;color:var(--label2);font-variant-numeric:tabular-nums}
+
+/* ── RECONNECT BANNER ── */
+#reconnectBanner{
+  display:none;position:relative;z-index:10;
+  background:rgba(255,59,48,.18);border:1px solid rgba(255,59,48,.4);
+  border-radius:16px;padding:12px 16px;margin-bottom:14px;
+  font:500 13px/1.4 -apple-system;color:var(--label);
+}
+#reconnectBanner.visible{display:flex;align-items:center;gap:10px}
+#reconnectBanner a{color:#FF375F;font-weight:700;text-decoration:underline}
+
+/* ── DEMO BANNER (roadmap P2 paso 5) ── */
+#demoBanner{
+  display:none;position:relative;z-index:10;
+  background:rgba(10,132,255,.14);border:1px solid rgba(10,132,255,.35);
+  border-radius:16px;padding:12px 16px;margin-bottom:14px;
+  font:500 13px/1.4 -apple-system;color:var(--label);
+}
+#demoBanner.visible{display:flex;align-items:center;gap:10px}
+#demoBanner a{color:#0A84FF;font-weight:700;text-decoration:underline}
+
+/* ── RECONNECT CHIP (roadmap P2 paso 4) — junto a "Última actualización" en
+   Más, cuando el token expiró pero la data sigue fresca (<24h). ── */
+.reconnect-chip{
+  display:inline-flex;align-items:center;gap:5px;margin-top:6px;
+  padding:5px 11px;border-radius:999px;cursor:pointer;
+  background:rgba(255,159,10,.14);border:1px solid rgba(255,159,10,.35);
+  color:#FF9F0A;font:600 11.5px/1 -apple-system;text-decoration:none;
+}
+/* Dot de aviso en el tab Más (roadmap P2 paso 4) */
+.tab-item{position:relative}
+.tab-dot{
+  display:none;position:absolute;top:2px;right:calc(50% - 20px);
+  width:8px;height:8px;border-radius:999px;background:#FF9F0A;
+  border:1.5px solid var(--tabbar);
+}
+.tab-dot.visible{display:block}
+
+/* ── OFFLINE BANNER (Fase 8C, paso C5) ── */
+#offlineBanner{
+  display:none;position:relative;z-index:10;
+  background:rgba(255,159,10,.16);border:1px solid rgba(255,159,10,.38);
+  border-radius:16px;padding:12px 16px;margin-bottom:14px;
+  font:500 13px/1.4 -apple-system;color:var(--label);
+}
+#offlineBanner.visible{display:flex;align-items:center;gap:10px}
+
+/* ── SYNC BUTTON ── */
+#syncWrap{margin-bottom:14px}
+#syncBtn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:rgba(10,132,255,.14);border:1px solid rgba(10,132,255,.3);
+  border-radius:15px;padding:12px;cursor:pointer;color:#0A84FF;
+  font:600 14px/1 -apple-system;transition:opacity .2s;
+}
+#syncBtn:disabled{opacity:.45;cursor:default}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin-icon{display:inline-block;animation:spin 1s linear infinite}
+
+/* ── DETAIL OVERLAY ── */
+#detailOverlay{
+  display:none;position:fixed;inset:0;z-index:60;
+  background:var(--app-bg);overflow-y:auto;overflow-x:hidden;
+  padding:40px max(18px,calc(50% - 280px)) 60px;
+}
+#detailOverlay.visible{display:block}
+#detailBack{
+  display:inline-flex;align-items:center;gap:4px;
+  font:500 16px/1 -apple-system;cursor:pointer;margin-bottom:18px;
+}
+#detailTitle{font:700 32px/1.05 -apple-system;letter-spacing:-.02em;color:var(--label)}
+#detailValRow{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+#detailVal{font:680 56px/1 -apple-system;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+#detailUnit{font:600 20px/1 -apple-system;color:var(--label2)}
+#detailSub{margin-top:4px;font:500 14px/1.2 -apple-system;color:var(--label2)}
+#detailChart{margin-top:20px}
+#detailCtx{margin-top:14px}
+.ctx-item{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
+.ctx-dot{width:6px;height:6px;border-radius:999px;margin-top:7px;flex:none}
+.ctx-txt{font:400 14px/1.5 -apple-system;color:var(--label2)}
+#detailNorms{margin-top:14px;padding-top:14px;border-top:1px solid var(--sep);font:500 13px/1.4 -apple-system;color:var(--label3)}
+
+/* ── ORDER OVERLAY ── */
+#orderOverlay{
+  display:none;position:fixed;inset:0;z-index:61;
+  background:rgba(0,0,0,.55);
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  align-items:flex-end;justify-content:center;
+}
+#orderOverlay.visible{display:flex}
+#orderOverlayCard{
+  background:var(--card);
+  border-radius:24px 24px 0 0;
+  width:100%;max-width:560px;
+  padding:20px 18px 36px;
+  max-height:90vh;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+#orderOverlayHeader{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;
+}
+#orderOverlayTitle{font:700 20px/1.1 -apple-system;color:var(--label)}
+#orderCloseBtn{
+  width:32px;height:32px;border:none;background:var(--card2,rgba(128,128,128,.18));
+  border-radius:999px;font-size:18px;color:var(--label2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.order-seg{
+  display:flex;gap:0;background:var(--card2,rgba(128,128,128,.15));
+  border-radius:10px;padding:3px;margin-bottom:14px;
+}
+.order-seg-btn{
+  flex:1;padding:7px 10px;border:none;background:transparent;
+  border-radius:8px;font:500 14px/1 -apple-system;color:var(--label2);
+  cursor:pointer;transition:background .15s,color .15s;
+}
+.order-seg-btn.active{
+  background:var(--card,#1c1c1e);color:var(--label);font-weight:600;
+  box-shadow:0 1px 4px rgba(0,0,0,.18);
+}
+#orderList{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#orderResetBtn{
+  margin-top:12px;padding:11px 14px;background:var(--card2,rgba(128,128,128,.15));
+  border-radius:12px;text-align:center;font:500 14px -apple-system;
+  color:var(--label2);cursor:pointer;border:none;width:100%;
+}
+/* Tend header sort button */
+#tendSortBtn{
+  width:34px;height:34px;border:none;
+  background:rgba(10,132,255,.14);border:1px solid rgba(10,132,255,.28);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#0A84FF;flex-shrink:0;
+}
+
+/* ── COACH SCREEN ── */
+#coachScreenHeader{display:flex;align-items:flex-start;justify-content:space-between;margin:2px 2px 16px}
+#coachScreenTitle{font:700 34px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}
+.coach-brief-card{position:relative;overflow:hidden;padding:18px}
+.coach-brief-glow{
+  position:absolute;top:-40px;right:-30px;width:160px;height:160px;border-radius:999px;
+  background:radial-gradient(circle,rgba(48,209,88,.22),transparent 70%);pointer-events:none;
+}
+.coach-brief-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;position:relative}
+.coach-brief-badge{
+  display:flex;align-items:center;gap:7px;background:rgba(48,209,88,.16);
+  border:1px solid rgba(48,209,88,.32);padding:5px 11px;border-radius:999px;
+}
+.coach-brief-badge-lbl{font:700 11px/1 -apple-system;letter-spacing:.06em;color:#30D158}
+.coach-brief-date{font:500 11px/1 -apple-system;color:var(--label3)}
+#coachBriefChips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;position:relative}
+#coachBriefBullets{display:flex;flex-direction:column;gap:11px;position:relative}
+
+/* Suggestions */
+.coach-suggestions-lbl{
+  font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--label2);margin:18px 2px 10px;
+}
+#coachSuggestions{display:flex;flex-direction:column;gap:8px}
+.coach-suggestion{
+  background:var(--card2);border:1px solid var(--card-border);border-radius:14px;
+  padding:13px 15px;cursor:pointer;text-align:left;
+  font:500 14px/1.4 -apple-system;color:var(--label);
+  transition:opacity .15s;display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.coach-suggestion:active{opacity:.65}
+.coach-suggestion-chevron{flex:none;opacity:.4}
+
+/* Chat thread */
+.coach-thread-lbl{
+  font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--label2);margin:20px 2px 10px;
+}
+#coachThread{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.bubble-wrap{display:flex;flex-direction:column}
+.bubble-wrap.user{align-items:flex-end}
+.bubble-wrap.assistant{align-items:flex-start}
+.bubble{
+  max-width:82%;padding:11px 14px;border-radius:18px;
+  font:400 14px/1.55 -apple-system;
+}
+.bubble.user{
+  background:rgba(48,209,88,.22);border:1px solid rgba(48,209,88,.3);
+  border-bottom-right-radius:5px;color:var(--label);
+}
+.bubble.assistant{
+  background:var(--card);border:1px solid var(--card-border);
+  border-bottom-left-radius:5px;color:var(--label);
+}
+.bubble.thinking{color:var(--label3);font-style:italic}
+
+/* Composer */
+#coachComposer{
+  position:sticky;bottom:80px;
+  background:var(--tabbar);
+  backdrop-filter:blur(24px) saturate(1.6);-webkit-backdrop-filter:blur(24px) saturate(1.6);
+  border:1px solid var(--card-border);border-radius:22px;
+  padding:8px 8px 8px 16px;
+  display:flex;align-items:center;gap:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 1px 0 var(--card-hi);
+  margin-top:12px;
+}
+#coachInput{
+  flex:1;background:none;border:none;outline:none;
+  /* >=16px: bajo eso, iOS auto-zoom al enfocar y el zoom queda pegado */
+  font:400 16px/1.4 -apple-system;color:var(--label);
+  resize:none;min-height:22px;max-height:120px;
+}
+#coachInput::placeholder{color:var(--label3)}
+#coachSendBtn{
+  width:34px;height:34px;border-radius:999px;flex:none;cursor:pointer;
+  background:linear-gradient(180deg,#3BDC63,#28C24F);border:none;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(48,209,88,.34),inset 0 1px 0 rgba(255,255,255,.3);
+  transition:opacity .15s;
+}
+#coachSendBtn:disabled{opacity:.35;cursor:default}
+#coachSendBtn:not(:disabled):active{opacity:.7}
+
+/* ── MÁS SCREEN ── */
+#masHeader{display:flex;align-items:flex-start;justify-content:space-between;margin:2px 2px 16px}
+#masTitle{font:700 34px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}
+
+/* Section labels within Más */
+.mas-section-lbl{
+  font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--label2);margin:18px 2px 10px;
+}
+.mas-section-lbl:first-child{margin-top:0}
+
+/* Appearance toggle row */
+.mas-row{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:16px;padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:8px;
+}
+.mas-row-label{font:500 15px/1.2 -apple-system;color:var(--label)}
+.mas-row-sub{font:400 12px/1.2 -apple-system;color:var(--label3);margin-top:2px}
+/* iOS-style toggle */
+.ios-toggle{
+  position:relative;width:51px;height:31px;flex:none;cursor:pointer;
+}
+.ios-toggle input{opacity:0;width:0;height:0;position:absolute}
+.ios-toggle-track{
+  position:absolute;inset:0;border-radius:999px;
+  background:var(--ring-track);transition:background .2s;
+}
+.ios-toggle input:checked ~ .ios-toggle-track{background:#30D158}
+.ios-toggle-thumb{
+  position:absolute;top:2px;left:2px;
+  width:27px;height:27px;border-radius:999px;
+  background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);
+  transition:transform .2s;pointer-events:none;
+}
+.ios-toggle input:checked ~ .ios-toggle-thumb{transform:translateX(20px)}
+
+/* Profile card */
+.mas-profile-card{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:20px;padding:18px;margin-bottom:8px;
+}
+.mas-profile-top{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.mas-avatar{
+  width:52px;height:52px;border-radius:999px;flex:none;
+  background:linear-gradient(140deg,#30D158,#0A84FF);
+  display:flex;align-items:center;justify-content:center;
+  font:700 20px -apple-system;color:#fff;
+  box-shadow:0 4px 14px rgba(10,132,255,.35);
+}
+.mas-name{font:700 18px/1.2 -apple-system;color:var(--label)}
+.mas-email{font:400 12px/1.2 -apple-system;color:var(--label3);margin-top:2px}
+.mas-stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.mas-stat{text-align:center;padding:10px 6px}
+.mas-stat-val{font:680 22px/1 -apple-system;color:var(--label);font-variant-numeric:tabular-nums}
+.mas-stat-lbl{font:500 11px/1.4 -apple-system;color:var(--label3);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+
+/* Perfil edit button */
+.mas-edit-btn{
+  width:100%;margin-top:12px;padding:10px;border:1px solid var(--card-border);
+  border-radius:12px;background:var(--card);color:var(--accent,#0A84FF);
+  font:600 14px/1 -apple-system;cursor:pointer;transition:opacity .15s;
+}
+.mas-edit-btn:active{opacity:.7}
+
+/* ── ONBOARDING OVERLAY ── */
+#onboardOverlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg,#07090e);
+  display:flex;flex-direction:column;align-items:center;
+  overflow-y:auto;padding:env(safe-area-inset-top,20px) 20px 40px;
+}
+#onboardOverlay.hidden{display:none}
+.ob-logo{
+  font:700 28px/1 -apple-system;color:var(--label,#e6edf3);
+  margin:40px 0 8px;letter-spacing:-.5px;
+}
+.ob-sub{
+  font:400 15px/1.5 -apple-system;color:var(--label3,#8b949e);
+  text-align:center;margin-bottom:32px;max-width:320px;
+}
+.ob-form{width:100%;max-width:390px;display:flex;flex-direction:column;gap:14px}
+.ob-field{display:flex;flex-direction:column;gap:5px}
+.ob-label{font:500 13px/1 -apple-system;color:var(--label3,#8b949e);text-transform:uppercase;letter-spacing:.04em}
+.ob-input{
+  background:var(--card,#141b22);border:1px solid var(--card-border,rgba(255,255,255,.08));
+  border-radius:12px;padding:13px 14px;
+  /* font-size >=16px a propósito: bajo 16px, iOS hace auto-zoom al enfocar el
+     campo y el zoom queda pegado tras cerrar el teclado (bug real reportado). */
+  font:400 16px/1 -apple-system;color:var(--label,#e6edf3);
+  -webkit-appearance:none;outline:none;
+}
+.ob-input:focus{border-color:var(--accent,#0A84FF)}
+.ob-textarea{
+  background:var(--card,#141b22);border:1px solid var(--card-border,rgba(255,255,255,.08));
+  border-radius:12px;padding:13px 14px;min-height:76px;resize:vertical;
+  font:400 16px/1.4 -apple-system;color:var(--label,#e6edf3);
+  -webkit-appearance:none;outline:none;
+}
+.ob-textarea:focus{border-color:var(--accent,#0A84FF)}
+.ob-section-lbl{font:650 13px/1.2 -apple-system;color:var(--label,#e6edf3);margin-top:6px}
+.ob-section-sub{font:400 12px/1.4 -apple-system;color:var(--label3,#8b949e);margin-top:-8px}
+.ob-seg{display:flex;gap:8px}
+.ob-seg-btn{
+  flex:1;padding:11px;border:1px solid var(--card-border,rgba(255,255,255,.08));
+  border-radius:12px;background:var(--card,#141b22);
+  font:500 14px/1 -apple-system;color:var(--label3,#8b949e);cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.ob-seg-btn.active{
+  background:var(--accent,#0A84FF);color:#fff;border-color:var(--accent,#0A84FF);
+}
+.ob-hint{font:400 12px/1.4 -apple-system;color:var(--label3,#8b949e)}
+.ob-submit{
+  margin-top:8px;width:100%;padding:15px;border:none;
+  border-radius:999px;cursor:pointer;color:#fff;
+  background:linear-gradient(180deg,#2A93FF,#0A84FF);
+  font:700 16px/1 -apple-system;
+  box-shadow:0 6px 20px rgba(10,132,255,.38),inset 0 1px 0 rgba(255,255,255,.28);
+  transition:opacity .15s,transform .1s;
+}
+.ob-submit:active{opacity:.9;transform:scale(.99)}
+.ob-submit:disabled{opacity:.4;cursor:default;box-shadow:none}
+.ob-error{font:400 13px/1.4 -apple-system;color:#FF375F;min-height:18px}
+
+/* ── PROFILE EDIT MODAL ── */
+#profileModal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#profileModal.hidden{display:none}
+#profileModalSheet{
+  width:100%;max-width:500px;max-height:90vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.pm-handle{
+  width:36px;height:4px;border-radius:2px;
+  background:var(--sep,rgba(255,255,255,.1));
+  margin:0 auto 20px;
+}
+.pm-title{font:700 20px/1 -apple-system;color:var(--label,#e6edf3);margin-bottom:20px;text-align:center}
+
+/* ── ECG: card en Hoy ── */
+#ecgCard{padding:18px}
+.ecg-card-hdr{display:flex;align-items:center;gap:7px;margin-bottom:12px}
+.ecg-card-lbl{font:600 13px/1 -apple-system;color:var(--label2,#c9d1d9);letter-spacing:.2px}
+.ecg-empty{font:400 13px/1.4 -apple-system;color:var(--label3,#8b949e);padding:4px 0}
+.ecg-row-list{display:flex;flex-direction:column;gap:0}
+.ecg-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:11px 0;cursor:pointer;
+}
+.ecg-row:not(:last-child){border-bottom:1px solid var(--sep,rgba(255,255,255,.08))}
+.ecg-row-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ecg-row-date{font:500 13.5px/1.2 -apple-system;color:var(--label,#e6edf3)}
+.ecg-row-sub{font:400 11.5px/1.3 -apple-system;color:var(--label3,#8b949e)}
+.ecg-badge{
+  font:600 11px/1 -apple-system;white-space:nowrap;flex-shrink:0;
+  padding:4px 10px;border-radius:999px;
+}
+.ecg-badge.sinus{background:rgba(48,209,88,.15);color:#30D158;border:1px solid rgba(48,209,88,.3)}
+.ecg-badge.afib{background:rgba(255,55,95,.15);color:#FF375F;border:1px solid rgba(255,55,95,.3)}
+.ecg-badge.inconclusive{background:rgba(255,159,10,.15);color:#FF9F0A;border:1px solid rgba(255,159,10,.3)}
+.ecg-badge.other{background:rgba(120,120,128,.15);color:var(--label3,#8b949e);border:1px solid var(--sep,rgba(255,255,255,.1))}
+.ecg-chevron{color:var(--label3,#8b949e);flex-shrink:0}
+
+/* ── ECG: modal de lista ── */
+#ecgListModal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#ecgListModal.hidden{display:none}
+#ecgListModalSheet{
+  width:100%;max-width:500px;max-height:80vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+
+/* ── COACH: switcher + modal de conversaciones ── */
+#coachConvSwitcher{
+  display:flex;align-items:center;gap:4px;margin-top:2px;
+  background:none;border:none;padding:2px 0;cursor:pointer;
+  color:var(--label3,#8b949e);font:500 13.5px/1.2 -apple-system;
+  max-width:220px;
+}
+#coachConvSwitcher:active{opacity:.65}
+#coachConvSwitcherTitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#coachConvModal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.7);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#coachConvModal.hidden{display:none}
+#coachConvModalSheet{
+  width:100%;max-width:500px;max-height:80vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+.coach-conv-new-row{
+  display:flex;align-items:center;gap:9px;cursor:pointer;
+  padding:11px 0;margin-bottom:4px;
+  color:var(--accent,#0A84FF);font:600 14.5px/1.2 -apple-system;
+  border-bottom:1px solid var(--sep,rgba(255,255,255,.08));
+}
+.coach-conv-new-row:active{opacity:.65}
+.coach-conv-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 0;cursor:pointer;
+}
+.coach-conv-row:not(:last-child){border-bottom:1px solid var(--sep,rgba(255,255,255,.08))}
+.coach-conv-row.active{background:var(--card2,rgba(255,255,255,.04));border-radius:12px;padding-left:8px;padding-right:8px;margin:0 -8px}
+.coach-conv-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.coach-conv-row-title{font:500 14px/1.3 -apple-system;color:var(--label,#e6edf3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coach-conv-row-sub{font:400 11.5px/1.3 -apple-system;color:var(--label3,#8b949e)}
+.coach-conv-row-del{
+  flex:none;background:none;border:none;cursor:pointer;padding:6px;
+  color:var(--label3,#8b949e);display:flex;align-items:center;justify-content:center;
+}
+.coach-conv-row-del:active{opacity:.5;color:#FF375F}
+.coach-conv-empty{font:400 13px/1.4 -apple-system;color:var(--label3,#8b949e);padding:4px 0}
+
+/* ── ECG: visor de la tira ── */
+#ecgViewerModal{
+  position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.85);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#ecgViewerModal.hidden{display:none}
+#ecgViewerSheet{
+  width:100%;max-width:640px;max-height:92vh;overflow-y:auto;
+  background:var(--bg,#07090e);border-radius:24px 24px 0 0;
+  padding:12px 16px calc(env(safe-area-inset-bottom,16px) + 20px);
+}
+#ecgViewerBack{
+  display:flex;align-items:center;gap:4px;background:none;border:none;
+  color:var(--accent,#0A84FF);font:500 15px/1 -apple-system;cursor:pointer;
+  padding:6px 2px 14px;
+}
+#ecgViewerHeader{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.ecg-vh-class{font:700 19px/1.2 -apple-system;color:var(--label,#e6edf3)}
+.ecg-vh-meta{font:400 12.5px/1.4 -apple-system;color:var(--label3,#8b949e)}
+/* Scroll horizontal para la tira: NUNCA debe desbordar el body — el contenedor
+   scrollea, el <svg> adentro puede ser más ancho que la pantalla. */
+#ecgViewerStripWrap{
+  width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;
+  border-radius:14px;background:#0b0e14;border:1px solid var(--card-border,rgba(255,255,255,.08));
+  -webkit-overflow-scrolling:touch;
+}
+#ecgViewerStripWrap svg{display:block}
+.ecg-strip-empty{
+  padding:40px 16px;text-align:center;font:400 13px/1.5 -apple-system;
+  color:var(--label3,#8b949e);
+}
+#ecgViewerDisclaimer{
+  margin-top:16px;padding:12px 14px;border-radius:14px;
+  background:rgba(255,159,10,.10);border:1px solid rgba(255,159,10,.25);
+  font:400 12px/1.5 -apple-system;color:var(--label2,#c9d1d9);
+}
+
+/* Sync card */
+.mas-sync-card{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:20px;padding:16px;margin-bottom:8px;
+}
+.mas-sync-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font:500 14px/1.2 -apple-system;color:var(--label);
+  padding:6px 0;
+}
+.mas-sync-row:not(:last-child){border-bottom:1px solid var(--sep);padding-bottom:12px;margin-bottom:6px}
+.mas-sync-status{
+  font:500 12px/1 -apple-system;
+  padding:4px 10px;border-radius:999px;
+}
+.mas-sync-status.ok{background:rgba(48,209,88,.15);color:#30D158;border:1px solid rgba(48,209,88,.3)}
+.mas-sync-status.warn{background:rgba(255,59,48,.12);color:#FF375F;border:1px solid rgba(255,59,48,.3)}
+#masSyncBtn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(180deg,#2A93FF,#0A84FF);border:none;
+  border-radius:999px;padding:13px;cursor:pointer;color:#fff;
+  font:700 14px/1 -apple-system;transition:opacity .2s,transform .15s;margin-top:10px;
+  box-shadow:0 6px 16px rgba(10,132,255,.34),inset 0 1px 0 rgba(255,255,255,.28);
+}
+#masSyncBtn:not(:disabled):active{opacity:.9;transform:scale(.99)}
+#masSyncBtn:disabled{opacity:.45;cursor:default;box-shadow:none}
+
+/* ── Notificaciones (Fase 8C, paso C3) ── */
+.mas-notify-field-lbl{
+  display:block;font:500 11px/1 -apple-system;color:var(--label3);
+  margin:10px 0 5px;text-transform:uppercase;letter-spacing:.04em;
+}
+.mas-notify-input{
+  width:100%;background:var(--card2);border:1px solid var(--card-border);
+  border-radius:12px;padding:10px 12px;font:500 13px -apple-system;
+  color:var(--label);outline:none;
+}
+.mas-notify-input::placeholder{color:var(--label3)}
+
+/* Sources list (Fase 6B) — una fila por fuente, con badge + acciones propias */
+.mas-source-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 0;
+}
+.mas-source-row:not(:last-child){border-bottom:1px solid var(--sep)}
+.mas-source-name{font:500 14px/1.2 -apple-system;color:var(--label)}
+.mas-source-sub{font:400 11px/1.3 -apple-system;color:var(--label3);margin-top:2px}
+.mas-source-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.mas-source-status{
+  font:500 11px/1 -apple-system;white-space:nowrap;
+  padding:4px 10px;border-radius:999px;
+}
+.mas-source-status.ok{background:rgba(48,209,88,.15);color:#30D158;border:1px solid rgba(48,209,88,.3)}
+.mas-source-status.warn{background:rgba(255,159,10,.15);color:#FF9F0A;border:1px solid rgba(255,159,10,.3)}
+.mas-source-status.off{background:rgba(120,120,128,.15);color:var(--label3);border:1px solid var(--sep)}
+.mas-source-btn{
+  font:600 12px/1 -apple-system;white-space:nowrap;cursor:pointer;
+  padding:7px 12px;border-radius:999px;border:none;
+}
+.mas-source-btn.connect{background:linear-gradient(180deg,#2A93FF,#0A84FF);color:#fff}
+.mas-source-btn.disconnect{background:rgba(255,59,48,.12);color:#FF375F;border:1px solid rgba(255,59,48,.3)}
+
+/* ── DEEP SCREEN — metric cards (Sleep / Fitness drill-down) ── */
+#deepScreenWrap{display:none;margin-top:14px}
+#deepScreenWrap.visible{display:block}
+/* Hide simple layout when deep screen is active */
+#deepScreenWrap.visible ~ #detailValRow,
+#deepScreenWrap.visible ~ #detailSub,
+#deepScreenWrap.visible ~ #detailChart,
+#deepScreenWrap.visible ~ #detailCtxCard{display:none}
+/* Roadmap P2 paso 3: grid 2-up DESDE 375px (a diferencia de .cards, que es
+   aditivo solo ≥900px — aquí el roadmap pide 2-up en TODOS los viewports
+   porque cada deep-mc es angosta: valor+pill+sparkline caben en ~165px). Las
+   hero cards (Duración/Readiness/wellbeing-header) y los separadores de
+   sección (.deep-section-lbl) llevan .deep-span-all para ocupar el ancho
+   completo del grid. */
+.deep-metric-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+.deep-metric-list .deep-span-all{grid-column:1 / -1}
+.deep-mc{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur)) saturate(1.4);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
+  border:1px solid var(--card-border);border-radius:22px;
+  box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
+  padding:16px 16px 14px;
+  margin-bottom:0; /* el gap lo da el grid del padre, no margin (roadmap paso 3) */
+}
+.deep-mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px}
+.deep-mc-lbl-row{display:flex;align-items:center;gap:8px}
+.deep-mc-dot{width:8px;height:8px;border-radius:3px;flex:none}
+.deep-mc-lbl{font:600 11px/1 -apple-system;letter-spacing:.05em;text-transform:uppercase;color:var(--label2)}
+.deep-mc-pill{
+  font:600 11px/1 -apple-system;padding:4px 9px;border-radius:999px;
+  white-space:nowrap;
+}
+.deep-mc-pill.green{background:rgba(48,209,88,.16);color:#30D158;border:1px solid rgba(48,209,88,.28)}
+.deep-mc-pill.amber{background:rgba(255,159,10,.14);color:#FF9F0A;border:1px solid rgba(255,159,10,.28)}
+.deep-mc-pill.red{background:rgba(255,59,48,.12);color:#FF375F;border:1px solid rgba(255,59,48,.28)}
+.deep-mc-pill.neutral{background:var(--card2);color:var(--label2);border:1px solid var(--card-border)}
+.deep-mc-val-row{display:flex;align-items:baseline;gap:5px;margin-bottom:4px}
+.deep-mc-val{font:680 32px/1 -apple-system;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.deep-mc-unit{font:600 13px/1 -apple-system;color:var(--label2)}
+.deep-mc-sub{font:400 12px/1.35 -apple-system;color:var(--label3);margin-bottom:10px}
+.deep-mc-spark{margin-top:2px}
+.deep-mc-spark svg{width:100%;height:auto;display:block}
+/* Bedtime mini-bars (sueño horario) */
+.deep-bed-bars{display:flex;gap:3px;align-items:flex-end;margin-top:6px;height:36px}
+.deep-bed-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.deep-bed-bar{width:100%;border-radius:3px;min-height:3px}
+.deep-bed-bar-lbl{font:500 9px/1 -apple-system;color:var(--label3);text-align:center}
+/* Heatmap calendario de sueño (Roadmap P1 F6) — grid semanas×días, sin libs */
+.sleep-heatmap-wrap{overflow-x:auto;padding-bottom:4px}
+.sleep-heatmap-months{display:flex;gap:3px;margin-bottom:4px;padding-left:22px}
+.sleep-heatmap-month-lbl{font:500 9px/1 -apple-system;color:var(--label3);flex:none}
+.sleep-heatmap-body{display:flex;gap:3px}
+.sleep-heatmap-daylbls{display:flex;flex-direction:column;gap:3px;margin-right:4px}
+.sleep-heatmap-daylbl{width:16px;height:12px;font:500 8px/12px -apple-system;color:var(--label3)}
+.sleep-heatmap-col{display:flex;flex-direction:column;gap:3px}
+.sleep-heatmap-cell{width:12px;height:12px;border-radius:3px;background:var(--card2)}
+.sleep-heatmap-legend{display:flex;align-items:center;gap:6px;margin-top:10px;font:500 10px/1 -apple-system;color:var(--label3)}
+.sleep-heatmap-legend-cell{width:10px;height:10px;border-radius:2px}
+/* Section divider inside overlay */
+.deep-section-lbl{
+  font:600 12px/1 -apple-system;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--label2);margin:18px 2px 10px;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes screenIn{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+@keyframes detailIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+.anim-in{animation:screenIn .35s ease both}
+.detail-in{animation:detailIn .25s ease both}
+
+/* ── CHART ANIMATIONS (sutil iOS) ── */
+@keyframes drawOn{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes chFade{from{opacity:0}to{opacity:1}}
+@keyframes barUp{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes dotPop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes ringSweep{from{stroke-dashoffset:var(--dlen,0)}to{stroke-dashoffset:0}}
+/* línea que se "dibuja": el path lleva pathLength="1" */
+.an-line{stroke-dasharray:1;stroke-dashoffset:1;animation:drawOn .85s cubic-bezier(.22,.61,.36,1) both}
+.an-fade{opacity:0;animation:chFade .55s ease-out .2s both}
+.an-area{opacity:0;animation:chFade .6s ease-out .28s both}
+.an-bar{transform-box:fill-box;transform-origin:bottom;animation:barUp .55s cubic-bezier(.22,.61,.36,1) both}
+.an-dot{transform-box:fill-box;transform-origin:center;animation:dotPop .42s cubic-bezier(.34,1.32,.64,1) both}
+.an-ring{animation:ringSweep .9s cubic-bezier(.22,.61,.36,1) both}
+@media (prefers-reduced-motion: reduce){
+  .an-line,.an-fade,.an-area,.an-bar,.an-dot,.an-ring{
+    animation:none!important;stroke-dashoffset:0!important;stroke-dasharray:none!important;
+    opacity:1!important;transform:none!important;
+  }
+}
+/* reinicio de animaciones al re-entrar a una pantalla (preserva delays inline) */
+.anim-restart .an-line,.anim-restart .an-fade,.anim-restart .an-area,
+.anim-restart .an-bar,.anim-restart .an-dot,.anim-restart .an-ring{animation:none!important}
+
+/* ── INSIGHT CARDS ── */
+#insightCards{margin:0 0 14px;}
+#insightCards:empty{display:none}
+.insight-card{
+  background:var(--card);
+  backdrop-filter:blur(var(--blur)) saturate(1.4);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
+  border:1px solid var(--card-border);border-radius:20px;
+  box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
+  padding:14px 16px;margin-bottom:10px;
+  border-left-width:3px;border-left-style:solid;
+}
+.insight-card:last-child{margin-bottom:0}
+.insight-card[data-sev="alert"] {border-left-color:#FF375F;}
+.insight-card[data-sev="watch"] {border-left-color:#FF9F0A;}
+.insight-card[data-sev="positive"]{border-left-color:#30D158;}
+.insight-card[data-sev="info"]   {border-left-color:var(--label2);}
+.insight-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.insight-icon{font-size:16px;line-height:1;flex:none}
+.insight-title{font:600 14px/1.2 -apple-system;color:var(--label)}
+.insight-sev-dot{
+  width:7px;height:7px;border-radius:50%;flex:none;margin-left:auto;
+}
+.insight-card[data-sev="alert"]  .insight-sev-dot{background:#FF375F;box-shadow:0 0 6px rgba(255,55,95,.5)}
+.insight-card[data-sev="watch"]  .insight-sev-dot{background:#FF9F0A;box-shadow:0 0 6px rgba(255,159,10,.5)}
+.insight-card[data-sev="positive"].insight-sev-dot{background:#30D158;box-shadow:0 0 6px rgba(48,209,88,.5)}
+.insight-card[data-sev="info"]   .insight-sev-dot{background:var(--label2)}
+.insight-summary{font:400 13px/1.45 -apple-system;color:var(--label2);margin-bottom:8px}
+.insight-factors{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.insight-factor{
+  font:500 11px/1 -apple-system;
+  padding:4px 8px;border-radius:999px;
+  background:var(--card2);color:var(--label2);
+  border:1px solid var(--card-border);
+}
+.insight-rec{
+  font:400 13px/1.5 -apple-system;color:var(--advice);
+  padding-top:8px;border-top:1px solid var(--card-border);
+}
+.insight-all-ok{
+  display:flex;align-items:center;gap:8px;
+  font:500 13px/1 -apple-system;color:var(--label3);
+  padding:12px 14px;
+  background:var(--card);
+  border:1px solid var(--card-border);border-radius:16px;
+  opacity:.7;
+}
+/* ── Insights: control "N más" (roadmap P0 paso 4) ── */
+.insight-more-row{
+  text-align:center;font:600 12.5px/1 -apple-system;color:var(--accent,#0A84FF);
+  padding:10px 0 2px;cursor:pointer;user-select:none;-webkit-user-select:none;
+}
+.insight-more-row:active{opacity:.6}
+
+/* ── Roadmap P1: helper "ⓘ detalles" (dato técnico a un tap, nunca por default) ── */
+.techdetail-trigger{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:15px;height:15px;border-radius:50%;
+  background:rgba(142,142,147,.16);color:var(--label3);
+  font:600 10px/1 -apple-system;cursor:pointer;user-select:none;-webkit-user-select:none;
+  flex:none;margin-left:4px;vertical-align:middle;
+}
+.techdetail-trigger:active{opacity:.6}
+.techdetail-body{
+  font:400 11.5px/1.4 -apple-system;color:var(--label3);
+  text-transform:none;letter-spacing:normal;
+  margin-top:4px;padding-top:4px;border-top:1px dashed var(--card-border);
+  display:none;
+}
+.techdetail-body.open{display:block}
+
+/* ── Roadmap P1: sección "Avanzado" colapsable en Más ── */
+.mas-advanced-toggle{
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  user-select:none;-webkit-user-select:none;
+}
+.mas-advanced-chevron{transition:transform .2s ease;color:var(--label3)}
+.mas-advanced-chevron.open{transform:rotate(90deg)}
+.mas-advanced-body{display:none}
+.mas-advanced-body.open{display:block}
+
+/* ── Roadmap P1: pill button reusable del design system (Copiar, etc.) ──
+   El anterior reusaba la clase .retry-toast-btn, pero esa clase SOLO tiene
+   estilo bajo #retryToastHost -> fuera de ese host quedaba como texto suelto
+   desbordado (hallazgo de la auditoría UI Architect). Esta clase es global. */
+.ds-pill-btn{
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+  background:rgba(10,132,255,.14);border:1px solid rgba(10,132,255,.32);
+  color:#0A84FF;font:600 12px/1 -apple-system;padding:7px 12px;border-radius:999px;
+  cursor:pointer;user-select:none;-webkit-user-select:none;
+}
+.ds-pill-btn:active{opacity:.7}
+.mas-token-reveal-btn{
+  flex:none;width:34px;height:34px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card);border:1px solid var(--card-border);color:var(--label2);
+  cursor:pointer;font-size:15px;
+}
+.mas-token-reveal-btn:active{opacity:.7}
