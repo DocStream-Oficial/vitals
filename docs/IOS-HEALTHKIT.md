@@ -1,134 +1,133 @@
-# Vitals iOS — HealthKit nativo (Fase 5D-B)
+# Vitals iOS — Native HealthKit
 
-Guía manual para activar la sincronización de Apple Watch / HealthKit en la app
-nativa. El código ya está escrito (plugin `VitalsHealth` + `HealthSyncManager`);
-esto son los pasos que solo se pueden hacer en Xcode, con el Doc al volante.
+Manual guide to enable Apple Watch / HealthKit sync in the native app. The code
+is already written (the `VitalsHealth` plugin + `HealthSyncManager`); these are
+the steps that can only be done in Xcode, by you.
 
-## 0. Qué hace esto
+## 0. What this does
 
-La app nativa (Capacitor, shell delgado) gana un plugin Swift propio que:
-- Lee ~13 tipos de HealthKit (HRV, RHR, respiración, SpO2, temperatura de
-  muñeca, pasos, VO2max, distancia, energía, sueño, entrenamientos) de los
-  últimos 45 días.
-- Agrega por **día local** del iPhone (no UTC).
-- Arma el mismo payload que ya consume `app/sources/healthkit.py`
-  (Fase 5D-A, backend ya desplegado).
-- Hace `POST {tu-instancia}/api/ingest` con el header `X-Vitals-Token`.
-- Se dispara solo (auto-sync) cada vez que la app vuelve a primer plano —
-  **solo si configuraste un token**. Sin token, cero llamadas (los usuarios
-  que no usan HealthKit/Apple Watch no se enteran de que esto existe).
+The native app (Capacitor, thin shell) gains its own Swift plugin that:
+- Reads ~13 HealthKit types (HRV, resting HR, respiratory rate, SpO₂, wrist
+  temperature, steps, VO₂max, distance, energy, sleep, workouts) from the last
+  45 days.
+- Aggregates by the iPhone's **local day** (not UTC).
+- Builds the same payload the backend already consumes
+  (`app/sources/healthkit.py`).
+- Does `POST {your-instance}/api/ingest` with the `X-Vitals-Token` header.
+- Fires automatically (auto-sync) every time the app returns to the foreground —
+  **only if you configured a token**. Without a token, zero calls (users who
+  don't use HealthKit/Apple Watch never notice this exists).
 
-## 1. Activar la capability HealthKit en Xcode
+## 1. Enable the HealthKit capability in Xcode
 
-1. Abre el proyecto: `open ios/App/App.xcodeproj` (o vía `npx cap open ios`).
-2. Selecciona el target **App** → pestaña **Signing & Capabilities**.
-3. Click **+ Capability** → busca **HealthKit** → agrégala.
-   - Esto genera (o actualiza) `ios/App/App/App.entitlements` automáticamente.
-   - **Importante**: el entitlement de HealthKit suele requerir una cuenta
-     **Apple Developer Program de pago** ($99/año). Con un **Personal Team**
-     gratuito, Xcode puede rechazar el build o quitar la capability al firmar.
-     Si te pasa esto, anótalo — no es un bug del código, es una limitación de
-     la cuenta. El código queda listo para cuando enroles en el programa de pago.
-4. Dentro de la capability HealthKit, no hace falta marcar "Clinical Health
-   Records" — solo lectura de los tipos estándar que el código ya pide.
+1. Open the project: `open ios/App/App.xcodeproj` (or via `npx cap open ios`).
+2. Select the **App** target → **Signing & Capabilities** tab.
+3. Click **+ Capability** → search **HealthKit** → add it.
+   - This generates (or updates) `ios/App/App/App.entitlements` automatically.
+   - **Important**: the HealthKit entitlement usually requires a **paid Apple
+     Developer Program** account ($99/yr). With a free **Personal Team**, Xcode
+     may reject the build or strip the capability at signing time. If that
+     happens, note it down — it's not a code bug, it's an account limitation.
+     The code stays ready for when you enroll in the paid program.
+4. Inside the HealthKit capability there's no need to check "Clinical Health
+   Records" — only read access to the standard types the code already requests.
 
-## 2. Confirmar el texto de permiso (ya incluido)
+## 2. Confirm the permission text (already included)
 
-`ios/App/App/Info.plist` ya trae:
+`ios/App/App/Info.plist` already ships:
 ```xml
 <key>NSHealthShareUsageDescription</key>
-<string>Vitals lee tus metricas de salud (frecuencia cardiaca, HRV, sueno,
-oxigeno, temperatura, pasos y entrenamientos) para calcular tu recuperacion,
-sueno y edad corporal. Tus datos solo se envian a tu propio servidor.</string>
+<string>Vitals reads your health metrics (heart rate, HRV, sleep, oxygen,
+temperature, steps and workouts) to compute your recovery, sleep and body age.
+Your data is only sent to your own server.</string>
 ```
-No necesitas tocarlo. Solo lectura → no hace falta `NSHealthUpdateUsageDescription`.
+You don't need to touch it. Read-only → no `NSHealthUpdateUsageDescription` needed.
 
-## 3. Build & Run en tu iPhone
+## 3. Build & Run on your iPhone
 
-1. Conecta tu iPhone, selecciónalo como destino en Xcode.
-2. Si tu Xcode estable no soporta tu versión de iOS, usa **Xcode-beta**
-   (mismo flujo que ya usas para el resto de la app — `DEVELOPER_DIR` apuntando
-   al beta si lo invocas por CLI).
-3. **Product → Run** (▶). Espera `** BUILD SUCCEEDED **`.
-   - Si el build falla por el entitlement (ver paso 1), confirma Team +
-     capability antes de seguir.
+1. Connect your iPhone and select it as the destination in Xcode.
+2. If your stable Xcode doesn't support your iOS version, use **Xcode-beta**
+   (point `DEVELOPER_DIR` at the beta if you invoke it from the CLI).
+3. **Product → Run** (▶). Wait for `** BUILD SUCCEEDED **`.
+   - If the build fails on the entitlement (see step 1), confirm Team +
+     capability before continuing.
 
-## 4. Conceder el permiso de HealthKit
+## 4. Grant the HealthKit permission
 
-1. La primera vez que la app intente sincronizar (ver paso 5), iOS muestra la
-   hoja estándar de HealthKit con la lista de tipos. Actívalos todos (o los
-   que quieras compartir — los que no actives simplemente no llegan datos de
-   esa métrica, el backend los tolera ausentes).
-2. Si la niegas por accidente: **Ajustes → Privacidad y seguridad → Salud →
-   Vitals** en el iPhone, y actívalos ahí.
+1. The first time the app tries to sync (see step 5), iOS shows the standard
+   HealthKit sheet with the list of types. Enable them all (or just the ones
+   you want to share — types you don't enable simply send no data for that
+   metric; the backend tolerates missing ones).
+2. If you deny it by accident: **Settings → Privacy & Security → Health →
+   Vitals** on the iPhone, and enable them there.
 
-## 5. Probar el flujo completo
+## 5. Test the full flow
 
-1. **Fase 8C (paso C6): el token ya NO es opcional ni hay que inventarlo a
-   mano.** Si `INGEST_TOKEN` no está en el `.env` del box, el backend lo
-   autogenera al arrancar y lo persiste en `data/ingest_token.json` — copia
-   el valor vigente desde la pestaña **Más → Conectar app móvil → Token de
-   HealthKit/ECG** (botón "Copiar"), o si prefieres fijarlo tú mismo:
+1. **The token is NOT optional and you don't need to invent one by hand.** If
+   `INGEST_TOKEN` isn't in your server's `.env`, the backend auto-generates one
+   at startup and persists it to `data/ingest_token.json` — copy the active
+   value from the **More → Connect mobile app → HealthKit/ECG token** tab
+   ("Copy" button), or set your own instead:
    ```
-   INGEST_TOKEN=elige-un-token-largo-y-aleatorio
+   INGEST_TOKEN=pick-a-long-random-token
    ```
-   en el `.env` y reinicia el servicio (`Restart-Service Vitals` en Windows,
-   o el equivalente en tu plataforma) — esto tiene prioridad sobre el
-   autogenerado.
-   - `/api/ingest` y `/api/ecg` responden **401 SIEMPRE** que falte el header
-     `X-Vitals-Token` o no coincida — ya no existe el modo "sin auth" de
-     versiones anteriores.
-2. En la app web (pestaña **Más**), cambia tu fuente (`source`) a `healthkit`
-   en tu perfil — así el backend sabe que tus datos vienen del push nativo
-   y no intenta jalar de Google/Oura/WHOOP.
-3. En la app nativa **(pantalla "Conecta tu Vitals")**: pega la URL de tu
-   instancia y, en el campo **"Token de sincronización (HealthKit)"** (ya
-   NO es opcional — sin él, todo push recibe 401), pega el token que copiaste
-   en el paso 1. Toca **Conectar**.
-   - Esto guarda el token en `UserDefaults` nativo (vía `VitalsHealth.setConfig`)
-     y en `localStorage` del shell.
-   - El QR de "Más → Conectar app móvil" ya embebe el token como query param
-     (`?ingest_token=...`) en la URL codificada — hoy la pantalla nativa
-     todavía pide pegarlo a mano (no hay lector de QR propio en la app), pero
-     queda ahí listo para un futuro flujo de auto-config por QR.
-4. Sal de la app a Home y vuelve a abrirla (foreground) — eso dispara
+   in the `.env` and restart the service (e.g. `Restart-Service Vitals` on
+   Windows, or your platform's equivalent) — this takes priority over the
+   auto-generated one.
+   - `/api/ingest` and `/api/ecg` respond **401 ALWAYS** when the
+     `X-Vitals-Token` header is missing or doesn't match — there is no
+     "no auth" mode.
+2. In the web app (**More** tab), switch your profile's source (`source`) to
+   `healthkit` — that way the backend knows your data comes from the native
+   push and doesn't try to pull from Google/Oura/WHOOP.
+3. In the native app (**"Connect your Vitals"** screen): paste your instance
+   URL and, in the **"Sync token (HealthKit)"** field (NOT optional — without
+   it every push gets a 401), paste the token you copied in step 1. Tap
+   **Connect**.
+   - This stores the token in native `UserDefaults` (via `VitalsHealth.setConfig`)
+     and in the shell's `localStorage`.
+   - The QR under "More → Connect mobile app" already embeds the token as a
+     query param (`?ingest_token=...`) in the encoded URL — today the native
+     screen still asks you to paste it manually (the app has no QR reader yet),
+     but it's ready for a future QR auto-config flow.
+4. Leave the app to the Home screen and reopen it (foreground) — that triggers
    `SceneDelegate.sceneDidBecomeActive` → `HealthSyncManager.shared.autoSyncIfConfigured()`.
-   - La primera vez te pedirá el permiso de HealthKit (paso 4).
-5. Verifica:
-   - En el box: revisa `data/healthkit_ingest.json` — debería tener el
-     payload crudo recién recibido (con `_ingested_at` actualizado).
-   - En la web app: `GET /api/data` (o la pestaña **Hoy/Tendencias**) debería
-     mostrar los días recientes leídos del Apple Watch.
+   - The first time, it will ask for the HealthKit permission (step 4).
+5. Verify:
+   - On the server: check `data/healthkit_ingest.json` — it should contain the
+     freshly received raw payload (with an updated `_ingested_at`).
+   - In the web app: `GET /api/data` (or the **Today/Trends** tabs) should show
+     recent days read from the Apple Watch.
 
 ## 6. Troubleshooting
 
-- **`window.Capacitor.Plugins.VitalsHealth` es `undefined`**: el plugin no
-  cargó. Confirma que `ios/App/App/capacitor.config.json` (la copia dentro del
-  target, NO solo la de la raíz del repo) tiene `"packageClassList": ["VitalsHealth"]`,
-  y que corriste `npx cap sync ios` después de cualquier cambio en
-  `capacitor.config.json` de la raíz (sync copia/regenera la del target).
-- **No llega nada al backend / `n_days: 0`**: revisa que concediste el
-  permiso de HealthKit (paso 4) y que tu Apple Watch realmente tiene datos en
-  los últimos 45 días para esos tipos (algunos, como `vo2Max` o
-  `appleSleepingWristTemperature`, requieren un Apple Watch compatible y
-  cierto uso — son opcionales y se omiten si no hay datos).
-- **401 en el POST**: el token de la app no coincide con el `INGEST_TOKEN`
-  vigente del box (de `.env` o el autogenerado en `data/ingest_token.json`).
-  Re-conecta con el token correcto — cópialo de nuevo desde **Más → Conectar
-  app móvil**. Desde Fase 8C (paso C6) esto responde 401 SIEMPRE sin un token
-  válido, ya no hay modo "sin auth".
-- **El build falla por entitlement/firma**: ver nota del paso 1 — cuenta
-  Personal Team gratuita puede no soportar HealthKit. Revisa el mensaje exacto
-  de Xcode; si es de provisioning, ese es el límite (no el código).
+- **`window.Capacitor.Plugins.VitalsHealth` is `undefined`**: the plugin didn't
+  load. Confirm that `ios/App/App/capacitor.config.json` (the copy inside the
+  target, NOT just the repo-root one) has `"packageClassList": ["VitalsHealth"]`,
+  and that you ran `npx cap sync ios` after any change to the root
+  `capacitor.config.json` (sync copies/regenerates the target's copy).
+- **Nothing reaches the backend / `n_days: 0`**: check that you granted the
+  HealthKit permission (step 4) and that your Apple Watch actually has data in
+  the last 45 days for those types (some, like `vo2Max` or
+  `appleSleepingWristTemperature`, require a compatible Apple Watch and some
+  usage — they're optional and are skipped when there's no data).
+- **401 on the POST**: the app's token doesn't match the server's active
+  `INGEST_TOKEN` (from `.env` or the auto-generated one in
+  `data/ingest_token.json`). Re-connect with the correct token — copy it again
+  from **More → Connect mobile app**. This responds 401 ALWAYS without a valid
+  token; there is no "no auth" mode.
+- **Build fails on entitlement/signing**: see the note in step 1 — a free
+  Personal Team account may not support HealthKit. Read Xcode's exact message;
+  if it's about provisioning, that's the account limit (not the code).
 
-## Notas
+## Notes
 
-- El auto-sync es **solo en foreground** (v1). No hay `HKObserverQuery` en
-  background todavía — para refrescar, basta con volver a abrir la app.
-- El botón "Sincronizar HealthKit" dentro del dashboard remoto
-  (`templates/vitals_ios.html`) queda **diferido** a un follow-up — por ahora,
-  relanzar la app nativa = sincronizar.
-- Rollback: si algo se rompe, quita `"VitalsHealth"` de ambos
-  `capacitor.config.json` (raíz y `ios/App/App/`) y vuelve a `npx cap sync ios`
-  — el resto de la app sigue funcionando igual, el campo de token en `www`
-  queda inerte con valor vacío.
+- Auto-sync is **foreground only** (v1). There's no background `HKObserverQuery`
+  yet — to refresh, just reopen the app.
+- A "Sync HealthKit" button inside the remote dashboard
+  (`templates/vitals_ios.html`) is **deferred** to a follow-up — for now,
+  relaunching the native app = syncing.
+- Rollback: if something breaks, remove `"VitalsHealth"` from both
+  `capacitor.config.json` files (repo root and `ios/App/App/`) and run
+  `npx cap sync ios` again — the rest of the app keeps working; the token field
+  in `www` stays inert with an empty value.

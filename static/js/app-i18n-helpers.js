@@ -2680,8 +2680,15 @@ var STRINGS = {
   }
 };
 
-// i18n lookup with ES fallback — never shows raw key
-function t(k){ return (STRINGS[PROFILE && PROFILE.locale] || STRINGS.es)[k] || STRINGS.es[k] || k; }
+// i18n lookup with ES fallback — never shows raw key. Comparación con
+// undefined (no truthiness): '' es un valor legítimo (p. ej. today_prefix
+// en EN/FR/PT) y con || caía de vuelta al español ("Hoy, 4 July").
+function t(k){
+  var loc = STRINGS[PROFILE && PROFILE.locale] || STRINGS.es;
+  if (loc[k] !== undefined) return loc[k];
+  if (STRINGS.es[k] !== undefined) return STRINGS.es[k];
+  return k;
+}
 
 // Apply all data-i18n* attributes in the DOM
 function applyI18n(){

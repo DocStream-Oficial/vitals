@@ -16,7 +16,12 @@ sends a byte of your health data to a third-party cloud.
   <img src="assets/demo/vitals-today-desktop.png" alt="Vitals — Today tab (desktop)" width="68%">
   <img src="assets/demo/vitals-today-mobile.png" alt="Vitals — Today tab (mobile PWA)" width="26%">
 </p>
-<p align="center"><sub>Screenshots from demo mode (<code>VITALS_DEMO=1</code>) — 100% synthetic data, no real user involved.</sub></p>
+<p align="center">
+  <img src="assets/demo/vitals-sleep-mobile.png" alt="Sleep — hypnogram, stages, efficiency" width="31%">
+  <img src="assets/demo/vitals-trends-mobile.png" alt="Trends — week vs week, healthspan pace" width="31%">
+  <img src="assets/demo/vitals-coach-mobile.png" alt="AI Coach — conversational, runs on your hardware" width="31%">
+</p>
+<p align="center"><sub>Sleep stages &amp; hypnogram · week-over-week trends &amp; healthspan pace · conversational AI coach.<br>All screenshots from demo mode (<code>VITALS_DEMO=1</code>) — 100% synthetic data, no real user involved.</sub></p>
 
 ---
 
@@ -35,10 +40,13 @@ Vitals takes the opposite bet:
 - **Transparent scoring** — recovery, strain, sleep performance, and body-age are
   plain Python you can read in an afternoon. See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md)
   for the exact formulas, weights, and — just as important — their honest limitations.
-- **AI-native, via MCP** — `vitals_mcp.py` exposes your health data as MCP tools,
-  so a local AI agent (Claude, OpenClaw, or anything speaking MCP) can
-  reason over your recovery trend, flag an early illness signal, or answer
-  "should I train hard today?" without any of that data leaving your network.
+- **AI-native, via MCP** — `vitals_mcp.py` exposes your health data as 9 MCP
+  tools, so a local AI agent ([OpenClaw](https://openclaw.io),
+  [Hermes](https://hermes-agent.nousresearch.com), Claude, or anything speaking
+  MCP) can reason over your recovery trend, flag an early illness signal, or
+  answer "should I train hard today?" without any of that data leaving your
+  network. There's even a [copy-paste prompt](#zero-effort-setup-just-ask-your-agent)
+  your agent can run to wire itself up.
 - **Multi-source, source-agnostic** — connect Google Health, Oura, WHOOP, or
   Apple HealthKit (or several at once); the scoring engine normalizes whatever
   comes in to one internal schema.
@@ -62,6 +70,8 @@ exportable, and running on infrastructure you control — this is that.
 | **Household / multi-profile** | Track multiple people (family, partner) from one instance, each with isolated data |
 | **Push notifications** | ntfy/Telegram alerts for recovery drops, illness-risk signals, sleep debt |
 | **Offline-capable PWA** | Add to Home Screen on iOS/Android; service worker caches the shell |
+| **Native iOS app (BYO dev account)** | Capacitor shell with a native HealthKit plugin: Apple Watch HRV, sleep stages, VO₂max, ECG — built and signed by you, distributed via TestFlight |
+| **AI agent integration (MCP)** | 9 read-only MCP tools for OpenClaw / Hermes / Claude — morning briefs, bedtime reminders, proactive alerts from your own agent |
 | **Female health module** | Opt-in cycle tracking (phase, fertile window, delay detection, peri/menopause signals) — zero data exposure unless explicitly enabled |
 | **ECG viewer** | Isolated viewer for Apple Watch ECG waveforms pushed from the iOS companion app |
 | **Data export** | Full JSON or flattened CSV export of your own history, any time |
@@ -382,6 +392,31 @@ the **More** tab → Profile.
 
 ---
 
+## Native iOS app (Apple Watch / HealthKit) — bring your own dev account
+
+The repo ships a full native iOS companion app (`ios/`, Capacitor + WKWebView):
+a thin shell that loads **your** self-hosted instance and adds what a PWA can't —
+**native HealthKit access**:
+
+- Reads ~13 HealthKit metrics, including Apple Watch data: HRV, resting HR,
+  respiratory rate, SpO₂, wrist temperature, VO₂max, sleep stages, workouts,
+  steps, active energy.
+- Pushes them to your instance (`POST /api/ingest`, authenticated with
+  `X-Vitals-Token`) and auto-syncs every time the app comes to the foreground.
+- Apple Watch **ECG waveforms** push too — viewable in the dashboard's ECG viewer.
+
+You build it yourself with your own Apple account — no binaries distributed,
+no App Store middleman for your health data:
+
+- **Free Apple ID** → run it on your own iPhone (7-day signing).
+- **Paid Apple Developer account** ($99/yr) → distribute to yourself and family
+  via **TestFlight** (~30 min setup).
+
+Step-by-step guides: [docs/IOS-BETA.md](docs/IOS-BETA.md) (build + TestFlight)
+and [docs/IOS-HEALTHKIT.md](docs/IOS-HEALTHKIT.md) (HealthKit wiring in Xcode).
+
+---
+
 ## PWA — Add to Home Screen
 
 Open `http://localhost:8700` (or your HTTPS URL) in Safari or Chrome.
@@ -390,11 +425,15 @@ Vitals runs as a full-screen, offline-capable app with no browser chrome.
 
 ---
 
-## MCP server (optional — for OpenClaw / any MCP client)
+## Connect your AI agent (OpenClaw / Hermes / any MCP client)
 
-If you run [OpenClaw](https://openclaw.io) or any other MCP-speaking agent, you
-can wire `vitals_mcp.py` as an MCP server so it can answer health questions
-directly from your data — locally, with nothing sent to a third party.
+This is where Vitals stops being a dashboard and becomes infrastructure: if you
+run [OpenClaw](https://openclaw.io), [Hermes Agent](https://hermes-agent.nousresearch.com),
+Claude, or any other MCP-speaking agent, `vitals_mcp.py` turns your health data
+into **9 read-only tools** your agent can call — locally, with nothing sent to
+a third party. Your agent can answer *"should I train hard today?"* from your
+actual HRV, message you a morning brief over WhatsApp/Telegram, or flag an
+illness-risk signal before you feel it.
 
 ```bash
 # Install extra deps (Python 3.10+ required for the mcp SDK)
@@ -405,10 +444,32 @@ python3 vitals_mcp.py
 ```
 
 Available tools: `vitals_today`, `vitals_trends`, `vitals_insights`, `vitals_bodyage`,
-`vitals_morning_brief`, `vitals_ask_coach`.
+`vitals_morning_brief`, `vitals_bedtime_brief`, `vitals_drivers`, `vitals_cycle_summary`,
+`vitals_ask_coach`.
 
-See the wiring instructions for your OpenClaw config in the `_dev/` folder (local only,
-not shipped in the public repo).
+### Zero-effort setup: just ask your agent
+
+Copy-paste this to your agent (OpenClaw, Hermes, Claude Code — anything that can
+run commands and edit its own MCP config) and it will wire everything up itself:
+
+```text
+I run a self-hosted Vitals instance (https://github.com/DocStream-Oficial/vitals-app).
+The repo is cloned at <PATH-TO-REPO> and the app runs at <MY-VITALS-URL>.
+Set up its MCP server so you can read my health data:
+
+1. Install the MCP extras: pip install -r <PATH-TO-REPO>/requirements-mcp.txt
+   (needs Python 3.10+).
+2. Register <PATH-TO-REPO>/vitals_mcp.py as a stdio MCP server named "vitals"
+   in your MCP config, then reload your MCP connections.
+3. Verify the 9 vitals_* tools are available, call vitals_today, and give me
+   today's recovery, sleep and strain in one line.
+4. From now on: include vitals_morning_brief in my morning routine, send me
+   vitals_bedtime_brief at night, and alert me proactively whenever recovery
+   drops below 40% or an illness-risk insight appears in vitals_insights.
+```
+
+That last step is the fun part — a scheduled agent + these tools = a proactive
+health copilot that costs you $0/month in subscriptions.
 
 ---
 
@@ -420,7 +481,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-1,300+ tests, all against **synthetic fixtures** — no real health data is required
+1,600+ tests, all against **synthetic fixtures** — no real health data is required
 or shipped in the repo. CI runs the full suite on Python 3.9 and 3.12 on every
 push/PR (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
