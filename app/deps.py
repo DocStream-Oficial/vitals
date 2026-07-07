@@ -103,3 +103,36 @@ def _demo_blocked_response() -> JSONResponse:
         {"status": "demo", "message": "Demo mode: esta acción está deshabilitada. Los datos son sintéticos."},
         status_code=200,
     )
+
+
+# Fase 9 (paso A2): _clean_str_list se descubrió compartido entre 2 dominios de
+# ruta (cycle: /api/cycle/symptom, profile: /api/profile) al trocear main.py
+# por routers — se centraliza aquí (mismo motivo que el resto de este archivo:
+# pegamento compartido entre >1 router) en vez de duplicarlo o crear un import
+# circular entre app/routes/cycle.py y app/routes/profile.py.
+_CLINICAL_FIELDS = ("goals", "injuries", "conditions", "medications")
+_CLINICAL_MAX_ITEMS = 10
+_CLINICAL_MAX_LEN = 120
+
+
+def _clean_str_list(v) -> list[str]:
+    """Valida y normaliza una lista de strings del intake clínico (goals/injuries/
+    conditions/medications). Acepta SOLO una lista de strings: trimea cada item,
+    filtra vacíos, corta a _CLINICAL_MAX_ITEMS items de máx _CLINICAL_MAX_LEN chars.
+
+    Cualquier otra cosa (no-lista, o lista con items no-string) → ValueError con
+    mensaje controlado, para que el caller lo capture y devuelva 422 (nunca 500).
+    """
+    if not isinstance(v, list):
+        raise ValueError("debe ser una lista de strings")
+    out = []
+    for item in v:
+        if not isinstance(item, str):
+            raise ValueError("cada elemento debe ser texto")
+        s = item.strip()
+        if not s:
+            continue
+        out.append(s[:_CLINICAL_MAX_LEN])
+        if len(out) >= _CLINICAL_MAX_ITEMS:
+            break
+    return out

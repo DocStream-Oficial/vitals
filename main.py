@@ -853,32 +853,10 @@ from app.routes._models import (  # noqa: E402
     ApiKeyCreate,
 )
 
-_CLINICAL_FIELDS = ("goals", "injuries", "conditions", "medications")
-_CLINICAL_MAX_ITEMS = 10
-_CLINICAL_MAX_LEN = 120
-
-
-def _clean_str_list(v: Any) -> list[str]:
-    """Valida y normaliza una lista de strings del intake clínico (goals/injuries/
-    conditions/medications). Acepta SOLO una lista de strings: trimea cada item,
-    filtra vacíos, corta a _CLINICAL_MAX_ITEMS items de máx _CLINICAL_MAX_LEN chars.
-
-    Cualquier otra cosa (no-lista, o lista con items no-string) → ValueError con
-    mensaje controlado, para que el caller lo capture y devuelva 422 (nunca 500).
-    """
-    if not isinstance(v, list):
-        raise ValueError("debe ser una lista de strings")
-    out = []
-    for item in v:
-        if not isinstance(item, str):
-            raise ValueError("cada elemento debe ser texto")
-        s = item.strip()
-        if not s:
-            continue
-        out.append(s[:_CLINICAL_MAX_LEN])
-        if len(out) >= _CLINICAL_MAX_ITEMS:
-            break
-    return out
+# Fase 9 (paso A2): _clean_str_list (+ constantes) se centralizó en
+# app/deps.py — usado por /api/profile (aquí) y /api/cycle/symptom
+# (app/routes/cycle.py). Mismo nombre, mismo comportamiento.
+from app.deps import _clean_str_list, _CLINICAL_FIELDS  # noqa: E402
 
 
 @app.get("/api/profile")
@@ -1098,127 +1076,9 @@ async def api_sources_status():
     return JSONResponse(out)
 
 
-def _cycle_tracking_enabled() -> bool:
-    """True si el toggle opt-in de ciclo está prendido. Nunca lanza."""
-    try:
-        return bool(_profile.effective("cycle_tracking"))
-    except Exception:
-        return False
-
-
-@app.get("/api/cycle")
-async def api_cycle_get():
-    """Estado de ciclo (fase, predicción, ventana fértil, retraso, peri/meno).
-    Con cycle_tracking=False (default) -> {enabled: false}, SIN fuga de datos
-    de ciclo (criterio #1 del roadmap de salud femenina). Nunca 500."""
-    if not _cycle_tracking_enabled():
-        return JSONResponse(content={"enabled": False})
-    try:
-        dataset = _load_dataset() or {}
-        cycle_log = _cycle.load_cycle_log()
-        profile = effective_profile_dict()
-        state = _cycle.compute_cycle_state(dataset.get("days", []), cycle_log, profile)
-        return JSONResponse(content=state or {"enabled": False})
-    except Exception as e:
-        logger.error(f"GET /api/cycle falló: {e}")
-        return JSONResponse(content={"enabled": False})
-
-
-@app.post("/api/cycle/period")
-async def api_cycle_period_post(body: CyclePeriodCreate):
-    """Añade/actualiza un inicio de periodo (de-dupe por 'start'). Validación de
-    fechas ISO controlada. Gateado por cycle_tracking. Nunca 500."""
-    if not _cycle_tracking_enabled():
-        return JSONResponse(content={"status": "disabled"}, status_code=403)
-
-    try:
-        import datetime as _dtm
-        _dtm.date.fromisoformat(body.start)
-    except (ValueError, TypeError):
-        return JSONResponse(
-            content={"status": "error", "message": "start debe ser fecha ISO 8601 (YYYY-MM-DD)"},
-            status_code=422,
-        )
-    if body.end is not None:
-        try:
-            _dtm.date.fromisoformat(body.end)
-        except (ValueError, TypeError):
-            return JSONResponse(
-                content={"status": "error", "message": "end debe ser fecha ISO 8601 (YYYY-MM-DD)"},
-                status_code=422,
-            )
-
-    try:
-        log = _cycle.load_cycle_log()
-        periods = [p for p in log.get("periods", []) if isinstance(p, dict) and p.get("start") != body.start]
-        periods.append({
-            "start": body.start,
-            "end": body.end,
-            "flow": body.flow,
-            "source": "manual",
-        })
-        log["periods"] = periods
-        _cycle.save_cycle_log(log)
-        return JSONResponse(content={"status": "ok", "periods": periods})
-    except Exception as e:
-        logger.error(f"POST /api/cycle/period falló: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error guardando periodo"}, status_code=200)
-
-
-@app.delete("/api/cycle/period/{start}")
-async def api_cycle_period_delete(start: str):
-    """Borra un evento de periodo por su fecha de inicio. Idempotente (no error
-    si no existía). Gateado por cycle_tracking. Nunca 500."""
-    if not _cycle_tracking_enabled():
-        return JSONResponse(content={"status": "disabled"}, status_code=403)
-    try:
-        log = _cycle.load_cycle_log()
-        periods = [p for p in log.get("periods", []) if isinstance(p, dict) and p.get("start") != start]
-        log["periods"] = periods
-        _cycle.save_cycle_log(log)
-        return JSONResponse(content={"status": "ok", "periods": periods})
-    except Exception as e:
-        logger.error(f"DELETE /api/cycle/period/{start} falló: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error borrando periodo"}, status_code=200)
-
-
-@app.post("/api/cycle/symptom")
-async def api_cycle_symptom_post(body: CycleSymptomCreate):
-    """Registra síntomas para una fecha (tags de lista libre, reusa _clean_str_list:
-    cap 10x120 chars). Validación de fecha ISO controlada. Gateado. Nunca 500."""
-    if not _cycle_tracking_enabled():
-        return JSONResponse(content={"status": "disabled"}, status_code=403)
-
-    try:
-        import datetime as _dtm
-        _dtm.date.fromisoformat(body.date)
-    except (ValueError, TypeError):
-        return JSONResponse(
-            content={"status": "error", "message": "date debe ser fecha ISO 8601 (YYYY-MM-DD)"},
-            status_code=422,
-        )
-
-    tags = body.tags if body.tags is not None else []
-    try:
-        clean_tags = _clean_str_list(tags)
-    except ValueError as e:
-        return JSONResponse(content={"status": "error", "errors": [f"tags {e}"]}, status_code=422)
-
-    try:
-        log = _cycle.load_cycle_log()
-        symptoms = [s for s in log.get("symptoms", []) if isinstance(s, dict)]
-        symptoms.append({
-            "date": body.date,
-            "tags": clean_tags,
-            "note": (body.note or "")[:500],
-            "source": "manual",
-        })
-        log["symptoms"] = symptoms
-        _cycle.save_cycle_log(log)
-        return JSONResponse(content={"status": "ok", "symptoms": symptoms})
-    except Exception as e:
-        logger.error(f"POST /api/cycle/symptom falló: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error guardando síntoma"}, status_code=200)
+# Fase 9 (paso A2): /api/cycle* vive ahora en app/routes/cycle.py.
+from app.routes.cycle import router as _cycle_router  # noqa: E402
+app.include_router(_cycle_router)
 
 
 # Fase 9 (paso A2): /api/journal* vive ahora en app/routes/journal.py.
