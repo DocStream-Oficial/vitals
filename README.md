@@ -1,4 +1,4 @@
-# Vitals — self-hosted WHOOP alternative
+# Vitals — self-hosted WHOOP / Google Health alternative
 
 [![CI](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DocStream-Oficial/vitals-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
