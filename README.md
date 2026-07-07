@@ -13,7 +13,7 @@
 
 A personal recovery / strain / sleep / body-age dashboard — the kind of thing you'd
 pay a monthly subscription for — except it runs on hardware you own, reads from
-wearables you already have (Google Fit, Oura, WHOOP, Apple HealthKit), and never
+wearables you already have (Google Health, Oura, WHOOP, Apple HealthKit), and never
 sends a byte of your health data to a third-party cloud.
 
 <p align="center">
@@ -137,7 +137,7 @@ exportable, and running on infrastructure you control — this is that.
 
 | Source | Auth | Notes |
 |---|---|---|
-| **Google Fit / Health Connect** | OAuth 2.0 (BYO client) | Fitbit, Pixel Watch, Garmin, and anything synced into Google Health Connect |
+| **Google Health** | OAuth 2.0 (BYO client) | The new Google Health API (`health.googleapis.com`) — Fitbit, Pixel Watch, Garmin, and anything that syncs into Health Connect |
 | **Oura** | OAuth 2.0 (BYO client) | Oura Ring v2 API |
 | **WHOOP** | OAuth 2.0 (BYO client) | WHOOP v2 API — requires `offline` scope for refresh tokens |
 | **Apple HealthKit** | Push token (`INGEST_TOKEN`) | Companion iOS app reads HealthKit on-device and pushes to `/api/ingest` — no cloud round-trip |

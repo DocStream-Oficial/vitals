@@ -20,7 +20,7 @@ WHOOP are shorter.
 
 ---
 
-## Google Health (Google Fit, Pixel Watch, Fitbit, Garmin via Health Connect)
+## Google Health (Pixel Watch, Fitbit, Garmin & more via Health Connect)
 
 Vitals reads from Google's **new Google Health API** (`health.googleapis.com`) —
 **not** the old Google Fit / Fitness API, which Google stopped accepting new
