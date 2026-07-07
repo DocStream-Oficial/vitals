@@ -93,6 +93,13 @@ def _load_dataset() -> dict | None:
     return None
 
 
+# Fase 9 (paso A2): _KNOWN_SOURCES se descubrió compartido entre 2 dominios de
+# ruta (profile: validación de /api/profile, sources: /api/sources*) al
+# trocear main.py por routers — se centraliza aquí, mismo motivo que
+# _clean_str_list arriba.
+_KNOWN_SOURCES = ("google_health", "oura", "whoop", "healthkit")
+
+
 def _demo_blocked_response() -> JSONResponse:
     """Respuesta uniforme (200, nunca 500/401) para cualquier endpoint de
     escritura sensible (auth/sync/ingest/sources) cuando VITALS_DEMO=1 — el
