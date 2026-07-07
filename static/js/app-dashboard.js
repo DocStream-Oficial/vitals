@@ -4789,9 +4789,14 @@ function submitProfileForm(isOnboarding) {
 }
 
 // ── INIT ONBOARDING CHECK ──
-(function() {
+// Diferido a DOMContentLoaded: este <script src> se carga ANTES del
+// <div id="onboardOverlay"> del template (script en ~821, overlay en ~824), así
+// que corre durante el parseo cuando el overlay aún no existe. Sin el defer,
+// openProfileForm(true) hacía getElementById('onboardOverlay')===null y salía
+// temprano → el onboarding no se auto-abría nunca (bug de orden pre-existente).
+document.addEventListener('DOMContentLoaded', function() {
   _updateAvatars();
   if (PROFILE && PROFILE.onboarded === false) {
     openProfileForm(true);
   }
-})();
+});

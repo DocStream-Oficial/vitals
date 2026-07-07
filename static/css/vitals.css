@@ -101,6 +101,15 @@ body{
 @media(min-width:900px){
   .cards{ grid-template-columns:1fr 1fr; grid-auto-rows:8px; row-gap:0; column-gap:14px; }
 }
+/* #screenMas: TODAS sus tarjetas son span-all (1 columna efectiva) → NO usa el
+   masonry de 2-col, y su JS (layoutMasonry) solo corre para los scopes hoy/tend
+   (ver ORDER_SCOPES). Sin este override, en ≥900px las cards del Más heredan
+   grid-auto-rows:8px SIN que ningún JS les asigne grid-row-end:span N → cada
+   sección queda en una fila de 8px y se ENCIMAN (bug de iPad/desktop). Volvemos
+   a filas automáticas + gap vertical normal solo para el Más. */
+@media(min-width:900px){
+  #screenMas .cards{ grid-auto-rows:auto; row-gap:14px; }
+}
 .cards .span-all{ grid-column:1 / -1; }
 .cards .card{ margin-bottom:0; }
 /* Roadmap P2 paso 1: journalCard (resumen colapsado, P0 paso 3) cabe en media

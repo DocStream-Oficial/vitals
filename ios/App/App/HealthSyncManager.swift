@@ -797,6 +797,10 @@ final class HealthSyncManager {
     /// Convierte HKCategoryValueVaginalBleeding (Apple Cycle Tracking) a la
     /// etiqueta de texto que espera el backend (`menstrual_flow[].value`).
     private func menstrualFlowLabel(for rawValue: Int) -> String? {
+        // HKCategoryValueVaginalBleeding (Apple Cycle Tracking) existe desde iOS 18;
+        // el deployment target es 17.6, así que en <18 degradamos a nil (la salud
+        // femenina es opt-in y este flujo no aplica en versiones sin el tipo).
+        guard #available(iOS 18.0, *) else { return nil }
         guard let v = HKCategoryValueVaginalBleeding(rawValue: rawValue) else { return nil }
         switch v {
         case .unspecified: return "unspecified"

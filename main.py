@@ -288,32 +288,44 @@ async def _dashboard_auth_middleware(request: Request, call_next):
 async def dashboard():
     dataset = _load_dataset()
     if not dataset:
-        # Sin datos todavía (primer arranque / antes del primer sync): C2 (Fase
-        # 8C) — skeleton shimmer en vez de un mensaje plano, mismo look Liquid
-        # Glass que el resto de la app. Progressive enhancement puro HTML/CSS
-        # (nada de JS que pueda fallar); los links de acción siguen presentes
-        # abajo del shimmer por si el usuario necesita actuar manualmente.
-        locale = _profile.effective("locale") or "es"
-        from app.i18n import tr as _tr
-        return HTMLResponse(
-            "<html><body style='background:#07090e;color:#e6edf3;font-family:-apple-system,sans-serif;"
-            "padding:24px;margin:0'>"
-            "<style>"
-            "@keyframes sk{0%{background-position:-200% 0}100%{background-position:200% 0}}"
-            ".sk{border-radius:26px;height:110px;margin-bottom:14px;"
-            "background:linear-gradient(90deg,rgba(255,255,255,.06) 25%,rgba(255,255,255,.14) 50%,"
-            "rgba(255,255,255,.06) 75%);background-size:200% 100%;animation:sk 1.4s ease-in-out infinite;"
-            "border:1px solid rgba(255,255,255,.1)}"
-            ".sk.tall{height:170px}"
-            "</style>"
-            "<h1 style='font-size:22px;margin:6px 0 16px'>Vitals</h1>"
-            "<div class='sk tall'></div><div class='sk'></div><div class='sk'></div>"
-            f"<p style='color:rgba(235,235,245,.62);font-size:14px;margin-top:18px'>{_tr('skeleton_first_load', locale)}</p>"
-            "<p style='margin-top:10px'><a href='/auth/login' style='color:#16c784'>Conectar Google Health</a> "
-            "&middot; <a href='/api/sync' style='color:#16c784'>POST /api/sync</a></p>"
-            "</body></html>",
-            status_code=200,
-        )
+        # Household ya activo (≥1 usuario registrado) y el usuario ACTIVO de
+        # este request no tiene dataset propio (ej. recién creado, o sync
+        # pendiente): NO servir la estática single-user de abajo — es un
+        # dead-end sin tab bar, sin switcher (masHouseholdSection) y sin
+        # onboarding. En su lugar, dataset sintético vacío y CAE al render
+        # normal más abajo: el shell completo trae el switcher y el bloque
+        # INIT auto-abre onboarding si PROFILE.onboarded===False.
+        if _userctx.should_use_household_paths() and _userctx.list_users():
+            dataset = {"days": [], "summary": {}}
+        else:
+            # Legacy single-user en primer arranque (o household sin ningún
+            # usuario registrado todavía): estática intacta, cero cambio. C2
+            # (Fase 8C) — skeleton shimmer en vez de un mensaje plano, mismo
+            # look Liquid Glass que el resto de la app. Progressive
+            # enhancement puro HTML/CSS (nada de JS que pueda fallar); los
+            # links de acción siguen presentes abajo del shimmer por si el
+            # usuario necesita actuar manualmente.
+            locale = _profile.effective("locale") or "es"
+            from app.i18n import tr as _tr
+            return HTMLResponse(
+                "<html><body style='background:#07090e;color:#e6edf3;font-family:-apple-system,sans-serif;"
+                "padding:24px;margin:0'>"
+                "<style>"
+                "@keyframes sk{0%{background-position:-200% 0}100%{background-position:200% 0}}"
+                ".sk{border-radius:26px;height:110px;margin-bottom:14px;"
+                "background:linear-gradient(90deg,rgba(255,255,255,.06) 25%,rgba(255,255,255,.14) 50%,"
+                "rgba(255,255,255,.06) 75%);background-size:200% 100%;animation:sk 1.4s ease-in-out infinite;"
+                "border:1px solid rgba(255,255,255,.1)}"
+                ".sk.tall{height:170px}"
+                "</style>"
+                "<h1 style='font-size:22px;margin:6px 0 16px'>Vitals</h1>"
+                "<div class='sk tall'></div><div class='sk'></div><div class='sk'></div>"
+                f"<p style='color:rgba(235,235,245,.62);font-size:14px;margin-top:18px'>{_tr('skeleton_first_load', locale)}</p>"
+                "<p style='margin-top:10px'><a href='/auth/login' style='color:#16c784'>Conectar Google Health</a> "
+                "&middot; <a href='/api/sync' style='color:#16c784'>POST /api/sync</a></p>"
+                "</body></html>",
+                status_code=200,
+            )
     auth_st = _active_source().auth_state()
 
     # Roadmap P2 paso 4/5: banner de reconexión inteligente + banner demo

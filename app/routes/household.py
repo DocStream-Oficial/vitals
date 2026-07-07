@@ -51,11 +51,16 @@ async def api_users_post(body: UserCreate, response: Response):
                 content={"status": "error", "message": "nombre inválido"},
                 status_code=422,
             )
-        # Conveniencia: si el caller no tenía cookie de usuario fijada, deja
-        # esta cookie apuntando al usuario recién creado (siguiente request ya
-        # navega directo a su vista, sin que el picker tenga que elegir de nuevo).
-        response.set_cookie(_USER_COOKIE_NAME, user["id"], httponly=False, samesite="lax")
-        return JSONResponse(content={"status": "ok", "user": user})
+        resp = JSONResponse(content={"status": "ok", "user": user})
+        # Deja al usuario recién creado como ACTIVO (cookie vitals_user): el
+        # reload que hace household.js tras el alta cae directo a su onboarding
+        # (ya no es dead-end gracias a F1 en GET /). SIEMPRE fija el usuario
+        # nuevo como activo. set_cookie debe ir sobre el Response que se
+        # RETORNA — fijarlo sobre el Response inyectado por FastAPI y retornar
+        # un JSONResponse nuevo (como antes) es un no-op: ese Set-Cookie nunca
+        # llega al cliente.
+        resp.set_cookie(_USER_COOKIE_NAME, user["id"], httponly=False, samesite="lax")
+        return resp
     except Exception as e:
         logger.error(f"POST /api/users falló: {e}")
         return JSONResponse(content={"status": "error", "message": "Error creando usuario"}, status_code=200)

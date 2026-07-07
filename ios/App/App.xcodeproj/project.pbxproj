@@ -18,6 +18,7 @@
 		DD4883962FF1C1DC00F0923F /* VitalsIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DD4883952FF1C1DC00F0923F /* VitalsIcon.icon */; };
 		DE5A100100000000000000A1 /* HealthSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A1 /* HealthSyncManager.swift */; };
 		DE5A100100000000000000A2 /* VitalsHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A2 /* VitalsHealth.swift */; };
+		DE5A100100000000000000A3 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A3 /* KeychainStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		DD4883952FF1C1DC00F0923F /* VitalsIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = VitalsIcon.icon; sourceTree = "<group>"; };
 		DE5A100000000000000000A1 /* HealthSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncManager.swift; sourceTree = "<group>"; };
 		DE5A100000000000000000A2 /* VitalsHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitalsHealth.swift; sourceTree = "<group>"; };
+		DE5A100000000000000000A3 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +77,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				DE5A100000000000000000A1 /* HealthSyncManager.swift */,
 				DE5A100000000000000000A2 /* VitalsHealth.swift */,
+				DE5A100000000000000000A3 /* KeychainStore.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -170,6 +173,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				DE5A100100000000000000A1 /* HealthSyncManager.swift in Sources */,
 				DE5A100100000000000000A2 /* VitalsHealth.swift in Sources */,
+				DE5A100100000000000000A3 /* KeychainStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
