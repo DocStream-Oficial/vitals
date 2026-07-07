@@ -1,8 +1,9 @@
 """
 vitals_mcp.py — MCP server de Vitals (FastMCP, transport stdio).
 
-Expone 9 tools de solo lectura para que Alfred (OpenClaw) consulte
-la salud del usuario sin duplicar la lógica de la app.
+Expone 9 tools de solo lectura para que un agente MCP (OpenClaw, Claude, o
+cualquier cliente MCP) consulte la salud del usuario sin duplicar la lógica
+de la app.
 
 Requiere Python 3.10+ y el SDK `mcp` (instalar en el box):
     pip install mcp
@@ -11,8 +12,8 @@ Cómo arrancar (en el box, Python 3.12):
     py -3 vitals_mcp.py           # Windows
     python3 vitals_mcp.py         # Linux/Mac
 
-El server usa stdio por defecto. Alfred lo spawn-eará como sub-proceso
-una vez cableado en Run C (codex-home/config.toml o per-agente).
+El server usa stdio por defecto. El agente lo spawn-eará como sub-proceso
+una vez registrado en la config de MCP servers de tu cliente.
 
 AISLAMIENTO: este es el ÚNICO archivo que importa `mcp`.
 app/mcp_tools.py (las funciones puras) NO importa mcp y corre en 3.9.
@@ -108,7 +109,7 @@ def vitals_morning_brief() -> str:
     dato, snapshot clave (recovery, sueño, HRV, FC, strain), alertas activas
     y 1 prioridad del día. Texto plano listo para enviar por WhatsApp.
 
-    Úsala para el cron mañanero de Alfred o cuando el usuario pida
+    Úsala para el cron mañanero de tu agente o cuando el usuario pida
     el resumen del día / el brief de salud de la mañana.
     Incluye la fecha de `summary.updated` para saber si el dato está fresco.
     """
@@ -174,7 +175,7 @@ def vitals_bedtime_brief() -> str:
     usa 00:00 como default), y UNA sugerencia concreta para esta noche.
     Texto plano listo para enviar por WhatsApp.
 
-    Úsala para el cron nocturno de Alfred (recordatorio de bedtime) o cuando el
+    Úsala para el cron nocturno de tu agente (recordatorio de bedtime) o cuando el
     usuario pregunte a qué hora debería acostarse hoy / cómo va con su meta de
     sueño esta semana.
     """

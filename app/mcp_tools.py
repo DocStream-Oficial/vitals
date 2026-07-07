@@ -462,7 +462,7 @@ def drivers_list(ds: Optional[dict]) -> list:
 
 def cycle_summary(ds: Optional[dict]) -> dict:
     """
-    Resumen del estado de ciclo para el MCP (Alfred). {enabled:false} si el
+    Resumen del estado de ciclo para el MCP. {enabled:false} si el
     toggle profile.cycle_tracking está apagado (default) — mismo criterio de
     opt-in estricto que /api/cycle: cero fuga de datos de ciclo sin activar.
     Nunca lanza — cualquier error interno degrada a {enabled:false}.
@@ -541,7 +541,7 @@ def _bed_min_to_hhmm(avg_bed_min: float) -> str:
 
 def bedtime_brief(ds: Optional[dict]) -> str:
     """
-    Brief corto (2-4 líneas) para el cron nocturno de Alfred: recovery de hoy,
+    Brief corto (2-4 líneas) para el cron nocturno del agente MCP: recovery de hoy,
     hora media de acostarse (7d) vs meta declarada (o 00:00 default), y UNA
     sugerencia. Texto plano, mismo tono que morning_brief (sin markdown pesado).
 

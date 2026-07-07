@@ -36,7 +36,7 @@ Vitals takes the opposite bet:
   plain Python you can read in an afternoon. See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md)
   for the exact formulas, weights, and — just as important — their honest limitations.
 - **AI-native, via MCP** — `vitals_mcp.py` exposes your health data as MCP tools,
-  so a local AI agent (Claude, OpenClaw/Alfred, or anything speaking MCP) can
+  so a local AI agent (Claude, OpenClaw, or anything speaking MCP) can
   reason over your recovery trend, flag an early illness signal, or answer
   "should I train hard today?" without any of that data leaving your network.
 - **Multi-source, source-agnostic** — connect Google Health, Oura, WHOOP, or
@@ -353,25 +353,24 @@ routes in `main.py`, with their auth model:
 
 ---
 
-## API pública de solo lectura
+## Public read-only API
 
-Roadmap P2 (F10): la comunidad self-hosted puede construir sobre sus propios
-datos (mismo patrón que [wger](https://wger.de)/Open Wearables) sin exponer
-`INGEST_TOKEN` (el secreto de escritura de HealthKit/ECG) a integraciones de
-terceros. Desde **Más → API**, genera una clave `vk_...` — se muestra **una
-sola vez**; guárdala, no se puede recuperar después.
+Build on top of your own data (same pattern as [wger](https://wger.de)/Open
+Wearables) without exposing `INGEST_TOKEN` (the HealthKit/ECG write secret) to
+third-party integrations. From **More → API**, generate a `vk_...` key — it is
+shown **only once**; save it, it cannot be recovered later.
 
 ```bash
-curl -H "Authorization: Bearer vk_..." https://tu-instancia.example/api/v1/data
-curl -H "Authorization: Bearer vk_..." https://tu-instancia.example/api/v1/insights
+curl -H "Authorization: Bearer vk_..." https://your-instance.example/api/v1/data
+curl -H "Authorization: Bearer vk_..." https://your-instance.example/api/v1/insights
 ```
 
-- Claves por usuario, revocables, de **solo lectura** — no existe ningún
-  endpoint de escritura bajo `/api/v1/*`.
-- Solo se persiste el hash SHA-256 de la clave; la clave cruda nunca se
-  guarda ni se puede recuperar tras su creación.
-- Sin clave, clave inválida o revocada → `401` (nunca `500`).
-- Máximo 10 claves activas por usuario; revócalas desde la misma sección.
+- Per-user, revocable, **read-only** keys — there is no write endpoint under
+  `/api/v1/*`.
+- Only the SHA-256 hash of the key is persisted; the raw key is never stored
+  and cannot be recovered after creation.
+- Missing, invalid, or revoked key → `401` (never `500`).
+- Up to 10 active keys per user; revoke them from the same section.
 
 ---
 
@@ -391,7 +390,7 @@ Vitals runs as a full-screen, offline-capable app with no browser chrome.
 
 ---
 
-## MCP server (optional — for OpenClaw / Alfred / any MCP client)
+## MCP server (optional — for OpenClaw / any MCP client)
 
 If you run [OpenClaw](https://openclaw.io) or any other MCP-speaking agent, you
 can wire `vitals_mcp.py` as an MCP server so it can answer health questions

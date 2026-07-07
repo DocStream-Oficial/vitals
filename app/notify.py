@@ -12,7 +12,7 @@ sync.py::run_sync(), envuelta en su propio try/except (patrón EXACTO de
 coach_headline/report: un fallo aquí NUNCA debe tumbar ni ralentizar run_sync()
 perceptiblemente). Envía:
   (a) morning brief 1×/día (reusa mcp_tools.morning_brief — mismo texto que ya
-      usa el cron de Alfred, cero duplicación de lógica).
+      usa el cron del agente MCP, cero duplicación de lógica).
   (b) insights severity=='alert' nuevos (no enviados antes).
 
 Dedupe: data/notify_state.json {last_brief_date, sent_alerts: [{date, factor_or_id}]}

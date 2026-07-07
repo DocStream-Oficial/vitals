@@ -493,7 +493,7 @@ class TestBedtimeBrief:
 class TestCycleSummary:
     def test_disabled_when_toggle_off(self, monkeypatch):
         """Default (cycle_tracking=False) -> {enabled:false}, cero fuga de
-        datos de ciclo hacia el MCP/Alfred (criterio #1 del roadmap)."""
+        datos de ciclo hacia el MCP (criterio #1 del roadmap)."""
         from app import profile as _pm
         monkeypatch.setattr(_pm, "effective_profile_dict", lambda: {"cycle_tracking": False})
         result = m.cycle_summary({"days": []})
