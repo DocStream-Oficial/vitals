@@ -4677,9 +4677,13 @@ function openProfileForm(isOnboarding) {
     // anterior (junto a cintura).
     + '<div class="ob-section-lbl">'+t('pf_goals_lbl')+'</div>'
     + '<div class="ob-section-sub">'+t('pf_goals_sub')+'</div>'
+    // El usuario ve y edita HORAS (5–10, paso 0.5), no minutos crudos: el
+    // backend guarda minutos (300–600) y submitProfileForm convierte h→min.
+    // Math.round(min/60*100)/100 da horas EXACTAS para cualquier valor legado
+    // (múltiplo de 15 min -> múltiplo de 0.25 h), sin decimales infinitos.
     + '<div class="ob-field"><label class="ob-label">'+t('pf_sleep_goal')+'</label>'
-    + '<input class="ob-input" id="pf-sleep-goal" type="number" min="300" max="600" step="15" placeholder="480" value="'
-    + (p.sleep_goal_min != null ? p.sleep_goal_min : '') + '">'
+    + '<input class="ob-input" id="pf-sleep-goal" type="number" min="5" max="10" step="0.5" placeholder="8" value="'
+    + (p.sleep_goal_min != null ? (Math.round(p.sleep_goal_min/60*100)/100) : '') + '">'
     + '<span class="ob-hint">'+t('pf_sleep_goal_hint')+'</span>'
     + (function(){
         var med = _sleepMedianHint();
@@ -4687,8 +4691,8 @@ function openProfileForm(isOnboarding) {
       })()
     + '</div>'
     + '<div class="ob-field"><label class="ob-label">'+t('pf_sleep_need')+'</label>'
-    + '<input class="ob-input" id="pf-sleep-target" type="number" min="300" max="600" step="15" placeholder="480" value="'
-    + (p.sleep_target_min != null ? p.sleep_target_min : '') + '">'
+    + '<input class="ob-input" id="pf-sleep-target" type="number" min="5" max="10" step="0.5" placeholder="8" value="'
+    + (p.sleep_target_min != null ? (Math.round(p.sleep_target_min/60*100)/100) : '') + '">'
     + '<span class="ob-hint">'+t('pf_sleep_need_hint')+'</span></div>'
     + '<div class="ob-field"><label class="ob-label">'+t('ob_steps_target')+'</label>'
     + '<input class="ob-input" id="pf-steps-target" type="number" min="1000" max="50000" step="100" placeholder="8000" value="'
@@ -4889,15 +4893,18 @@ function submitProfileForm(isOnboarding) {
   // Sleep-goal-vs-need: OBJETIVO (sleep_goal_min) se manda libre, sin aviso —
   // editarlo no toca el motor. NECESIDAD (sleep_target_min) sí re-califica el
   // histórico -> se detecta el cambio para el confirm() de abajo.
+  // Los inputs vienen en HORAS (5–10); el backend guarda minutos (300–600).
+  // h -> min: parseFloat * 60 redondeado a entero, luego clamp. 8 -> 480,
+  // 7.5 -> 450, 6 -> 360 (exactos, no disparan un confirm falso más abajo).
   if (sleepGoalRaw) {
-    var sleepGoalVal = parseInt(sleepGoalRaw, 10);
-    if (!isNaN(sleepGoalVal)) payload.sleep_goal_min = clamp(sleepGoalVal, 300, 600);
+    var sleepGoalVal = parseFloat(sleepGoalRaw);
+    if (!isNaN(sleepGoalVal)) payload.sleep_goal_min = clamp(Math.round(sleepGoalVal * 60), 300, 600);
   }
   var sleepTargetChanged = false;
   if (sleepTargetRaw) {
-    var sleepTargetVal = parseInt(sleepTargetRaw, 10);
+    var sleepTargetVal = parseFloat(sleepTargetRaw);
     if (!isNaN(sleepTargetVal)) {
-      var sleepTargetClamped = clamp(sleepTargetVal, 300, 600);
+      var sleepTargetClamped = clamp(Math.round(sleepTargetVal * 60), 300, 600);
       payload.sleep_target_min = sleepTargetClamped;
       sleepTargetChanged = sleepTargetClamped !== (PROFILE && PROFILE.sleep_target_min);
     }
