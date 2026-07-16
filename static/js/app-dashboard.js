@@ -2277,10 +2277,13 @@ function _buildSleepContent(nightIdx){
   var html = _renderHypnogramBlock(today);
   html += _deepSection('deep_section_sleep_data');
 
-  // Duration — roadmap P1 paso 3: meta de sueño ÚNICA en toda la app, leída
-  // de PROFILE.sleep_target_min (480 default -> "meta 8h"). Antes hardcoded
-  // a 420 (7h), inconsistente con el default real del perfil.
-  var sleepTargetMin = (PROFILE && PROFILE.sleep_target_min) || 480;
+  // Duration — sleep-goal-vs-need: la tarjeta de Hoy es consumidora del
+  // OBJETIVO personal (sleep_goal_min), NO de la necesidad fisiológica: su
+  // copy ya dice "meta {h}h" en los 4 locales y pf_sleep_goal_hint le promete
+  // al usuario que fijar su meta "mueve tu tarjeta de Hoy". Misma cadena de
+  // fallback que app/changes.py y app/coach_headline.py (goal -> target -> 480)
+  // para que un PROFILE viejo sin sleep_goal_min se comporte igual que hoy.
+  var sleepTargetMin = (PROFILE && (PROFILE.sleep_goal_min || PROFILE.sleep_target_min)) || 480;
   var sleepTargetH = Math.round(sleepTargetMin/60);
   var dur = today.asleep != null ? (Math.floor(today.asleep/60)+'h '+(today.asleep%60<10?'0':'')+(today.asleep%60)+'m') : null;
   var durStatus = today.asleep == null ? 'no_data' : today.asleep >= sleepTargetMin ? 'on_target' : 'low';
@@ -2464,15 +2467,18 @@ function _buildSleepTrendSection(){
   var slice = days.slice(-n);
   if (!slice.length) return '';
 
-  var sleepTargetMinChart = (PROFILE && PROFILE.sleep_target_min) || 480;
+  // La línea de referencia es el OBJETIVO (adherencia en el tiempo), no la necesidad:
+  // misma cadena de fallback que la tarjeta de Hoy -> goal → target → 480, para que
+  // un perfil viejo sin sleep_goal_min caiga a su necesidad y no a un 480 duro.
+  var sleepGoalMinChart = (PROFILE && (PROFILE.sleep_goal_min || PROFILE.sleep_target_min)) || 480;
   var html = _deepSection('tend_sleep_arch');
   html += '<div class="deep-mc deep-span-all" style="padding:16px">';
-  html += '<div class="deep-mc-sub" style="margin-bottom:8px">' + t('tend_sleep_sub').replace('{h}', Math.round(sleepTargetMinChart/60)) + '</div>';
+  html += '<div class="deep-mc-sub" style="margin-bottom:8px">' + t('tend_sleep_sub').replace('{h}', Math.round(sleepGoalMinChart/60)) + '</div>';
   html += stackedBars(
     slice,
     ['deep','rem','light','awake'],
     ['#4B3FA8','#9D78FF','#2E7BE6','rgba(150,150,175,.6)'],
-    sleepTargetMinChart,
+    sleepGoalMinChart,
     {H:160, padL:32, yTicks:[120,240,360,480,600]}
   );
   html += '<div class="tend-legend" style="margin-top:10px">'
@@ -4664,6 +4670,26 @@ function openProfileForm(isOnboarding) {
     + '<input class="ob-input" id="pf-waist" type="number" min="1" max="500" placeholder="" value="'
     + waistDisp + '">'
     + '<span class="ob-hint">'+t('ob_waist_hint')+'</span></div>'
+    // Sleep-goal-vs-need: sección "Tus metas" — separa el OBJETIVO personal
+    // (sleep_goal_min, editable libre) de la NECESIDAD fisiológica
+    // (sleep_target_min, avanzado, dispara confirm() al cambiar — ver
+    // submitProfileForm). Meta de pasos MOVIDA aquí desde su ubicación
+    // anterior (junto a cintura).
+    + '<div class="ob-section-lbl">'+t('pf_goals_lbl')+'</div>'
+    + '<div class="ob-section-sub">'+t('pf_goals_sub')+'</div>'
+    + '<div class="ob-field"><label class="ob-label">'+t('pf_sleep_goal')+'</label>'
+    + '<input class="ob-input" id="pf-sleep-goal" type="number" min="300" max="600" step="15" placeholder="480" value="'
+    + (p.sleep_goal_min != null ? p.sleep_goal_min : '') + '">'
+    + '<span class="ob-hint">'+t('pf_sleep_goal_hint')+'</span>'
+    + (function(){
+        var med = _sleepMedianHint();
+        return med == null ? '' : '<span class="ob-hint" id="pf-sleep-goal-median">'+t('pf_sleep_goal_median').replace('{h}', med)+'</span>';
+      })()
+    + '</div>'
+    + '<div class="ob-field"><label class="ob-label">'+t('pf_sleep_need')+'</label>'
+    + '<input class="ob-input" id="pf-sleep-target" type="number" min="300" max="600" step="15" placeholder="480" value="'
+    + (p.sleep_target_min != null ? p.sleep_target_min : '') + '">'
+    + '<span class="ob-hint">'+t('pf_sleep_need_hint')+'</span></div>'
     + '<div class="ob-field"><label class="ob-label">'+t('ob_steps_target')+'</label>'
     + '<input class="ob-input" id="pf-steps-target" type="number" min="1000" max="50000" step="100" placeholder="8000" value="'
     + (p.steps_target != null ? p.steps_target : '') + '">'
@@ -4709,6 +4735,22 @@ function openProfileForm(isOnboarding) {
     if (!p.sex) pfSexSel('M');
     modal.classList.remove('hidden');
   }
+}
+
+// Sleep-goal-vs-need: hint DESCRIPTIVO (no prescriptivo) bajo Meta de sueño —
+// mediana real de 'asleep' de las últimas 90 noches del global `days` (línea
+// ~22). null si hay <14 noches con dato (onboarding / usuario nuevo con
+// `days` vacío) -> el llamador omite el hint en vez de renderizar "NaNh".
+// Prohibido sugerir un óptimo: solo reporta lo que YA pasó.
+function _sleepMedianHint() {
+  var recent = (days || []).slice(-90)
+    .map(function(d){ return d && d.asleep; })
+    .filter(function(v){ return v != null && !isNaN(v); });
+  if (recent.length < 14) return null;
+  var sorted = recent.slice().sort(function(a,b){ return a - b; });
+  var mid = Math.floor(sorted.length / 2);
+  var medianMin = sorted.length % 2 === 0 ? (sorted[mid-1] + sorted[mid]) / 2 : sorted[mid];
+  return (medianMin / 60).toFixed(1) + 'h';
 }
 
 function _esc(s) {
@@ -4768,6 +4810,8 @@ function submitProfileForm(isOnboarding) {
   var birthdate = (document.getElementById('pf-birthdate')||{}).value||'';
   var waistRaw = (document.getElementById('pf-waist')||{}).value||'';
   var stepsTargetRaw = (document.getElementById('pf-steps-target')||{}).value||'';
+  var sleepGoalRaw = (document.getElementById('pf-sleep-goal')||{}).value||'';
+  var sleepTargetRaw = (document.getElementById('pf-sleep-target')||{}).value||'';
   var heightRaw = (document.getElementById('pf-height')||{}).value||'';
   var weightRaw = (document.getElementById('pf-weight')||{}).value||'';
   var imperial = PROFILE && PROFILE.units === 'imperial';
@@ -4840,6 +4884,31 @@ function submitProfileForm(isOnboarding) {
     // Clamp defensivo en el front (el backend valida igual, esto solo evita
     // un PUT rechazado por un valor fuera de rango tecleado a mano).
     if (!isNaN(stepsTargetVal)) payload.steps_target = clamp(stepsTargetVal, 1000, 50000);
+  }
+
+  // Sleep-goal-vs-need: OBJETIVO (sleep_goal_min) se manda libre, sin aviso —
+  // editarlo no toca el motor. NECESIDAD (sleep_target_min) sí re-califica el
+  // histórico -> se detecta el cambio para el confirm() de abajo.
+  if (sleepGoalRaw) {
+    var sleepGoalVal = parseInt(sleepGoalRaw, 10);
+    if (!isNaN(sleepGoalVal)) payload.sleep_goal_min = clamp(sleepGoalVal, 300, 600);
+  }
+  var sleepTargetChanged = false;
+  if (sleepTargetRaw) {
+    var sleepTargetVal = parseInt(sleepTargetRaw, 10);
+    if (!isNaN(sleepTargetVal)) {
+      var sleepTargetClamped = clamp(sleepTargetVal, 300, 600);
+      payload.sleep_target_min = sleepTargetClamped;
+      sleepTargetChanged = sleepTargetClamped !== (PROFILE && PROFILE.sleep_target_min);
+    }
+  }
+
+  // Criterio 10: cambiar la NECESIDAD recalcula recovery/edad corporal
+  // históricas en el próximo sync -> avisar y proceder. Cambiar SOLO el
+  // objetivo (o solo pasos) NO dispara este confirm. Si el usuario cancela,
+  // no se manda el PUT (return antes de tocar el botón/fetch).
+  if (sleepTargetChanged && !confirm(t('pf_need_change_confirm'))) {
+    return;
   }
 
   // Include locale/units if changed in onboarding form

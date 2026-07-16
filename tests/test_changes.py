@@ -235,6 +235,38 @@ def test_sleep_streak_broken_by_opposite_night():
     assert not any(e["factor"] == "sleep" and e["kind"] == "streak" for e in evs)
 
 
+# ── sleep-goal-vs-need: rachas usan el OBJETIVO (sleep_goal_min), no la
+# NECESIDAD (sleep_target_min), con fallback (criterio 6 del roadmap) ───────
+
+def test_sleep_streak_uses_goal_not_target_when_present():
+    """summary con sleep_goal_min=360 + noches de 370 min -> racha BUENA
+    (con sleep_target_min=480 sería mala hoy)."""
+    days = make_days([{"asleep": 370} for _ in range(4)])
+    evs = detect_changes({"days": days, "summary": {"sleep_goal_min": 360, "sleep_target_min": 480}})
+    streaks = [e for e in evs if e["factor"] == "sleep" and e["kind"] == "streak"]
+    assert len(streaks) == 1
+    assert streaks[0]["direction"] == "up"
+
+
+def test_sleep_streak_old_summary_without_goal_falls_back_to_target():
+    """Compat: summary VIEJO (solo sleep_target_min=480, sin sleep_goal_min) ->
+    comportamiento idéntico al de hoy (cae al target)."""
+    days = make_days([{"asleep": 500} for _ in range(4)])
+    evs = detect_changes({"days": days, "summary": {"sleep_target_min": 480}})
+    streaks = [e for e in evs if e["factor"] == "sleep" and e["kind"] == "streak"]
+    assert len(streaks) == 1
+    assert streaks[0]["direction"] == "up"
+
+
+def test_sleep_streak_summary_without_any_sleep_field_defaults_480():
+    """Sin sleep_goal_min NI sleep_target_min -> default 480 (comportamiento idéntico a hoy)."""
+    days = make_days([{"asleep": 300} for _ in range(4)])
+    evs = detect_changes({"days": days, "summary": {}})
+    streaks = [e for e in evs if e["factor"] == "sleep" and e["kind"] == "streak"]
+    assert len(streaks) == 1
+    assert streaks[0]["direction"] == "down"
+
+
 # ── Strain: delta día vs día ─────────────────────────────────────────────────
 
 def test_strain_up_triggers():

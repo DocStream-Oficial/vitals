@@ -42,6 +42,14 @@ _DEFAULTS: dict[str, Any] = {
     # hardcodeado. Default 480 = comportamiento idéntico a antes. Validado
     # 300-600 en PUT /api/profile (main.py).
     "sleep_target_min": 480,
+    # Sleep-goal-vs-need: OBJETIVO personal de sueño, distinto de la NECESIDAD
+    # fisiológica de arriba (sleep_target_min). Este campo NO entra a ningún
+    # motor (scoring/bodyage/sleep_scores) — solo alimenta rachas, titular y
+    # UI (app/changes.py, app/coach_headline.py, app-dashboard.js). Default
+    # 480 = mismo valor que sleep_target_min, pero la cascada real vive en
+    # effective_sleep_goal() (cae al target antes que a este default).
+    # Validado 300-600 en PUT /api/profile (routes/profile.py).
+    "sleep_goal_min": 480,
     # Tarjeta de Pasos en Hoy: meta diaria (pasos). Default 8000 = mismo umbral
     # que ya usaba el estado "on_target" hardcodeado en el drill-down de Fitness.
     # Validado 1000-50000 en PUT /api/profile (main.py), mismo estilo que sleep_target_min.
@@ -196,6 +204,31 @@ def effective_sources() -> list[str]:
     return [fallback] if fallback else ["google_health"]
 
 
+def effective_sleep_goal() -> Any:
+    """Sleep-goal-vs-need: cascada del OBJETIVO personal de sueño.
+
+    Modelada sobre effective_sources() — campo nuevo que debe caer a un campo
+    viejo cuando no existe, para que perfiles ya persistidos no sufran una
+    regresión silenciosa el día del deploy:
+
+      1. profile.json['sleep_goal_min'] — si el usuario lo fijó explícito, se usa.
+      2. Si no existe, cae a effective("sleep_target_min") — el objetivo sigue
+         a la necesidad hasta que se fije un valor propio (nunca un objetivo
+         mayor que la necesidad por accidente en perfiles viejos).
+      3. Si tampoco hay necesidad, 480 (default duro).
+
+    NO se usa .get("sleep_goal_min", 480) directo: eso saltaría el paso 2 y
+    rompería a cualquier usuario con sleep_target_min != 480.
+    """
+    profile = load_profile()
+    if profile is not None and profile.get("sleep_goal_min") is not None:
+        return profile["sleep_goal_min"]
+    target = effective("sleep_target_min")
+    if target is not None:
+        return target
+    return _DEFAULTS["sleep_goal_min"]
+
+
 def current_age() -> int:
     """Calcula la edad en años a partir del campo birthdate del perfil.
     Fórmula idéntica a sync.py:74-76."""
@@ -222,6 +255,7 @@ def effective_profile_dict() -> dict:
         "height_cm": effective("height_cm"),
         "weight_kg": effective("weight_kg"),
         "sleep_target_min": effective("sleep_target_min"),
+        "sleep_goal_min": effective_sleep_goal(),
         "steps_target": effective("steps_target"),
         "locale": effective("locale") or "es",
         "units": effective("units") or "metric",

@@ -31,6 +31,9 @@ class ProfileUpdate(BaseModel):
     weight_kg: Optional[float] = None
     # Ronda 5: umbral único de sueño (minutos). default 480, validado 300-600.
     sleep_target_min: Optional[int] = None
+    # Sleep-goal-vs-need: OBJETIVO personal de sueño (distinto de la NECESIDAD
+    # de arriba). default 480, validado 300-600. NO entra a ningún motor.
+    sleep_goal_min: Optional[int] = None
     # Tarjeta de Pasos en Hoy: meta diaria de pasos. default 8000, validado 1000-50000.
     steps_target: Optional[int] = None
     locale: Optional[str] = None

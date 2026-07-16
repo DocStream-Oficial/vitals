@@ -400,6 +400,87 @@ def test_put_steps_target_non_numeric_rejected(api_client):
     assert resp.status_code == 422
 
 
+# ── PUT /api/profile — sleep_goal_min (objetivo personal de sueño) ──────────
+# Tests espejo de los de steps_target (criterio 3 del roadmap sleep-goal-vs-need).
+
+def test_put_valid_sleep_goal_min_saves(api_client):
+    """PUT /api/profile con sleep_goal_min válido -> 200, se guarda."""
+    resp = api_client.put("/api/profile", json={"sleep_goal_min": 360})
+    assert resp.status_code == 200
+    assert resp.json()["sleep_goal_min"] == 360
+
+
+def test_put_sleep_goal_min_below_300_rejected(api_client):
+    """PUT /api/profile con sleep_goal_min < 300 -> 422 controlado (nunca 500)."""
+    resp = api_client.put("/api/profile", json={"sleep_goal_min": 299})
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "errors" in data or "detail" in data
+
+
+def test_put_sleep_goal_min_above_600_rejected(api_client):
+    """PUT /api/profile con sleep_goal_min > 600 -> 422 controlado (nunca 500)."""
+    resp = api_client.put("/api/profile", json={"sleep_goal_min": 601})
+    assert resp.status_code == 422
+
+
+def test_put_sleep_goal_min_boundaries_accepted(api_client):
+    """Límites inclusivos 300 y 600 -> 200."""
+    resp_lo = api_client.put("/api/profile", json={"sleep_goal_min": 300})
+    assert resp_lo.status_code == 200
+    resp_hi = api_client.put("/api/profile", json={"sleep_goal_min": 600})
+    assert resp_hi.status_code == 200
+
+
+def test_get_profile_default_sleep_goal_min_480(api_client):
+    """GET /api/profile sin profile.json (perfil viejo/sin el campo) -> default 480."""
+    resp = api_client.get("/api/profile")
+    assert resp.status_code == 200
+    assert resp.json()["sleep_goal_min"] == 480
+
+
+def test_put_sleep_goal_min_non_numeric_rejected(api_client):
+    """sleep_goal_min no numérico -> 422 de pydantic, nunca 500."""
+    resp = api_client.put("/api/profile", json={"sleep_goal_min": "mucho"})
+    assert resp.status_code == 422
+
+
+def test_put_sleep_goal_min_greater_than_target_is_legit(api_client):
+    """Criterio 4: NO se valida goal<=target. Objetivo MAYOR que la necesidad
+    es legítimo (ej. atleta que apunta a 9h con necesidad 8h) -> 200."""
+    resp = api_client.put("/api/profile", json={"sleep_target_min": 480, "sleep_goal_min": 540})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sleep_target_min"] == 480
+    assert data["sleep_goal_min"] == 540
+
+
+# ── effective_sleep_goal() — cascada (criterio 2) ────────────────────────────
+
+def test_effective_sleep_goal_falls_back_to_target_when_no_goal(tmp_path, monkeypatch):
+    """Perfil con sleep_target_min=420 y SIN sleep_goal_min -> effective_sleep_goal()==420
+    (el objetivo sigue a la necesidad hasta que se fije explícito)."""
+    _patch_profile_path(monkeypatch, tmp_path)
+    from app.profile import save_profile, effective_sleep_goal
+    save_profile({"sleep_target_min": 420})
+    assert effective_sleep_goal() == 420
+
+
+def test_effective_sleep_goal_uses_explicit_value(tmp_path, monkeypatch):
+    """Perfil con sleep_goal_min explícito -> se usa tal cual, sin caer al target."""
+    _patch_profile_path(monkeypatch, tmp_path)
+    from app.profile import save_profile, effective_sleep_goal
+    save_profile({"sleep_target_min": 480, "sleep_goal_min": 360})
+    assert effective_sleep_goal() == 360
+
+
+def test_effective_sleep_goal_default_480_no_profile(tmp_path, monkeypatch):
+    """Sin profile.json en absoluto -> 480 (default duro, vía target default)."""
+    _patch_profile_path(monkeypatch, tmp_path)
+    from app.profile import effective_sleep_goal
+    assert effective_sleep_goal() == 480
+
+
 # ── GET / debe inyectar __PROFILE__ ──────────────────────────────────────────
 
 def test_root_injects_profile_placeholder(api_client):

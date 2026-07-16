@@ -120,11 +120,22 @@ def run_sync(days: int = 45):
             sleep_target_min = int(_profile.effective("sleep_target_min") or 480)
         except Exception:
             sleep_target_min = 480
+        # Sleep-goal-vs-need: OBJETIVO personal de sueño (distinto de la NECESIDAD
+        # de arriba). Mismo try/except defensivo — un perfil corrupto jamás debe
+        # tumbar el sync. Se lee AQUÍ pero se inyecta DESPUÉS de build_dataset()
+        # (ver abajo) para que scoring.py nunca lo vea y el golden no se mueva.
+        try:
+            sleep_goal_min = int(_profile.effective_sleep_goal() or 480)
+        except Exception:
+            sleep_goal_min = 480
         dataset = build_dataset(**data, sleep_target_min=sleep_target_min)
         # Ronda 3: proveniencia de la fusión (qué fuente ganó HRV, cuántas fuentes se
         # fundieron). Aditivo y DESPUÉS de build_dataset() -> el golden (que llama
         # build_dataset directo en tests) nunca ve esta clave.
         dataset["summary"]["merge_info"] = last_merge_info()
+        # Sleep-goal-vs-need: mismo patrón que merge_info -- aditivo, DESPUÉS de
+        # build_dataset(), NUNCA pasado como parámetro al motor.
+        dataset["summary"]["sleep_goal_min"] = sleep_goal_min
 
         # ── Edad corporal — perfil con cascada: profile.json → .env → default ──
         try:

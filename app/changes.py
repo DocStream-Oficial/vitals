@@ -235,8 +235,12 @@ def _check_sleep(days: list[dict], summary: dict, locale: str) -> list[dict]:
                     locale, today_h=today_h, yesterday_h=yesterday_h, delta_h=delta_h,
                 ))
 
-    # Rachas: usa sleep_target_min del summary (default 480, consistente con insights.py)
-    target = summary.get("sleep_target_min", 480)
+    # Rachas: usa el OBJETIVO personal (sleep_goal_min), con fallback a la
+    # NECESIDAD (sleep_target_min) y luego 480 -- sleep-goal-vs-need. Datasets
+    # viejos sin sleep_goal_min en summary (pre-deploy) caen al target, mismo
+    # comportamiento de hoy: NUNCA .get("sleep_goal_min", 480) directo, eso
+    # sería una regresión silenciosa para usuarios con necesidad != 480.
+    target = summary.get("sleep_goal_min") or summary.get("sleep_target_min") or 480
     recent = [d for d in days[-14:] if d.get("asleep") is not None]
     if len(recent) >= STREAK_MIN:
         # Cuenta la racha actual (desde el final hacia atrás) de noches todas

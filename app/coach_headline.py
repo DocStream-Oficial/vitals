@@ -160,7 +160,10 @@ def signature(dataset: dict, changes: Optional[list] = None, insights: Optional[
         hrv_base = summary.get("hrv_base_recent") or summary.get("hrv_base")
         rec_bucket = _bucket_recovery(today.get("recovery"))
         hrv_bucket = _bucket_hrv_vs_base(today.get("hrv"), hrv_base)
-        sleep_bucket = _bucket_sleep(today.get("asleep"), summary.get("sleep_target_min", 480))
+        # sleep-goal-vs-need: titular usa el OBJETIVO (sleep_goal_min) con
+        # fallback a la NECESIDAD y luego 480, mismo patrón que app/changes.py.
+        # _bucket_sleep NO cambia de firma.
+        sleep_bucket = _bucket_sleep(today.get("asleep"), summary.get("sleep_goal_min") or summary.get("sleep_target_min") or 480)
         strain_bucket = _bucket_strain(today.get("strain"))
         top_kind = changes[0].get("kind", "none") if changes else "none"
         top_factor = changes[0].get("factor", "none") if changes else "none"

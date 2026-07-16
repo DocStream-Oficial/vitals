@@ -41,6 +41,8 @@ async def api_profile_put(body: ProfileUpdate):
     - sex: 'M' o 'F', opcional
     - waist_cm: > 0, opcional
     - sleep_target_min: entero 300-600 (minutos), opcional (Ronda 5)
+    - sleep_goal_min: entero 300-600 (minutos), opcional (sleep-goal-vs-need;
+      NO se valida goal<=target — un objetivo mayor que la necesidad es legítimo)
     - steps_target: entero 1000-50000 (pasos), opcional
     - locale: 'es', 'en', 'fr' o 'pt', opcional
     - units: 'metric' o 'imperial', opcional
@@ -65,6 +67,9 @@ async def api_profile_put(body: ProfileUpdate):
 
     if body.sleep_target_min is not None and not (300 <= body.sleep_target_min <= 600):
         errors.append("sleep_target_min debe estar entre 300 y 600 (minutos)")
+
+    if body.sleep_goal_min is not None and not (300 <= body.sleep_goal_min <= 600):
+        errors.append("sleep_goal_min debe estar entre 300 y 600 (minutos)")
 
     if body.steps_target is not None and not (1000 <= body.steps_target <= 50000):
         errors.append("steps_target debe estar entre 1000 y 50000 (pasos)")

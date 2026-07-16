@@ -77,6 +77,40 @@ def test_signature_none_safe():
     assert ch.signature({}, None) is not None
 
 
+# ── sleep-goal-vs-need: titular usa el OBJETIVO (sleep_goal_min), con
+# fallback a la NECESIDAD (sleep_target_min) y luego 480 (criterio 7) ───────
+
+def test_signature_uses_sleep_goal_over_target():
+    """Con sleep_goal_min presente en summary, cruzar la banda de sueño según
+    el OBJETIVO (no la necesidad) cambia la firma."""
+    ds_low_goal = {
+        "days": [{"date": "2026-01-01", "recovery": 70, "hrv": 55, "asleep": 370, "strain": 10}],
+        "summary": {"hrv_base_recent": 55, "sleep_goal_min": 360, "sleep_target_min": 480},
+    }
+    ds_high_goal = {
+        "days": [{"date": "2026-01-01", "recovery": 70, "hrv": 55, "asleep": 370, "strain": 10}],
+        "summary": {"hrv_base_recent": 55, "sleep_goal_min": 480, "sleep_target_min": 480},
+    }
+    # asleep=370: con goal=360 cae en banda "bien" (>=goal); con goal=480 cae
+    # en banda "mal" (<goal por mucho margen) -> firmas distintas.
+    assert ch.signature(ds_low_goal) != ch.signature(ds_high_goal)
+
+
+def test_signature_old_summary_without_goal_falls_back_to_target():
+    """Compat: summary VIEJO (solo sleep_target_min, sin sleep_goal_min) ->
+    misma firma que un summary CON sleep_goal_min igual al target (la cadena
+    de fallback debe producir el mismo bucket)."""
+    ds_old = {
+        "days": [{"date": "2026-01-01", "recovery": 70, "hrv": 55, "asleep": 450, "strain": 10}],
+        "summary": {"hrv_base_recent": 55, "sleep_target_min": 480},
+    }
+    ds_explicit = {
+        "days": [{"date": "2026-01-01", "recovery": 70, "hrv": 55, "asleep": 450, "strain": 10}],
+        "summary": {"hrv_base_recent": 55, "sleep_target_min": 480, "sleep_goal_min": 480},
+    }
+    assert ch.signature(ds_old) == ch.signature(ds_explicit)
+
+
 # ── signature() consciente de alertas (F3, roadmap vitals-illness-proactivo) ──
 
 def test_signature_no_alerts_identical_to_before_change():
