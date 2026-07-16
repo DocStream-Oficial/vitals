@@ -6,6 +6,11 @@ Añadidos aditivos (Tier 1):
 - confidence: dict con rhr_days/hrv_days/sleep_days/exercise_sessions + level
 - vo2max_percentile: percentil 0-100 por edad+sexo (normas Cooper Institute/ACSM)
 - vo2max_label: etiqueta por percentil ("Superior (top 10%)", "Excelente", etc.)
+
+Añadido aditivo (roadmap edad-corporal-estable, modelo dos-números estilo
+WHOOP): compute_body_age_stable() promedia body_age_raw sobre una ventana de
+días CERRADOS para dar un número que no salta a diario. NO reimplementa la
+fórmula: solo LLAMA a compute_body_age() y promedia sus salidas crudas.
 """
 import statistics
 import datetime as _dt
@@ -164,4 +169,113 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
             "waist": waist, "age": age, "penalty": round(pen, 1),
             "confidence": confidence,
             "vo2max_percentile": v2p,
-            "vo2max_label": v2l}
+            "vo2max_label": v2l,
+            # Aditivo (roadmap edad-corporal-estable, paso 1): valor crudo SIN
+            # redondear, para que compute_body_age_stable pueda promediar sin
+            # duplicar la fórmula (evita drift si esta función cambia).
+            "body_age_raw": body_age}
+
+
+# ── Edad corporal ESTABLE (roadmap edad-corporal-estable, paso 2) ────────────
+# Modelo "dos números" estilo WHOOP: el body_age instantáneo salta a diario
+# porque compute_body_age recalcula sobre una ventana de solo 14 días,
+# incluyendo el día "de hoy" a medio llenar. compute_body_age_stable() NO
+# reimplementa la fórmula — LLAMA a compute_body_age una vez por cada día
+# CERRADO de la ventana y promedia sus salidas crudas (body_age_raw), para
+# que el número mostrado se mueva lento y sea idéntico a lo largo de un
+# mismo día calendario.
+MIN_STABLE_DAYS = 14
+
+
+def compute_body_age_stable(days, exercises, age_at, waist, sex,
+                             sleep_penalty_h: float = 7.0, window: int = 30):
+    """Edad corporal ESTABLE: media de body_age crudo sobre los últimos
+    `window` días CERRADOS (excluye el día en curso = último del dataset).
+    Suaviza el jitter diario del instantáneo. NO toca compute_body_age:
+    la LLAMA por cada día cerrado y promedia sus salidas crudas (fitness+penalty
+    sin el round() final), redondeando UNA sola vez al final.
+
+    `age_at` (nombre tomado literal del contrato del roadmap) es el
+    BIRTHDATE en formato ISO (el mismo valor que profile.effective(
+    'birthdate')) — se usa para evaluar la edad cronológica EN LA FECHA de
+    cada día cerrado (nunca la edad de "hoy"), replicando la lógica de
+    app.healthspan._chrono_age_at SIN importar ese módulo (evita un import
+    circular: healthspan.py ya importa compute_body_age desde este archivo).
+
+    Días cerrados = todos los días del dataset MENOS el último (el "hoy"
+    parcial que llena el auto-sync). Con <2 días no hay nada que promediar
+    -> cae al instantáneo. Con <MIN_STABLE_DAYS (14) días cerrados
+    computables en la ventana -> también cae al instantáneo
+    (stable_confidence="low"). Nunca lanza si hay al menos 1 día en el
+    dataset; con 0 días usa "hoy" como referencia (mismo comportamiento por
+    defecto que compute_body_age)."""
+
+    def _parse_date(s):
+        if not isinstance(s, str):
+            return None
+        try:
+            return _dt.date.fromisoformat(s)
+        except Exception:
+            return None
+
+    def _chrono_age_at(ref_date):
+        bd = _parse_date(age_at)
+        if bd is None:
+            return None
+        delta = (ref_date - bd).days
+        if delta < 0:
+            return None
+        return delta / 365.25
+
+    valid = sorted(
+        ((dt, d) for d in (days or []) for dt in [_parse_date(d.get("date"))] if dt is not None),
+        key=lambda x: x[0],
+    )
+
+    today_ref = valid[-1][0] if valid else _dt.date.today()
+    age_now = _chrono_age_at(today_ref)
+
+    def _fallback():
+        age_val = age_now if age_now is not None else 0.0
+        instant = compute_body_age(days or [], exercises or [], age_val, waist, sex,
+                                    sleep_penalty_h=sleep_penalty_h)
+        return {"body_age_stable": instant["body_age"], "n_days_stable": 0,
+                "stable_confidence": "low"}
+
+    if len(valid) < 2:
+        # 0 ó 1 día: nada que promediar -> instantáneo (criterio 4 /
+        # equivalencia single-day, criterio "test_stable_equivalence_single_day").
+        return _fallback()
+
+    closed = valid[:-1]  # excluye el último (día "de hoy" parcial)
+    last_closed_date = closed[-1][0]
+    window_start = last_closed_date - _dt.timedelta(days=window)
+
+    raws = []
+    for idx, (dt, _d) in enumerate(closed):
+        if not (window_start < dt <= last_closed_date):
+            continue
+        # closed es un prefijo de valid (mismos índices 0..len(closed)-1) ->
+        # idx en closed == idx en valid; days_upto = todo lo que compute_body_age
+        # vería si este día cerrado fuera "hoy" (su recent(k,14) interno corta
+        # a los últimos 14 de esta lista).
+        days_upto = [orig for _, orig in valid[:idx + 1]]
+        date_str = dt.isoformat()
+        exercises_upto = [e for e in (exercises or []) if e.get("date", "") <= date_str]
+        age_d = _chrono_age_at(dt)
+        if age_d is None:
+            continue
+        try:
+            ba = compute_body_age(days_upto, exercises_upto, age_d, waist, sex,
+                                   sleep_penalty_h=sleep_penalty_h)
+        except Exception:
+            continue
+        raw = ba.get("body_age_raw")
+        if raw is not None:
+            raws.append(raw)
+
+    if len(raws) < MIN_STABLE_DAYS:
+        return _fallback()
+
+    stable = round(statistics.mean(raws))
+    return {"body_age_stable": stable, "n_days_stable": len(raws), "stable_confidence": "ok"}

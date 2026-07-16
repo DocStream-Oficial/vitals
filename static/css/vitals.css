@@ -144,6 +144,13 @@ body.light #glow{
   border:1px solid var(--card-border);border-radius:26px;
   box-shadow:var(--shadow),inset 0 1px 0 var(--card-hi);
   margin-bottom:14px;
+  /* REGLA: el padding vive en la base, NO en cada #idCard. Toda tarjeta nueva
+     con class="card" hereda 18px automáticamente y nunca sale pegada al borde.
+     Solo declara padding en un #id si necesitas un valor DISTINTO (p. ej.
+     #healthCard usa 18px 6px 8px). Historial: planCard/sleepSummaryCard salían
+     sin margen porque el patrón viejo era "cada card pone su padding" y a las
+     nuevas se les olvidaba (mismo bug que #ecgCard, commit bd79c13). */
+  padding:18px;
 }
 
 /* ── SECTION LABEL ── */
@@ -321,6 +328,14 @@ body.light #glow{
 .ba-detail{position:relative;font:400 13px/1.6 -apple-system;color:var(--label2)}
 .ba-detail strong{color:var(--label);font-weight:600}
 .ba-penalty{position:relative;margin-top:9px;font:500 12.5px/1.4 -apple-system;color:#FF9F0A}
+
+/* Ritmo de envejecimiento (roadmap edad-corporal-estable, paso 4) */
+.ba-pace-row{position:relative;margin:0 0 14px}
+.ba-pace-lbl{display:block;font:600 11px/1.3 -apple-system;letter-spacing:.04em;text-transform:uppercase;color:var(--label2);margin-bottom:4px}
+.ba-pace-main{display:flex;align-items:baseline;gap:7px}
+#baPaceVal{font:700 28px/1 -apple-system;letter-spacing:-.02em;color:var(--label);font-variant-numeric:tabular-nums}
+.ba-pace-sub{font:500 12px/1 -apple-system;color:var(--label3)}
+.ba-pace-note{font:400 12px/1.4 -apple-system;color:var(--label2);margin-top:3px}
 
 /* ── MONITOR DE SALUD ── */
 #healthCard{padding:18px 6px 8px}

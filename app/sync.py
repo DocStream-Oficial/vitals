@@ -30,7 +30,7 @@ from typing import Optional
 from app.config import settings
 from app.auth import TokenExpired, NoToken  # re-exportadas para callers/tests
 from app.scoring import build_dataset
-from app.bodyage import compute_body_age
+from app.bodyage import compute_body_age, compute_body_age_stable
 from app.sources import get_source
 from app.merge import merge_sources, last_merge_info
 from app.fsutil import atomic_write_text
@@ -172,6 +172,31 @@ def run_sync(days: int = 45):
             logger.warning("Healthspan falló en este sync (best-effort, ignorado): %s", exc)
             dataset["summary"]["healthspan"] = None
 
+        # ── Edad corporal ESTABLE (modelo dos-números estilo WHOOP) ─────────
+        # Roadmap edad-corporal-estable, paso 3. Aditivo, best-effort TOTAL —
+        # un fallo aquí NUNCA debe tumbar el sync (mismo patrón que healthspan
+        # arriba). Corre DESPUÉS del bloque de healthspan para poder leer su
+        # `pace` ya escrito en summary.healthspan (orden importa: pace se
+        # copia de ahí, no se recalcula).
+        # Requiere que el bloque de bodyage instantáneo (arriba) haya corrido
+        # (bd y waist presentes) — si no hay `bd`/`waist` o el instantáneo no
+        # se pudo computar, no hay `ba` que actualizar y este bloque se salta
+        # entero (deja solo el instantáneo, sin campos stable/pace).
+        if bd and waist and dataset["summary"].get("bodyage") is not None:
+            try:
+                ba = dataset["summary"]["bodyage"]
+                stable = compute_body_age_stable(
+                    dataset["days"], dataset.get("exercises", []),
+                    bd, float(waist), sex, sleep_penalty_h=sleep_penalty_h, window=30
+                )
+                ba.update(stable)  # añade body_age_stable/n_days_stable/stable_confidence
+                # pace del velocímetro: copia desde summary.healthspan si existe
+                # (best-effort, None-safe con <120 días de historial).
+                hs = dataset["summary"].get("healthspan")
+                ba["pace"] = (hs or {}).get("pace") if hs else None
+            except Exception as exc:
+                logger.warning("body_age_stable falló en este sync (best-effort, ignorado): %s", exc)
+
         # ── Frescura de Alertas + Coach (Paso 4): vo2max ANTERIOR para el evento
         # de cambio de changes.py. Se lee del health_compact.json VIEJO (antes
         # de sobrescribirlo abajo) — best-effort, None-safe: si no existe o está
@@ -203,9 +228,17 @@ def run_sync(days: int = 45):
         try:
             from app import changes as _changes
             from app import coach_headline as _coach_headline
+            from app.insights import evaluate as _evaluate_insights_headline
             locale = _profile.effective("locale") or "es"
             change_events = _changes.detect_changes(dataset, locale)
-            _coach_headline.maybe_regenerate(dataset, change_events, locale)
+            # F3 (roadmap vitals-illness-proactivo): el titular necesita saber si
+            # hay alertas activas (insights severity=='alert') para no dar luz
+            # verde encima de una. Cálculo propio, independiente del que hace el
+            # bloque de notificaciones más abajo — mismo patrón de aislamiento
+            # best-effort que ya usa cada bloque de este método (un fallo acá
+            # no debe afectar a los demás).
+            insights_for_headline = _evaluate_insights_headline(dataset, locale)
+            _coach_headline.maybe_regenerate(dataset, change_events, locale, insights_for_headline)
         except Exception as exc:
             logger.warning("Titular del coach (headline) falló en este sync (best-effort, ignorado): %s", exc)
 

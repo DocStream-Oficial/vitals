@@ -86,6 +86,80 @@ def test_illness_watch_two_signals_no_temp():
     assert insight["severity"] == "watch"
 
 
+def test_illness_alert_temp_delta_masked_by_high_sd_real_case():
+    """Escenario de referencia (F1): temp variable
+    (sd alta) enmascara el z-score, pero el delta absoluto (mismo criterio que
+    coach_chat._build_context) sí lo caza. skin_temp_hoy=0.24, media previa
+    ≈ -0.93, sd≈1.25 → z≈0.94 (NO dispara por z solo, <1.5) pero delta≈+1.17>0.6
+    → SÍ debe marcar la señal de temp elevada. Con ≥1 señal más (rhr alto)
+    → insight illness_early_warning con severity alert.
+
+    Nota: se usan 13 días previos (no 14) para que _window(days,14,...) NO
+    descarte ninguno (con 14 días previos + hoy = 15 total, _window solo toma
+    los últimos 14 y el primero se cae del cálculo de media/sd — con 13+hoy=14
+    entran los 13 completos, que es lo que este test quiere fijar a mano)."""
+    dates = date_seq(14)
+    # 13 días previos de skin_temp con varianza alta (sd≈1.25, media=-0.93),
+    # construidos para reproducir el escenario (sd≈1.18) sin depender de datos
+    # externos al repo.
+    temps_prev = [-2.84, -2.46, -2.23, -1.01, -0.29, -0.16, 0.15, 0.27,
+                  0.38, 0.42, -2.01, -2.58, 0.28]
+    assert abs((sum(temps_prev) / len(temps_prev)) - (-0.93)) < 0.01  # media ≈ -0.93 (sanity)
+    days = [make_day(d, skin_temp=t, rhr=50.0, hrv=57.0, asleep=440)
+            for d, t in zip(dates[:13], temps_prev)]
+    # día 14: temp=0.24 (z≈0.94, NO dispara solo) + rhr alto (2ª señal)
+    days.append(make_day(dates[13], skin_temp=0.24, rhr=58.0, hrv=57.0, asleep=440))
+
+    summary = make_summary(hrv_base=57.0, rhr_base=50.0)
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    assert "illness_early_warning" in ids, (
+        "El delta (+1.17, umbral 0.6) debía disparar la señal de temp aunque "
+        "el z-score (≈0.94) quede bajo 1.5 por la sd alta"
+    )
+    insight = next(r for r in results if r["id"] == "illness_early_warning")
+    assert insight["severity"] == "alert"
+
+
+def test_illness_temp_delta_below_threshold_does_not_fire_alone():
+    """Delta pequeño (≤0.6) y z bajo → NO eleva la señal de temp (anti-alarmismo:
+    el OR no debe volverse un umbral más permisivo de lo calibrado)."""
+    dates = date_seq(14)
+    # Varianza alta similar al escenario (13 días previos, ver test anterior
+    # para por qué 13 y no 14), pero delta del día final se queda en 0.5
+    # (bajo el umbral 0.6) y z también bajo 1.5.
+    temps_prev = [-2.84, -2.46, -2.23, -1.01, -0.29, -0.16, 0.15, 0.27,
+                  0.38, 0.42, -2.01, -2.58, 0.28]
+    base_mean = sum(temps_prev) / len(temps_prev)
+    days = [make_day(d, skin_temp=t) for d, t in zip(dates[:13], temps_prev)]
+    days.append(make_day(dates[13], skin_temp=base_mean + 0.5))  # delta=0.5 < 0.6
+
+    summary = make_summary()
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    assert "illness_early_warning" not in ids
+
+
+def test_illness_temp_none_safe_short_window_no_trigger():
+    """Ventana corta (<3 valores de skin_temp) → ausencia de dato NUNCA dispara.
+    None-safe explícito del roadmap: ausencia ≠ enfermedad."""
+    dates = date_seq(3)
+    days = [make_day(dates[0], skin_temp=None, rhr=50.0, hrv=57.0),
+            make_day(dates[1], skin_temp=0.1, rhr=50.0, hrv=57.0),
+            make_day(dates[2], skin_temp=5.0, rhr=58.0, hrv=44.0)]  # temp muy alta pero ventana<3
+    summary = make_summary(hrv_base=57.0, rhr_base=50.0)
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    # rhr+hrv sí son 2 señales sin temp -> watch, pero NUNCA "alert" por temp
+    # (ventana insuficiente = ausencia de dato confiable, no dispara la señal de temp)
+    if "illness_early_warning" in ids:
+        insight = next(r for r in results if r["id"] == "illness_early_warning")
+        assert insight["severity"] != "alert"
+
+
 def test_illness_no_trigger_one_signal():
     """Solo rhr alta (1 señal sin temp) → NO dispara."""
     dates = date_seq(5)
@@ -97,6 +171,174 @@ def test_illness_no_trigger_one_signal():
     results = evaluate(ds)
     ids = [r["id"] for r in results]
     assert "illness_early_warning" not in ids
+
+
+# ── Regla 1b: hrv_anomala (roadmap "vitals-illness-hrv-bidireccional") ─────────
+
+def test_illness_alert_hrv_anomalous_high_with_elevated_temp():
+    """Escenario de referencia: temp elevada + HRV anormalmente ALTA (el "pico
+    parasimpático" de una infección incipiente). skin_temp=0.24 (delta≈+1.17 vs
+    media previa≈-0.93, mismos 13 días previos que
+    test_illness_alert_temp_delta_masked_by_high_sd_real_case), hrv=79.77 con
+    base_recent=58.8 y sd=7.71 (z≈+2.72 → HRV ANORMALMENTE ALTA, no baja),
+    rhr=53/base 51.6 (z≈+0.43, no dispara), resp=15.23 (no dispara),
+    spo2=95.68 (>92, no dispara).
+
+    Sin la señal bidireccional: 0 co-señales (la regla solo miraba HRV baja), así
+    que la temp elevada quedaba sola → la regla se quedaba en `watch`,
+    insuficiente para este patrón. Con hrv_anomala (|z_hrv|>1.5, bidireccional)
+    la HRV alta SÍ cuenta como co-señal → escala a `alert`.
+    """
+    dates = date_seq(14)
+    temps_prev = [-2.84, -2.46, -2.23, -1.01, -0.29, -0.16, 0.15, 0.27,
+                  0.38, 0.42, -2.01, -2.58, 0.28]
+    days = [make_day(d, skin_temp=t, rhr=51.6, hrv=57.0, resp=15.0)
+            for d, t in zip(dates[:13], temps_prev)]
+    days.append(make_day(dates[13], skin_temp=0.24, rhr=53.0, hrv=79.77,
+                          resp=15.23, spo2=95.68))
+
+    summary = {"hrv_base_recent": 58.8, "hrv_sd": 7.71, "rhr_base": 51.6}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    assert "illness_early_warning" in ids, (
+        "Temp elevada + HRV anómala ALTA (z≈+2.72) debe disparar el insight — "
+        "sin la señal bidireccional se quedaba en watch."
+    )
+    insight = next(r for r in results if r["id"] == "illness_early_warning")
+    assert insight["severity"] == "alert"
+    factors_text = " ".join(insight["factors"])
+    assert "HRV" in factors_text or "VFC" in factors_text
+
+
+def test_illness_alert_silences_contradictory_positive_hrv():
+    """Coherencia de mensaje: el MISMO dato (HRV alta) alimenta la señal
+    hrv_anomala de la alerta de enfermedad Y el positivo "HRV en racha
+    ascendente". Aparecer juntos el mismo día es la señal mixta que le quita
+    credibilidad al coach proactivo, así que con la alerta activa el positivo
+    se silencia.
+
+    Se usa el escenario de temp elevada + HRV anómala + una racha ascendente de
+    HRV en los días previos, para que positive_hrv dispare de verdad y el
+    silenciado tenga algo que suprimir (si no, el test pasaría vacuo).
+    """
+    dates = date_seq(14)
+    temps_prev = [-2.84, -2.46, -2.23, -1.01, -0.29, -0.16, 0.15, 0.27,
+                  0.38, 0.42, -2.01, -2.58, 0.28]
+    # HRV en racha ascendente los días previos -> dispara positive_hrv
+    hrv_rising = [50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 56.0, 57.0,
+                  58.0, 59.0, 60.0, 61.0, 62.0]
+    days = [make_day(d, skin_temp=t, rhr=51.6, hrv=h, resp=15.0)
+            for d, t, h in zip(dates[:13], temps_prev, hrv_rising)]
+    days.append(make_day(dates[13], skin_temp=0.24, rhr=53.0, hrv=79.77,
+                          resp=15.23, spo2=95.68))
+
+    summary = {"hrv_base_recent": 58.8, "hrv_sd": 7.71, "rhr_base": 51.6}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+
+    assert "illness_early_warning" in ids, "la alerta debe seguir presente"
+    assert "positive_hrv" not in ids, (
+        "positive_hrv debe silenciarse con una alerta de enfermedad activa: "
+        "es el mismo dato (HRV alta) contradiciendo a la alerta el mismo día."
+    )
+    # El evento de cambio equivalente tampoco debe colarse por la otra puerta
+    # (al quitar positive_hrv se libera su anti-duplicado en _CHANGE_ANTI_DUP).
+    assert not any(i.startswith("change_hrv") for i in ids), (
+        "el cambio 'HRV mejoró' tampoco debe reintroducir el mensaje contradictorio"
+    )
+
+
+def test_positive_hrv_survives_without_illness_alert():
+    """Contraparte del silenciado: SIN alerta de enfermedad, positive_hrv sigue
+    apareciendo igual que siempre (el silenciado no debe comerse el positivo en
+    el caso normal)."""
+    dates = date_seq(14)
+    hrv_rising = [50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 56.0, 57.0,
+                  58.0, 59.0, 60.0, 61.0, 62.0, 63.0]
+    # temp plana y normal -> sin señal de enfermedad
+    days = [make_day(d, skin_temp=0.0, rhr=51.6, hrv=h, resp=15.0)
+            for d, h in zip(dates, hrv_rising)]
+
+    summary = {"hrv_base_recent": 58.8, "hrv_sd": 7.71, "rhr_base": 51.6}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+
+    assert "illness_early_warning" not in ids, "sin señales, no debe haber alerta"
+    assert "positive_hrv" in ids, (
+        "sin alerta de enfermedad, positive_hrv debe aparecer normalmente"
+    )
+
+
+def test_illness_hrv_high_with_normal_temp_does_not_fire():
+    """RIESGO #1 del roadmap: HRV alta = buena recuperación. Un día con HRV
+    anormalmente alta (|z|>2.0) pero temp NORMAL (no elevada) y sin otras
+    señales NO debe disparar nada — ni alert ni watch (1 sola señal no-temp
+    no alcanza el umbral de watch, que exige >=2 sin temp)."""
+    dates = date_seq(14)
+    # skin_temp estable (sd baja, sin variación relevante) para que la señal
+    # de temp NUNCA se eleve.
+    days = [make_day(d, skin_temp=35.0, rhr=50.0, hrv=57.0, resp=15.0)
+            for d in dates[:13]]
+    # hrv muy alta (z = (80-57)/5 = 4.6 >> 2.0) con temp normal
+    days.append(make_day(dates[13], skin_temp=35.1, rhr=50.0, hrv=80.0, resp=15.0))
+
+    summary = {"hrv_base_recent": 57.0, "hrv_sd": 5.0, "rhr_base": 50.0}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    assert "illness_early_warning" not in ids, (
+        "HRV alta con temperatura normal es BUENA recuperación, no debe "
+        "disparar el insight de enfermedad (falso positivo obvio del roadmap)."
+    )
+
+
+def test_illness_hrv_anomaly_none_safe_degenerate_sd():
+    """None-safe: hrv_sd degenerada (<epsilon) → no se evalúa z-score → la
+    señal hrv_anomala NUNCA dispara (solo el fallback absoluto de HRV baja
+    sigue vigente, sin cambios). Ausencia/degeneración de sd ≠ enfermedad."""
+    dates = date_seq(14)
+    days = [make_day(d, skin_temp=35.0, rhr=50.0, hrv=57.0, resp=15.0)
+            for d in dates[:13]]
+    days.append(make_day(dates[13], skin_temp=35.1, rhr=50.0, hrv=90.0, resp=15.0))
+
+    summary = {"hrv_base_recent": 57.0, "hrv_sd": 0.001, "rhr_base": 50.0}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    # hrv=90 vs base=57 con fallback absoluto (0.85*57=48.45): 90 no es < 48.45,
+    # así que ni siquiera el fallback de HRV baja dispara. Sin temp elevada ni
+    # otras señales, no debe aparecer el insight.
+    assert "illness_early_warning" not in ids
+
+
+def test_illness_hrv_low_signal_preserved_z_below_minus_1_5():
+    """No-regresión (criterio 1 del roadmap): la señal existente de HRV BAJA
+    (z<-1.5) se conserva intacta, sin verse reemplazada por hrv_anomala.
+    skin_temp se mantiene igual al histórico (temp NO elevada) y se suma rhr
+    alta como 2ª señal para que dispare watch (sin temp, requiere >=2)."""
+    dates = date_seq(14)
+    days = [make_day(d, skin_temp=35.0, rhr=50.0, hrv=57.0, resp=15.0)
+            for d in dates[:13]]
+    # hrv baja: z = (45-57)/5 = -2.4 (< -1.5, dispara hrv baja; también
+    # |z|>2.0 pero debe reportarse como "HRV baja", un solo factor).
+    # rhr alta (fallback: 60 > 50+5) como 2ª señal no-temp.
+    days.append(make_day(dates[13], skin_temp=35.0, rhr=60.0, hrv=45.0, resp=15.0))
+
+    summary = {"hrv_base_recent": 57.0, "hrv_sd": 5.0, "rhr_base": 50.0}
+    ds = make_dataset(days, summary)
+    results = evaluate(ds)
+    ids = [r["id"] for r in results]
+    assert "illness_early_warning" in ids
+    insight = next(r for r in results if r["id"] == "illness_early_warning")
+    assert insight["severity"] == "watch"
+    factors_text = " ".join(insight["factors"])
+    assert "baja" in factors_text.lower()
+    # Un solo factor de hrv, no dos (no se duplica low+anomaly)
+    hrv_factor_count = sum(1 for f in insight["factors"] if "hrv" in f.lower() or "vfc" in f.lower())
+    assert hrv_factor_count == 1
 
 
 # ── Regla 2: spo2_low ──────────────────────────────────────────────────────────

@@ -181,6 +181,17 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
             <div class="ba-num-sub" data-i18n="ba_body_sub">+ HRV y sueño</div>
           </div>
         </div>
+        <!-- Ritmo de envejecimiento (roadmap edad-corporal-estable, paso 4):
+             velocímetro ya calculado en app/healthspan.py, mostrado también
+             aquí junto al número estable. Oculto si pace es null (<120d). -->
+        <div class="ba-pace-row" id="baPaceRow" style="display:none">
+          <span class="ba-pace-lbl" data-i18n="ba_pace_lbl">Ritmo de envejecimiento</span>
+          <div class="ba-pace-main">
+            <span id="baPaceVal">—</span>
+            <span class="ba-pace-sub" data-i18n="ba_pace_sub">vs tu edad real</span>
+          </div>
+          <div class="ba-pace-note" id="baPaceNote"></div>
+        </div>
         <div class="ba-detail" id="baDetail"></div>
         <div id="bodyAgeBadge" style="display:none;font-size:11px;margin-top:4px"></div>
         <div class="ba-penalty" id="baPenalty"></div>

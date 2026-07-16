@@ -864,8 +864,36 @@ function renderHoy(){
 
   // ── EDAD CORPORAL ──
   document.getElementById('fitnessAge').textContent = bodyage.fitness_age != null ? bodyage.fitness_age : '—';
-  document.getElementById('bodyAge').textContent = bodyage.body_age != null ? bodyage.body_age : '—';
+  // Roadmap edad-corporal-estable: el número grande de Hoy pasa a ser el
+  // ESTABLE (media rodante de 30 días cerrados, compute_body_age_stable en
+  // app/bodyage.py) — deja de saltar a diario. Fallback al instantáneo si el
+  // backend no lo pudo poblar (datasets viejos antes de este cambio, o el
+  // best-effort de sync.py falló).
+  var bodyAgeMain = bodyage.body_age_stable != null ? bodyage.body_age_stable : bodyage.body_age;
+  document.getElementById('bodyAge').textContent = bodyAgeMain != null ? bodyAgeMain : '—';
   var ba = bodyage;
+
+  // ── Ritmo de envejecimiento (pace) ──────────────────────────────────────
+  // Reutiliza el `pace` ya calculado por app/healthspan.py (motor de
+  // Tendencias, #tendHealthspanCard) — sync.py lo copia a summary.bodyage.pace.
+  // Este bloque NO reinventa el motor, solo lo muestra también en Hoy junto
+  // al número estable (roadmap edad-corporal-estable, paso 4). Si pace es
+  // null (historial <120 días) el bloque se oculta limpio, nunca "—x" roto.
+  (function(){
+    var paceRow = document.getElementById('baPaceRow');
+    if(!paceRow) return;
+    var pace = ba.pace;
+    if(pace == null){
+      paceRow.style.display = 'none';
+      return;
+    }
+    paceRow.style.display = '';
+    document.getElementById('baPaceVal').textContent = pace.toFixed(2) + 'x';
+    // _healthspanPaceNote vive en healthspan.js (mismos umbrales 0.9/1.1) —
+    // se reutiliza tal cual para no duplicar el criterio en dos archivos.
+    var note = (typeof _healthspanPaceNote === 'function') ? _healthspanPaceNote(pace) : '';
+    document.getElementById('baPaceNote').textContent = note;
+  })();
   // baDetail: base info + percentil + label — SOLO se emite un segmento si
   // tiene dato real (roadmap P0 paso 5: nunca "()" vacíos ni "—" sueltos
   // colgando de un join). Cada segmento se arma completo o se omite entero.
@@ -2121,9 +2149,9 @@ function _hypnogramAxis(totalMin, bedtime){
 }
 
 /** Bloque "Anoche" (hipnograma + stats). SIEMPRE presente (roadmap tab Sueño,
- * paso 2 — empty state honesto, criterio nuevo del Doc: antes desaparecía
- * en silencio sin `segments`, lo cual parecía que el feature "se había
- * borrado"). Tres ramas según qué trae la noche `today`:
+ * paso 2 — empty state honesto: antes el bloque desaparecía en silencio sin
+ * `segments`, lo cual parecía que el feature "se había borrado"). Tres ramas
+ * según qué trae la noche `today`:
  *  1. Con `segments` -> hipnograma SVG completo + stats (comportamiento
  *     idéntico al de antes de este paso).
  *  2. Sin `segments` pero con totales de fase (deep/rem/light no nulos) ->
@@ -2212,9 +2240,9 @@ function _renderHypnogramBlock(today){
   html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px">';
   var effVal = today.eff != null ? String(today.eff)+t('du_pct') : '—';
   html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_eff')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system">'+effVal+'</div></div>';
+    + '<div style="font:680 20px/1 -apple-system;color:var(--label)">'+effVal+'</div></div>';
   html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_awakenings')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system">'+nAwakenings+'</div></div>';
+    + '<div style="font:680 20px/1 -apple-system;color:var(--label)">'+nAwakenings+'</div></div>';
   html += '</div>';
   var pctDeep = pctOf('deep'), pctRem = pctOf('rem'), pctLight = pctOf('light');
   html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px">';
@@ -4083,7 +4111,12 @@ function _sourceRowHtml(name, info) {
       badgeClass = 'off';
       badgeText = t('mas_healthkit_status_inactive');
       sub = t('mas_source_healthkit_sync_hint');
-      actionsHtml = ''; // sin flujo OAuth web — nada que conectar desde aquí
+      // En la app nativa iOS SÍ se puede pedir el permiso + sincronizar desde
+      // aquí (botón que dispara el plugin). En web pura no hay forma de invocar
+      // el permiso nativo -> sin botón (solo el hint informativo).
+      actionsHtml = _isNativeApp()
+        ? '<button type="button" id="hkConnectBtn" class="mas-source-btn" onclick="healthkitConnect()">' + t('mas_healthkit_connect_btn') + '</button>'
+        : '';
     }
   } else {
     // Fuentes OAuth (google_health / oura / whoop)
@@ -4140,6 +4173,84 @@ function _disconnectBtnHtml(name, label) {
 
 function sourceConnect(name) {
   location.href = '/auth/login?source=' + encodeURIComponent(name);
+}
+
+// ── HealthKit: pedir el permiso nativo + sincronizar DESDE LA UI ─────────────
+// El permiso de HealthKit solo se puede pedir desde la app nativa iOS (plugin
+// VitalsHealth). Antes SOLO se disparaba en sceneDidBecomeActive, así que un
+// usuario nuevo que se configuraba dentro de la misma sesión NUNCA veía la hoja
+// de permiso (el "become active" ya había pasado y no se re-dispara). Este botón
+// lo invoca explícitamente — mismo método que ya usa el auto-sync, expuesto al
+// WebView por el plugin.
+function _isNativeApp() {
+  return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
+    && window.Capacitor.isNativePlatform());
+}
+function _vitalsHealthPlugin() {
+  return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.VitalsHealth) || null;
+}
+// Sync con reintento ante "already_running": el sync global es single-flight
+// (_SYNC_LOCK); al abrir la app, el autoSync de Google suele tener el lock y el
+// ingest de HealthKit choca. En vez de fallar, esperamos ~4s y reintentamos
+// (hasta `left` veces, ~40s) — mismo patrón que autoSync/_trySync del dashboard.
+function _hkSyncWithRetry(plugin, left) {
+  return plugin.sync().then(function (syncRes) {
+    var status = syncRes && syncRes.status;
+    if (status === 'already_running' && left > 0) {
+      return new Promise(function (resolve) { setTimeout(resolve, 4000); })
+        .then(function () { return _hkSyncWithRetry(plugin, left - 1); });
+    }
+    if (status && status !== 'ok') { throw new Error(status); }
+    return syncRes;
+  });
+}
+function healthkitConnect() {
+  var plugin = _vitalsHealthPlugin();
+  // Defensa: el botón solo se renderiza en la app nativa, pero si por algo se
+  // invoca sin plugin (web pura), avisamos en vez de romper.
+  if (!plugin) { showRetryToast(null, t('healthkit_connect_err')); return; }
+  var btn = document.getElementById('hkConnectBtn');
+  if (btn) { btn.disabled = true; btn.textContent = t('healthkit_connecting'); }
+  function fail(msg) {
+    showRetryToast(healthkitConnect, msg);
+    if (btn) { btn.disabled = false; btn.textContent = t('mas_healthkit_connect_btn'); }
+  }
+  // 1) CONFIGURAR el plugin. El plugin nativo necesita url+token para saber a
+  //    dónde empujar (hasConfig). Al reinstalar la app se pierde su config
+  //    (UserDefaults/Keychain) y el shell nativo puede no haberla repuesto ->
+  //    sync() devolvía "no_config" en silencio. Lo resolvemos aquí: el dashboard
+  //    SÍ conoce su propio origin y puede pedir el token de ingest. En household,
+  //    HOUSEHOLD_ACTIVE trae el usuario correcto para el header X-Vitals-User.
+  // 0) REGISTRAR healthkit como fuente conectada del perfil. El guard de
+  //    /api/ingest (app/routes/sync.py) rechaza con "wrong_source" si healthkit
+  //    no está en profile.sources. El POST es idempotente (no duplica, no
+  //    desconecta las otras fuentes). Sin esto el push llega pero se rechaza.
+  fetch('/api/sources/healthkit', { method: 'POST' }).then(function () {
+    return fetch('/api/ingest-token');
+  }).then(function (r) { return r.json(); }).then(function (data) {
+    var token = (data && data.token) || '';
+    if (!token) { throw new Error('no_token'); }
+    var cfg = { url: window.location.origin, token: token };
+    if (typeof HOUSEHOLD_ACTIVE !== 'undefined' && HOUSEHOLD_ACTIVE) { cfg.user = HOUSEHOLD_ACTIVE; }
+    return plugin.setConfig(cfg);
+  }).then(function () {
+    // 2) Permiso: presenta la hoja nativa (idempotente, no-op si ya concedido).
+    return plugin.requestAuthorization();
+  }).then(function (res) {
+    if (!res || !res.granted) { throw new Error('denied'); }
+    // 3) Sync con reintento ante "already_running" (otro sync tiene el lock);
+    //    _hkSyncWithRetry valida el status real y lanza si no es "ok".
+    return _hkSyncWithRetry(plugin, 10);
+  }).then(function () {
+    renderSourcesList(); // badge -> activo = feedback visual de éxito
+  }).catch(function (err) {
+    var m = (err && err.message) || 'error';
+    // Diagnóstico: el motivo exacto (no_token / no_config / error / status del
+    // sync) va entre paréntesis para poder cazarlo desde el dispositivo.
+    var msg = (m === 'denied') ? t('healthkit_connect_denied')
+      : (t('healthkit_connect_err') + ' (' + m + ')');
+    fail(msg);
+  });
 }
 
 function sourceDisconnect(name, label) {
@@ -4527,7 +4638,12 @@ function openProfileForm(isOnboarding) {
               return '<button class="ob-seg-btn'+(active?' active':'')+'" onclick="pfSourceSel(\''+sc+'\')">'+lbl+'</button>';
             }).join('')
           + '</div>'
-          + ((connectedSources.indexOf('healthkit') !== -1 || pendingAdd === 'healthkit') ? '<span class="ob-hint">'+t('ob_source_healthkit_hint')+'</span>' : '')
+          + ((connectedSources.indexOf('healthkit') !== -1 || pendingAdd === 'healthkit')
+              ? '<span class="ob-hint">'+t('ob_source_healthkit_hint')+'</span>'
+                // En la app nativa, botón para pedir el permiso de HealthKit aquí
+                // mismo (sin depender de re-abrir la app). En web pura solo el hint.
+                + (_isNativeApp() ? '<button type="button" class="ob-seg-btn" style="margin-top:8px;width:100%" onclick="healthkitConnect()">'+t('mas_healthkit_connect_btn')+'</button>' : '')
+              : '')
           + '</div>';
       })()
     + '<div class="ob-field"><label class="ob-label">'+t('ob_name')+'</label>'

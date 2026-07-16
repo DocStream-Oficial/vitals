@@ -77,6 +77,64 @@ def test_signature_none_safe():
     assert ch.signature({}, None) is not None
 
 
+# ── signature() consciente de alertas (F3, roadmap vitals-illness-proactivo) ──
+
+def test_signature_no_alerts_identical_to_before_change():
+    """Backward-compat (criterio #7 del roadmap): SIN alertas, la firma debe
+    quedar IDÉNTICA a como era antes de agregar el parámetro `insights` —
+    con insights=None, con insights=[], y con insights que no traen ninguna
+    severity=='alert' (solo watch/positive/info)."""
+    ds = _dataset()
+    changes = [{"factor": "recovery", "kind": "improvement"}]
+    baseline = ch.signature(ds, changes)  # firma "de antes" (sin 3er arg)
+    assert ch.signature(ds, changes, None) == baseline
+    assert ch.signature(ds, changes, []) == baseline
+    non_alert_insights = [
+        {"id": "sleep_debt", "severity": "watch"},
+        {"id": "positive_hrv", "severity": "positive"},
+    ]
+    assert ch.signature(ds, changes, non_alert_insights) == baseline
+
+
+def test_signature_changes_when_alert_appears():
+    ds = _dataset()
+    sig_sin_alerta = ch.signature(ds, [])
+    insights_con_alerta = [{"id": "illness_early_warning", "severity": "alert"}]
+    sig_con_alerta = ch.signature(ds, [], insights_con_alerta)
+    assert sig_sin_alerta != sig_con_alerta
+
+
+def test_signature_stable_for_same_alert_ids_order_independent():
+    """La firma es estable frente al ORDEN en que llegan los insights (se
+    ordenan los ids antes de hashear) — misma lista de alertas activas,
+    misma firma sin importar el orden de evaluate()."""
+    ds = _dataset()
+    insights_a = [
+        {"id": "illness_early_warning", "severity": "alert"},
+        {"id": "spo2_low", "severity": "alert"},
+    ]
+    insights_b = [
+        {"id": "spo2_low", "severity": "alert"},
+        {"id": "illness_early_warning", "severity": "alert"},
+    ]
+    assert ch.signature(ds, [], insights_a) == ch.signature(ds, [], insights_b)
+
+
+def test_signature_changes_when_alert_disappears():
+    ds = _dataset()
+    insights_con_alerta = [{"id": "illness_early_warning", "severity": "alert"}]
+    sig_con_alerta = ch.signature(ds, [], insights_con_alerta)
+    sig_sin_alerta = ch.signature(ds, [], [])
+    assert sig_con_alerta != sig_sin_alerta
+
+
+def test_signature_different_alert_sets_differ():
+    ds = _dataset()
+    sig1 = ch.signature(ds, [], [{"id": "illness_early_warning", "severity": "alert"}])
+    sig2 = ch.signature(ds, [], [{"id": "spo2_low", "severity": "alert"}])
+    assert sig1 != sig2
+
+
 # ── load_cache() / save_cache() ──────────────────────────────────────────────
 
 def test_load_cache_missing_file_returns_none(isolated_cache):
@@ -110,6 +168,39 @@ def test_save_cache_atomic_no_tmp_leftover(isolated_cache):
     tmp_files = list(isolated_cache.glob("*.tmp"))
     assert tmp_files == []
     assert ch._CACHE_PATH.exists()
+
+
+# ── _build_headline_prompt() consciente de alertas (F3, Paso 4) ─────────────
+
+def test_prompt_no_alerts_byte_identical_to_before():
+    """Criterio #8 del roadmap: SIN alertas, el prompt debe ser BYTE-IDÉNTICO
+    al de antes de este cambio — con alerts=None y con alerts=[]."""
+    ds = _dataset()
+    changes = [{"summary": "Tu recuperación subió 20 pts."}]
+    baseline = ch._build_headline_prompt(ds, changes, "es")  # sin 4to arg (firma vieja)
+    assert ch._build_headline_prompt(ds, changes, "es", None) == baseline
+    assert ch._build_headline_prompt(ds, changes, "es", []) == baseline
+
+
+def test_prompt_with_alert_contains_alert_and_instruction():
+    ds = _dataset()
+    alerts = [{
+        "id": "illness_early_warning",
+        "severity": "alert",
+        "title": "Posible enfermedad en curso",
+        "summary": "Temp de piel elevada + FC en reposo alta.",
+    }]
+    prompt = ch._build_headline_prompt(ds, [], "es", alerts)
+    assert "Posible enfermedad en curso" in prompt
+    assert "Temp de piel elevada + FC en reposo alta." in prompt
+    assert "NO des luz verde" in prompt
+    assert "ALERTA" in prompt.upper()
+
+
+def test_prompt_with_alert_differs_from_no_alert():
+    ds = _dataset()
+    alerts = [{"id": "illness_early_warning", "severity": "alert", "title": "X", "summary": "Y"}]
+    assert ch._build_headline_prompt(ds, [], "es", alerts) != ch._build_headline_prompt(ds, [], "es", [])
 
 
 # ── maybe_regenerate(): cache hit = 0 llamadas al CLI ────────────────────────
@@ -147,6 +238,42 @@ def test_maybe_regenerate_signature_changed_calls_cli(isolated_cache, monkeypatc
     cache = ch.load_cache()
     assert cache["headline"] == "Nuevo titular fresco."
     assert cache["signature"] == ch.signature(ds_new, [])
+
+
+def test_maybe_regenerate_alert_appearing_forces_regeneration(isolated_cache, monkeypatch):
+    """Mismo dataset/changes, pero aparece una alerta nueva -> firma cambia ->
+    SÍ regenera (aunque recovery/HRV/sueño no hayan cruzado de banda)."""
+    ds = _dataset()
+    ch.save_cache(ch.signature(ds, [], []), "titular sin alerta", "es")
+
+    class FakeResult:
+        returncode = 0
+        stdout = "Cuidado, hay una señal de alerta activa.\n"
+        stderr = ""
+
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: calls.append(1) or FakeResult())
+
+    insights = [{"id": "illness_early_warning", "severity": "alert", "title": "T", "summary": "S"}]
+    ch.maybe_regenerate(ds, [], "es", insights)
+    assert len(calls) == 1, "una alerta nueva debe forzar regeneración del titular"
+    cache = ch.load_cache()
+    assert cache["headline"] == "Cuidado, hay una señal de alerta activa."
+    assert cache["signature"] == ch.signature(ds, [], insights)
+
+
+def test_maybe_regenerate_no_insights_arg_backward_compatible(isolated_cache, monkeypatch):
+    """Llamar maybe_regenerate() sin el 4to argumento (como hacía el código
+    antes de F3) debe seguir funcionando exactamente igual (cache hit)."""
+    ds = _dataset()
+    ch.save_cache(ch.signature(ds, []), "titular viejo", "es")
+
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: calls.append(1) or None)
+
+    ch.maybe_regenerate(ds, [], "es")  # sin insights
+    assert len(calls) == 0
+    assert ch.load_cache()["headline"] == "titular viejo"
 
 
 def test_maybe_regenerate_locale_changed_calls_cli(isolated_cache, monkeypatch):

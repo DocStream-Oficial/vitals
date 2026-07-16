@@ -68,6 +68,46 @@ def _last_with_field(days: list[dict], field: str) -> float | None:
 _SD_EPSILON = 0.01   # SD mínima general para usar z-score
 _TEMP_SD_MIN = 0.1   # SD mínima para temp/resp (per roadmap: sd>=0.1 and z>1.5)
 
+# Umbral de delta absoluto para skin_temp. Es un OR con el z-score de abajo, no
+# lo reemplaza: mismo criterio (delta = temp_hoy - media(días previos), sin
+# dividir por sd) que la bandera de coach_chat._build_context(), para que el
+# motor de insights y el del chat no diverjan ante la misma señal.
+# Motivo: con una skin_temp de varianza alta, la sd infla el denominador y un
+# delta clínicamente relevante nunca alcanza el z — la señal queda enmascarada.
+# El delta absoluto la recupera. Calibrable con _dev/analyze_illness_threshold.py.
+_TEMP_DELTA_ALERT = 0.6
+
+# Umbral de HRV anómala BIDIRECCIONAL (|z| en cualquier dirección).
+# Por qué bidireccional: una HRV anormalmente ALTA (no solo baja) junto con temp
+# elevada es la firma del "pico parasimpático" de las primeras horas de una
+# infección. La regla solo miraba HRV BAJA (z<-1.5), así que ese patrón pasaba
+# desapercibido. Esta señal es ADITIVA: la de HRV baja se conserva sin cambios.
+#
+# Por qué 1.5 y no un margen más alto: el umbral vive en z-scores, así que
+# depende de la ESCALA de la serie canónica de HRV — y esa serie CAMBIA de
+# fuente (merge.py elige canónica por nº de días + frescura). Un mismo día se ve
+# distinto según qué fuente gane: entre dos series reales del mismo histórico,
+# el mismo día medía z=2.72 en una y z=1.69 en la otra. Con 2.0 el insight se
+# degradaba a `watch` al cambiar la fuente; 1.5 lo detecta en ambas y marca los
+# MISMOS días, sin costo de especificidad (2.0 y 1.5 miden idéntico en la serie
+# donde ambos funcionan). 3.0 pierde el patrón en las dos.
+# LECCIÓN: un umbral en z-scores es frágil al cambio de fuente canónica del
+# merge — al recalibrar, medir contra la serie que esté ganando.
+#
+# Especificidad MEDIDA sobre un histórico real (397 días, 219 evaluables;
+# corriendo la regla real sobre ventanas rodantes): la señal añade 2 días de
+# alert (1.37% -> 2.28%), bajo el gate del 3%. El `watch` no se mueve (3.65%):
+# hrv_anomala es UNA co-señal y el watch-sin-temp exige >=2. Falso positivo
+# clave descartado: de los días con HRV alta y temp NORMAL (buena recuperación,
+# incl. z=+3.77), ninguno dispara.
+#
+# 🔴 Honestidad sobre la evidencia: calibrado con muy pocos casos positivos y
+# sin ground truth etiquetado. Lo que lo hace seguro NO es certeza clínica sino
+# la frecuencia medida (~2 avisos en 6 meses): si alguno es falso positivo, el
+# costo es bajo. El hábito `sick` del journal es ground-truth a futuro para
+# re-calibrar cuando haya más episodios registrados.
+_HRV_ANOMALY_Z = 1.5
+
 
 def _z_score(value: float, mean: float, sd: float | None,
              sd_min: float = _SD_EPSILON) -> float | None:
@@ -93,10 +133,19 @@ def rule_illness_early_warning(days: list[dict], summary: dict, locale: str = "e
     Señales:
     - skin_temp: z = (temp_today - mean14d) / sd14d; elevada si z>1.5
                  fallback: temp_today > mean14d + 0.5
+                 F1 (2026-07): también elevada si delta = temp_today - mean14d
+                 > _TEMP_DELTA_ALERT (0.6, mismo criterio que coach_chat) —
+                 cubre sd alta que enmascara el z-score. Es un OR con lo de
+                 arriba, no lo reemplaza.
     - rhr:       z = (rhr_today - rhr_base) / rhr_sd; alta si z>1.5
                  fallback: rhr_today > rhr_base + 5
     - hrv:       z = (hrv_today - hrv_base) / hrv_sd; baja si z<-1.5
                  fallback: hrv_today < hrv_base * 0.85
+                 F2 (roadmap "vitals-illness-hrv-bidireccional"): además,
+                 anómala si |z| > _HRV_ANOMALY_Z (1.5), en CUALQUIER dirección
+                 (alta o baja) — solo cuando hay z-score real (sd disponible;
+                 sin sd no hay fallback bidireccional, ver constante arriba).
+                 Es aditivo: la señal de HRV baja (z<-1.5) se conserva igual.
     - resp:      z = (resp_today - mean14d) / sd14d; elevada si z>1.5
                  fallback: resp_today > mean14d + 1.5
     - spo2:      < 92 (sin cambio — no hay SD para SpO₂)
@@ -121,7 +170,13 @@ def rule_illness_early_warning(days: list[dict], summary: dict, locale: str = "e
     temp_elevated = False
 
     # skin_temp
-    # Per roadmap: z-score path if sd>=0.1; else fallback absoluto (+0.5°)
+    # Per roadmap: z-score path if sd>=0.1; else fallback absoluto (+0.5°).
+    # F1 (roadmap "vitals-illness-proactivo"): además del z-score, se marca
+    # elevada si el delta absoluto vs la media de días previos supera
+    # _TEMP_DELTA_ALERT (mismo cálculo/umbral que coach_chat._build_context,
+    # ver constante arriba) — cuando la sd es alta el z-score puede enmascarar
+    # un delta clínicamente relevante (p.ej. z=0.92 con delta=+1.17).
+    # Es un OR, no un reemplazo: los casos que ya disparaban por z siguen igual.
     temp_window = _window(days, 14, "skin_temp")
     temp_today = today.get("skin_temp")
     if temp_today is not None and len(temp_window) >= 3:
@@ -134,6 +189,9 @@ def rule_illness_early_warning(days: list[dict], summary: dict, locale: str = "e
             else:
                 # Fallback absoluto (sd<0.1 o sin datos suficientes)
                 elevated = float(temp_today) > temp_mean + 0.5
+            delta = float(temp_today) - temp_mean
+            if delta > _TEMP_DELTA_ALERT:
+                elevated = True
             if elevated:
                 temp_elevated = True
                 temp_signals.append(tr("factor_temp_elevated", locale, temp_today=float(temp_today), temp_mean=temp_mean))
@@ -155,12 +213,27 @@ def rule_illness_early_warning(days: list[dict], summary: dict, locale: str = "e
     if hrv_today is not None and hrv_base is not None:
         z = _z_score(float(hrv_today), float(hrv_base), hrv_sd)
         if z is not None:
-            fired = z < -1.5
+            fired_low = z < -1.5
+            # F2: hrv_anomala — bidireccional (|z|>2.0). Solo evaluable con
+            # z-score real (sd presente y >= _SD_EPSILON); None-safe por
+            # construcción: si sd falta o es degenerada, z es None y esta
+            # rama ni se evalúa (ver bloque else abajo).
+            fired_anomaly = abs(z) > _HRV_ANOMALY_Z
         else:
-            # Fallback absoluto
-            fired = float(hrv_today) < float(hrv_base) * 0.85
-        if fired:
+            # Fallback absoluto (sin sd → sin criterio bidireccional nuevo,
+            # se conserva el comportamiento previo tal cual)
+            fired_low = float(hrv_today) < float(hrv_base) * 0.85
+            fired_anomaly = False
+        if fired_low:
+            # HRV baja (z<-1.5, o su fallback): incluye también el caso
+            # z<-2.0 (que también cumpliría fired_anomaly) — un solo factor,
+            # no se duplica la señal por el mismo metric.
             non_temp_signals.append(tr("factor_hrv_low", locale, hrv_today=int(hrv_today), hrv_base=int(hrv_base)))
+        elif fired_anomaly:
+            # Solo llega aquí si z>_HRV_ANOMALY_Z (HRV anormalmente ALTA;
+            # el lado bajo ya lo cubrió fired_low arriba) — "pico
+            # parasimpático" de infección temprana.
+            non_temp_signals.append(tr("factor_hrv_anomalous", locale, hrv_today=int(hrv_today), hrv_base=int(hrv_base)))
 
     # resp — análogo a temp (sd_min=_TEMP_SD_MIN para consistencia)
     resp_window = _window(days, 14, "resp")
@@ -673,6 +746,16 @@ _ORDER_SHIFT = {  # severidades NO frescas se corren +1 para dejar hueco a "fres
 # cambio del mismo factor/dirección se omite — evita repetir la misma señal
 # dos veces (p.ej. "recovery_declining" ya narra la caída sostenida; el evento
 # fresco de un solo día de caída de recovery no debe listarse aparte).
+# Insights POSITIVOS que se silencian cuando hay una alerta de enfermedad activa
+# (ver evaluate()). Hoy solo el de HRV: es el mismo dato que alimenta la señal
+# hrv_anomala de illness_early_warning, así que afirmarlo como buena noticia
+# contradice la alerta el mismo día.
+_ILLNESS_SILENCED_IDS = {"positive_hrv"}
+
+# Eventos de cambio equivalentes (factor, kind) que se silencian por el mismo motivo
+# — si no, entrarían por detect_changes al quedar libre el anti-duplicado de abajo.
+_ILLNESS_SILENCED_CHANGES = {("hrv", "improvement")}
+
 _CHANGE_ANTI_DUP = {
     ("recovery", "decline"): {"recovery_declining", "overtraining"},
     ("recovery", "improvement"): set(),
@@ -762,6 +845,21 @@ def evaluate(dataset: dict, locale: str = "es") -> list[dict]:
             # Ronda 3: el fallo queda LOGUEADO (antes se silenciaba con `pass`).
             logger.warning("Regla %s falló: %s", getattr(rule, "__name__", rule), exc)
 
+    # Coherencia de mensaje: el MISMO dato (HRV alta) puede
+    # disparar A LA VEZ la alerta de enfermedad (vía la señal hrv_anomala) y el positivo
+    # "HRV en racha ascendente" — dos mensajes opuestos en la misma tarjeta el mismo día.
+    # Es la señal mixta que le quita credibilidad al coach proactivo: dar luz verde y
+    # avisar de una posible enfermedad a la vez. Con una alerta ACTIVA, los positivos
+    # de HRV se silencian: la alerta manda.
+    illness_alert = any(
+        r.get("id") == "illness_early_warning" and r.get("severity") == "alert"
+        for r in results
+    )
+    if illness_alert:
+        results = [r for r in results if r.get("id") not in _ILLNESS_SILENCED_IDS]
+
+    # OJO: fired_ids se calcula DESPUÉS del silenciado — si no, el anti-duplicado de
+    # abajo creería que positive_hrv sigue vivo.
     fired_ids = {r.get("id") for r in results}
 
     try:
@@ -773,6 +871,11 @@ def evaluate(dataset: dict, locale: str = "es") -> list[dict]:
     for event in change_events:
         factor = event.get("factor", "")
         kind = event.get("kind", "")
+        # El mismo silenciado, por la puerta de los cambios: sin esto, quitar
+        # positive_hrv liberaría el anti-duplicado (_CHANGE_ANTI_DUP lo bloqueaba vía
+        # positive_hrv) y el evento "HRV mejoró" reintroduciría el mensaje contradictorio.
+        if illness_alert and (factor, kind) in _ILLNESS_SILENCED_CHANGES:
+            continue
         skip_ids = _CHANGE_ANTI_DUP.get((factor, kind), set())
         if fired_ids & skip_ids:
             continue  # una regla existente ya narra esta misma señal

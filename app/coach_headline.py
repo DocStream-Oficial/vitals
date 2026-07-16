@@ -12,14 +12,19 @@ load_cache()/save_cache() -> dict | None
   Escritura atómica (fsutil.atomic_write_text). None-safe: archivo ausente o
   corrupto -> None, nunca lanza.
 
-maybe_regenerate(dataset, changes, locale) -> None
-  Si signature(dataset, changes) != cache.signature (o locale distinto, o sin
-  cache) -> delega en app.llm.generate() (backend intercambiable, F3 roadmap
-  P0: claude_cli u openai_compat según settings.COACH_BACKEND) y cachea el
-  resultado. Si la llamada falla -> deja el cache viejo intacto (no lo pisa
-  con basura). SIEMPRE best-effort: try/except en torno a TODA la función —
-  un fallo aquí nunca debe tumbar run_sync(). Se llama SOLO desde
-  sync.py::run_sync() (nunca desde el path de GET /).
+maybe_regenerate(dataset, changes, locale, insights=None) -> None
+  Si signature(dataset, changes, insights) != cache.signature (o locale
+  distinto, o sin cache) -> delega en app.llm.generate() (backend
+  intercambiable, F3 roadmap P0: claude_cli u openai_compat según
+  settings.COACH_BACKEND) y cachea el resultado. Si la llamada falla -> deja
+  el cache viejo intacto (no lo pisa con basura). SIEMPRE best-effort:
+  try/except en torno a TODA la función — un fallo aquí nunca debe tumbar
+  run_sync(). Se llama SOLO desde sync.py::run_sync() (nunca desde el path
+  de GET /).
+  `insights` (roadmap vitals-illness-proactivo, F3): lista completa de
+  app.insights.evaluate(); los que traen severity=='alert' entran a la firma
+  y al prompt (con instrucción explícita de no dar luz verde). Parámetro
+  opcional — sin él, comportamiento idéntico a antes (backward-compat).
 
 get_headline(dataset, changes, locale) -> str
   LEE el cache (nunca genera, nunca hace I/O de red ni subprocess). Si no hay
@@ -119,11 +124,29 @@ def _bucket_strain(v) -> str:
     return "low"
 
 
-def signature(dataset: dict, changes: Optional[list] = None) -> str:
+def _alert_ids(insights: Optional[list]) -> list[str]:
+    """Ids de insights con severity=='alert', ordenados y sin duplicados
+    (roadmap vitals-illness-proactivo, F3, criterio #7: estables -> misma
+    lista de alertas produce SIEMPRE el mismo sufijo de firma)."""
+    if not insights:
+        return []
+    ids = {i.get("id") for i in insights if isinstance(i, dict) and i.get("severity") == "alert" and i.get("id")}
+    return sorted(ids)
+
+
+def signature(dataset: dict, changes: Optional[list] = None, insights: Optional[list] = None) -> str:
     """Firma coarse del estado actual: buckets de recovery/HRV-vs-base/sueño/
     strain + fecha del último día + kind del top cambio (si hay). Dos estados
     "parecidos" (misma banda) producen la MISMA firma -> no regenera.
-    None-safe: dataset vacío -> firma estable basada en "sin datos"."""
+    None-safe: dataset vacío -> firma estable basada en "sin datos".
+
+    F3 (roadmap vitals-illness-proactivo): `insights` es opcional y trae la
+    lista completa de insights evaluados (evaluate()); se extraen solo los
+    ids con severity=='alert' (ordenados) y se agregan al final del `raw`
+    -> aparecer/desaparecer una alerta cambia la firma y fuerza regenerar el
+    titular. SIN alertas (insights=None, [] o ninguna con severity=='alert')
+    el sufijo queda vacío y `raw` es BYTE-IDÉNTICO al de antes de este
+    cambio -> backward-compat: no invalida el cache de nadie sin motivo."""
     dataset = dataset or {}
     days = dataset.get("days") or []
     summary = dataset.get("summary") or {}
@@ -142,6 +165,10 @@ def signature(dataset: dict, changes: Optional[list] = None) -> str:
         top_kind = changes[0].get("kind", "none") if changes else "none"
         top_factor = changes[0].get("factor", "none") if changes else "none"
         raw = f"{date_str}|{rec_bucket}|{hrv_bucket}|{sleep_bucket}|{strain_bucket}|{top_factor}:{top_kind}"
+
+    alert_ids = _alert_ids(insights)
+    if alert_ids:
+        raw += "|alerts:" + ",".join(alert_ids)
 
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
@@ -215,10 +242,16 @@ def _load_brain() -> str:
 _LOCALE_LANG = {"es": "español", "en": "English", "fr": "français", "pt": "português"}
 
 
-def _build_headline_prompt(dataset: dict, changes: list, locale: str) -> str:
+def _build_headline_prompt(dataset: dict, changes: list, locale: str, alerts: Optional[list] = None) -> str:
+    """F3 (roadmap vitals-illness-proactivo): `alerts` es opcional (lista de
+    insights con severity=='alert'). SIN alertas, esta función devuelve
+    EXACTAMENTE el mismo prompt que antes de este cambio (criterio #8: byte-
+    idéntico) — el bloque de alertas y la instrucción de "no luz verde" solo
+    se agregan cuando alerts trae algo."""
     brain = _load_brain()
     days = dataset.get("days") or []
     today = days[-1] if days else {}
+    alerts = alerts or []
 
     lines = ["=== ESTADO DE HOY ==="]
     if today.get("recovery") is not None:
@@ -237,16 +270,33 @@ def _build_headline_prompt(dataset: dict, changes: list, locale: str) -> str:
     else:
         lines.append("\n=== SIN CAMBIOS SIGNIFICATIVOS HOY (estado estable) ===")
 
+    if alerts:
+        lines.append("\n=== ALERTA(S) DE SALUD ACTIVA(S) (motor de insights) ===")
+        for a in alerts:
+            title = a.get("title", "")
+            summ = a.get("summary", "")
+            lines.append(f"- {title}: {summ}" if summ else f"- {title}")
+
     output_lang = _LOCALE_LANG.get(locale, "español")
-    return (
-        f"{brain}\n\n"
-        f"{chr(10).join(lines)}\n\n"
+    instruction = (
         f"Escribe un TITULAR de 1-2 líneas (máx ~140 caracteres) para la tarjeta del "
         f"Coach en la app, en {output_lang}. Si hay cambios, ancla el titular al cambio "
         f"más relevante de hoy; si no hay cambios, resume el estado general con foco "
         f"en la prioridad #1 del usuario. Sin saludos, sin markdown, sin comillas, "
         f"solo el texto del titular. No diagnostiques; ante señales de posible "
         f"enfermedad usa tono de vigilancia, no alarmista."
+    )
+    if alerts:
+        instruction += (
+            " Hay una alerta de salud ACTIVA arriba: NO des luz verde ni celebres "
+            "los números aunque recovery/HRV/sueño se vean bien — menciona la alerta "
+            "explícitamente y ajusta el tono a vigilancia, no la ignores."
+        )
+
+    return (
+        f"{brain}\n\n"
+        f"{chr(10).join(lines)}\n\n"
+        f"{instruction}"
     )
 
 
@@ -266,20 +316,28 @@ def _call_cli(prompt: str) -> Optional[str]:
 
 # ── API pública ──────────────────────────────────────────────────────────────
 
-def maybe_regenerate(dataset: dict, changes: Optional[list] = None, locale: str = "es") -> None:
+def maybe_regenerate(dataset: dict, changes: Optional[list] = None, locale: str = "es",
+                      insights: Optional[list] = None) -> None:
     """Regenera el titular SOLO si la firma cambió (o el locale cambió, o no
     hay cache). Best-effort total: cualquier excepción se traga y se loguea,
     NUNCA propaga — se llama desde run_sync() y no debe tumbar el sync.
     Si el CLI falla, el cache viejo se conserva intacto (no se sobreescribe
-    con nada)."""
+    con nada).
+
+    F3 (roadmap vitals-illness-proactivo): `insights` es opcional (lista
+    completa de evaluate()). Si trae insights con severity=='alert', esos
+    entran a la firma (signature) Y al prompt (con la instrucción de no dar
+    luz verde). Sin insights o sin alertas -> comportamiento y firma
+    idénticos a antes de este parámetro (backward-compat, contrato #9)."""
     try:
         changes = changes or []
-        sig = signature(dataset, changes)
+        sig = signature(dataset, changes, insights)
         cache = load_cache()
         if cache and cache.get("signature") == sig and cache.get("locale") == locale:
             return  # cache hit: firma sin cambios -> CERO llamadas al CLI
 
-        prompt = _build_headline_prompt(dataset or {}, changes, locale)
+        alerts = [i for i in (insights or []) if isinstance(i, dict) and i.get("severity") == "alert"]
+        prompt = _build_headline_prompt(dataset or {}, changes, locale, alerts)
         headline = _call_cli(prompt)
         if headline:
             save_cache(sig, headline, locale)

@@ -387,6 +387,33 @@ def test_run_sync_computes_bodyage_when_profile_complete(sync_env):
     assert dataset["summary"]["bodyage"] is not None
 
 
+def test_run_sync_computes_bodyage_stable_and_pace(sync_env):
+    """Roadmap edad-corporal-estable, paso 3: summary.bodyage gana
+    body_age_stable/n_days_stable/stable_confidence/pace, y los campos viejos
+    del instantáneo (body_age, fitness_age, vo2max, penalty) siguen
+    presentes e idénticos (no se tocan)."""
+    tmp_path, sync_mod = sync_env
+    (tmp_path / "profile.json").write_text(json.dumps({
+        "source": "google_health", "birthdate": "1985-01-01", "waist_cm": 85.0,
+        "sex": "M", "onboarded": True,
+    }))
+    fake_source = MagicMock()
+    fake_source.fetch.return_value = _sample_source_data()
+
+    with patch("app.sync.get_source", return_value=fake_source):
+        dataset = sync_mod.run_sync(45)
+
+    ba = dataset["summary"]["bodyage"]
+    # campos viejos del instantáneo: presentes e intactos
+    for k in ("body_age", "fitness_age", "vo2max", "penalty", "category"):
+        assert k in ba, f"falta campo viejo '{k}' en summary.bodyage"
+    # campos nuevos aditivos
+    assert "body_age_stable" in ba and ba["body_age_stable"] is not None
+    assert "n_days_stable" in ba
+    assert "stable_confidence" in ba
+    assert "pace" in ba  # None es válido (1 solo día de fixture -> healthspan sin datos)
+
+
 # ── Paso 4: hook del titular del Coach (coach_headline) dentro de run_sync ──
 
 def test_run_sync_generates_headline_cache_on_first_sync(sync_env, monkeypatch):
