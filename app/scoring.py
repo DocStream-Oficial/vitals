@@ -242,6 +242,59 @@ def _rolling_percentile_ranges(dates_sorted: list, hrv_by_date: dict, rhr_by_dat
     return result
 
 
+# ── Recovery v3 — anclado a línea base (estándar de mercado: WHOOP/Oura/Fitbit) ──
+# Reemplaza la normalización percentil-lineal (v2) por z-score vs la base personal
+# + curva logística. Filosofía de mercado: "en tu base = listo/verde (~70)", arriba
+# de base → sube, abajo → baja, con saturación suave en los extremos (mata el zigzag
+# 25→95 de la escala percentil y el rango se vuelve intuitivo).
+# Calibración: A elegido para que la MEDIANA de 30 días del perfil real ≈ 70 (día
+# típico verde). Corrida sobre producción (perfil default, historia con HRV real):
+# A=1.06 → median30≈69.5, rango histórico 12–94. B/A y pisos documentados abajo.
+# Pesos 0.55/0.25/0.20 y la compuerta (recovery solo si hay HRV o sueño) INTACTOS.
+RECOVERY_ANCHORED = True             # False → vuelve al motor v2 percentil (revert 1 línea)
+RECOVERY_V3_A = 1.06                 # ancla logística: base (W=0) → ~74; median30 ≈ 70
+RECOVERY_V3_B = 0.85                 # sensibilidad: pendiente de la logística sobre W
+RECOVERY_V3_HSD_FLOOR = 3.0          # piso de sd de HRV (ms) — evita z gigante en series planas
+RECOVERY_V3_RSD_FLOOR = 1.5          # piso de sd de RHR (bpm)
+RECOVERY_V3_SLEEP_SPREAD = 0.12      # 1 sd ≈ 12% de desvío vs NEED de sueño
+_ROLLING_BASELINE_WINDOW = 90        # días trailing (solo pasado, incluye el día d)
+_ROLLING_BASELINE_TAKE = 30          # últimas N lecturas dentro de la ventana
+_ROLLING_BASELINE_MIN_N = 5          # <5 lecturas → sin base (el componente se omite)
+
+
+def _rolling_baseline_ranges(dates_sorted: list, hrv_by_date: dict, rhr_by_date: dict):
+    """Por cada fecha (orden cronológico), media y desviación (pstdev) TRAILING de
+    HRV y RHR usando SOLO datos hasta esa fecha inclusive (anti look-ahead, igual
+    criterio que _rolling_percentile_ranges): ventana de 90 días, últimas 30 lecturas.
+    Devuelve {date: (hb, hsd, rb, rsd)} con None donde no haya historia suficiente."""
+    result = {}
+    hrv_hist: list = []
+    rhr_hist: list = []
+    hi = ri = 0
+    hd = sorted(hrv_by_date)
+    rd = sorted(rhr_by_date)
+    for d in dates_sorted:
+        while hi < len(hd) and hd[hi] <= d:
+            hrv_hist.append((hd[hi], hrv_by_date[hd[hi]])); hi += 1
+        while ri < len(rd) and rd[ri] <= d:
+            rhr_hist.append((rd[ri], rhr_by_date[rd[ri]])); ri += 1
+        cutoff = (datetime.date.fromisoformat(d) -
+                  datetime.timedelta(days=_ROLLING_BASELINE_WINDOW - 1)).isoformat()
+        hw = [v for dt, v in hrv_hist if dt >= cutoff][-_ROLLING_BASELINE_TAKE:]
+        rw = [v for dt, v in rhr_hist if dt >= cutoff][-_ROLLING_BASELINE_TAKE:]
+        # Cascada de 2 niveles (arranque en frío, roadmap engine-v3-port):
+        #   >=5 lecturas -> media/sd de la ventana        [comportamiento ACTUAL, intacto]
+        #   1..4         -> media de las lecturas que haya, sd=None (el consumidor
+        #                    aplica el piso RECOVERY_V3_*_FLOOR que ya existe)
+        #   0            -> (None, None) -> el componente se OMITE (no hay dato)
+        hb = statistics.mean(hw) if hw else None
+        hsd = statistics.pstdev(hw) if len(hw) >= _ROLLING_BASELINE_MIN_N else None
+        rb = statistics.mean(rw) if rw else None
+        rsd = statistics.pstdev(rw) if len(rw) >= _ROLLING_BASELINE_MIN_N else None
+        result[d] = (hb, hsd, rb, rsd)
+    return result
+
+
 # Campos de sueño que se omiten cuando se detecta siesta
 _SLEEP_FIELDS = ("asleep", "inbed", "awake", "deep", "rem", "light", "eff",
                  "bedtime", "waketime", "bed_min", "sleep_perf")
@@ -344,6 +397,8 @@ def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, 
     # ── Ronda 5: rangos de recovery RODANTES (trailing 90d, anti look-ahead) ────
     sorted_dates = sorted(d for d in dates if d >= "2000-01-01")
     rolling_ranges = _rolling_percentile_ranges(sorted_dates, hrv, rhr)
+    # Recovery v3 (anclado a base): media/sd trailing por día (anti look-ahead).
+    rolling_baselines = _rolling_baseline_ranges(sorted_dates, hrv, rhr)
 
     for d in sorted_dates:
         o = {"date": d}
@@ -375,17 +430,38 @@ def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, 
         # Ronda 5: hlo/hhi/rlo/rhi ahora vienen del rango RODANTE de este día (trailing
         # 90d, solo pasado) en vez del percentil global — pesos 0.55/0.25/0.20 y
         # compuerta quirúrgica INTACTOS.
-        d_hlo, d_hhi, d_rlo, d_rhi = rolling_ranges[d]
-        comps = []
-        if "hrv" in o: comps.append((clamp((o["hrv"]-d_hlo)/(d_hhi-d_hlo)*100), 0.55))
-        if "rhr" in o: comps.append((clamp((d_rhi-o["rhr"])/(d_rhi-d_rlo)*100), 0.25))
-        if "asleep" in o: comps.append((clamp(o["asleep"]/NEED*100), 0.20))
-        if comps and ("hrv" in o or "asleep" in o):
-            w = sum(x[1] for x in comps)
-            rec = round(sum(v*wt for v, wt in comps)/w)
-            if not (len(comps) == 1 and rec in (0, 100)):
-                o["recovery"] = rec
+        if RECOVERY_ANCHORED:
+            # ── Recovery v3: z-score vs base personal + logística anclada ──────
+            # comps guardan el z (signo: + = mejor recovery), no un 0-100. La
+            # logística 100/(1+exp(-(A+B*W))) mapea W (z ponderado) a 0-100,
+            # anclando la base (W=0) al verde. Sin clamp por-componente: la
+            # logística ya satura suave los extremos (fin del zigzag percentil).
+            hb, hsd, rb, rsd = rolling_baselines[d]
+            comps = []
+            if "hrv" in o and hb is not None:
+                comps.append(((o["hrv"] - hb) / max(hsd or 0, RECOVERY_V3_HSD_FLOOR), 0.55))
+            if "rhr" in o and rb is not None:
+                comps.append(((rb - o["rhr"]) / max(rsd or 0, RECOVERY_V3_RSD_FLOOR), 0.25))
+            if "asleep" in o:
+                comps.append((((o["asleep"] / NEED) - 1) / RECOVERY_V3_SLEEP_SPREAD, 0.20))
+            if comps and ("hrv" in o or "asleep" in o):
+                w = sum(x[1] for x in comps)
+                W = sum(z * wt for z, wt in comps) / w
+                o["recovery"] = round(100.0 / (1.0 + math.exp(-(RECOVERY_V3_A + RECOVERY_V3_B * W))))
                 o["recovery_n"] = len(comps)
+        else:
+            # ── Recovery v2 (percentil rodante) — conservado para revert ───────
+            d_hlo, d_hhi, d_rlo, d_rhi = rolling_ranges[d]
+            comps = []
+            if "hrv" in o: comps.append((clamp((o["hrv"]-d_hlo)/(d_hhi-d_hlo)*100), 0.55))
+            if "rhr" in o: comps.append((clamp((d_rhi-o["rhr"])/(d_rhi-d_rlo)*100), 0.25))
+            if "asleep" in o: comps.append((clamp(o["asleep"]/NEED*100), 0.20))
+            if comps and ("hrv" in o or "asleep" in o):
+                w = sum(x[1] for x in comps)
+                rec = round(sum(v*wt for v, wt in comps)/w)
+                if not (len(comps) == 1 and rec in (0, 100)):
+                    o["recovery"] = rec
+                    o["recovery_n"] = len(comps)
         if "asleep" in o: o["sleep_perf"] = round(clamp(o["asleep"]/NEED*100))
         # Ronda 5: strain v2 — híbrido TRIMP (reemplaza vigorous*0.10 + steps/2500).
         # Presencia ampliada: steps O trimp O vigorous (antes solo steps).
@@ -438,9 +514,9 @@ def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, 
         # umbral de sueño configurable). Ver docstring del módulo.
         "sleep_target_min": sleep_target_min,
         "engine": {
-            "version": 2,
+            "version": 3 if RECOVERY_ANCHORED else 2,
             "strain": "trimp-hybrid-v2",
-            "recovery_scale": "rolling-90d",
+            "recovery_scale": "baseline-anchored-v3" if RECOVERY_ANCHORED else "rolling-90d",
             "sleep_target_min": sleep_target_min,
         },
     }

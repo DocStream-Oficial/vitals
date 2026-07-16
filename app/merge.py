@@ -52,6 +52,8 @@ así que build_dataset() llamado directo (regression) nunca lo ve.
 """
 from __future__ import annotations
 
+from datetime import date
+
 # Prioridad fija de fuente, usada SOLO como desempate (nunca para pesos de promedio).
 # Apple Watch/WHOOP dan fases de sueño más finas de fábrica que Fitbit-vía-Google.
 SOURCE_PRIORITY = ["healthkit", "whoop", "oura", "google_health"]
@@ -77,6 +79,7 @@ _ALL_KEYS = (
 
 # Metadatos de la última fusión (proveniencia) -- ver last_merge_info().
 _last_merge_info: dict = {}
+_HRV_FRESHNESS_MAX_LAG_DAYS = 3
 
 
 def _priority_rank(source_name: str) -> int:
@@ -90,6 +93,14 @@ def _priority_rank(source_name: str) -> int:
 def _ordered_sources(fetched: dict[str, dict]) -> list[str]:
     """Nombres de fuente en fetched, ordenados por SOURCE_PRIORITY (orden estable/determinista)."""
     return sorted(fetched.keys(), key=_priority_rank)
+
+
+def _parse_iso_date(value: str) -> date | None:
+    """Parsea YYYY-MM-DD; devuelve None para claves no ISO o inválidas."""
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _merge_average(fetched: dict[str, dict], key: str) -> dict[str, float]:
@@ -112,6 +123,59 @@ def _merge_average(fetched: dict[str, dict], key: str) -> dict[str, float]:
     return out
 
 
+def _canonical_choice(fetched: dict[str, dict], key: str) -> tuple[str | None, dict]:
+    """Selecciona la fuente canónica de `key` y devuelve (source, serie_filtrada).
+
+    Para HRV aplica una guardia de frescura: una fuente cuyo último dato válido quede
+    >3 días detrás del dato HRV más reciente disponible queda descartada antes del
+    ranking histórico. Si alguna fecha válida no es parseable, degrada con seguridad
+    al ranking histórico para no cambiar el comportamiento previo por datos raros.
+    """
+    candidates: list[tuple[str, dict, int, date | None]] = []
+    latest_overall: date | None = None
+    saw_unparseable = False
+
+    for source_name in _ordered_sources(fetched):
+        series = fetched[source_name].get(key) or {}
+        filtered = {day: value for day, value in series.items() if value is not None}
+        latest_for_source: date | None = None
+        for day in filtered:
+            parsed = _parse_iso_date(day)
+            if parsed is None:
+                saw_unparseable = True
+                continue
+            if latest_for_source is None or parsed > latest_for_source:
+                latest_for_source = parsed
+            if latest_overall is None or parsed > latest_overall:
+                latest_overall = parsed
+        candidates.append((source_name, filtered, len(filtered), latest_for_source))
+
+    eligible = candidates
+    if key == "hrv" and latest_overall is not None and not saw_unparseable:
+        fresh_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate[3] is not None
+            and (latest_overall - candidate[3]).days <= _HRV_FRESHNESS_MAX_LAG_DAYS
+        ]
+        if fresh_candidates:
+            eligible = fresh_candidates
+
+    best_source = None
+    best_series: dict = {}
+    best_rank = None
+    for source_name, filtered, n_days, _latest_for_source in eligible:
+        if n_days == 0:
+            continue
+        rank = (n_days, -_priority_rank(source_name))
+        if best_rank is None or rank > best_rank:
+            best_rank = rank
+            best_source = source_name
+            best_series = filtered
+
+    return best_source, best_series
+
+
 def _merge_canonical(fetched: dict[str, dict], key: str) -> dict:
     """Elige la fuente con MÁS días con dato no-None para `key` y devuelve su serie
     (mono-método, sin promediar, sin round, sin tocar tipos -- passthrough natural de
@@ -127,20 +191,8 @@ def _merge_canonical(fetched: dict[str, dict], key: str) -> dict:
     baselines EWMA/percentiles; el promedio inter-método no es ninguna de las dos
     magnitudes reales, y el fallback per-día re-mezcla métodos entre días (bimodal).
     """
-    best_source = None
-    best_rank = None  # (n_days_con_dato, -priority_rank) -- mayor es mejor
-    for source_name in _ordered_sources(fetched):
-        data = fetched[source_name].get(key) or {}
-        n_days = sum(1 for v in data.values() if v is not None)
-        rank = (n_days, -_priority_rank(source_name))
-        if best_rank is None or rank > best_rank:
-            best_rank = rank
-            best_source = source_name
-
-    if best_source is None:
-        return {}
-    series = fetched[best_source].get(key) or {}
-    return {date: value for date, value in series.items() if value is not None}
+    _, series = _canonical_choice(fetched, key)
+    return series
 
 
 def _merge_max(fetched: dict[str, dict], key: str) -> dict:
@@ -281,17 +333,7 @@ def _canonical_source_for(fetched: dict[str, dict], key: str) -> str | None:
     """Nombre de la fuente elegida como canónica para `key` (igual criterio que
     _merge_canonical: más días con dato, empate -> SOURCE_PRIORITY). None si
     ninguna fuente tiene ese día con dato (o fetched vacío)."""
-    best_source = None
-    best_rank = None
-    for source_name in _ordered_sources(fetched):
-        data = fetched[source_name].get(key) or {}
-        n_days = sum(1 for v in data.values() if v is not None)
-        if n_days == 0:
-            continue
-        rank = (n_days, -_priority_rank(source_name))
-        if best_rank is None or rank > best_rank:
-            best_rank = rank
-            best_source = source_name
+    best_source, _series = _canonical_choice(fetched, key)
     return best_source
 
 

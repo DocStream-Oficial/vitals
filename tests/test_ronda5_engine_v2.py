@@ -362,10 +362,15 @@ class TestRollingRecoveryDirection:
 
 
 class TestRollingRecoveryFallbacks:
-    def test_fallback_defaults_below_10_readings(self):
+    def test_fallback_defaults_below_10_readings(self, monkeypatch):
         """<10 lecturas totales -> recovery usa los defaults fijos (40,70)/(48,60),
-        NO un percentil calculado sobre la serie chica."""
+        NO un percentil calculado sobre la serie chica.
+
+        Engine-v3-port: cascada de fallback fijo es del motor v2 — forzar
+        RECOVERY_ANCHORED=False."""
+        import app.scoring as scoring
         from app.scoring import build_dataset
+        monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
         dates = [f"2024-01-{i+1:02d}" for i in range(5)]
         hrv = {d: 60.0 + i for i, d in enumerate(dates)}
@@ -389,10 +394,15 @@ class TestRollingRecoveryFallbacks:
         expected_rec = round(sum(v * wt for v, wt in comps) / w)
         assert day["recovery"] == expected_rec
 
-    def test_fallback_full_history_between_10_and_29_readings(self):
+    def test_fallback_full_history_between_10_and_29_readings(self, monkeypatch):
         """10-29 lecturas -> usa percentiles de TODA la historia hasta ese día
-        (no los defaults fijos, no una ventana de 90 recortada)."""
+        (no los defaults fijos, no una ventana de 90 recortada).
+
+        Engine-v3-port: cascada de percentil de historia completa es del motor v2 —
+        forzar RECOVERY_ANCHORED=False."""
+        import app.scoring as scoring
         from app.scoring import build_dataset
+        monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
         n = 15
         dates = [f"2024-01-{i+1:02d}" for i in range(n)]

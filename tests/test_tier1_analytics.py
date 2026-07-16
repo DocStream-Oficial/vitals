@@ -31,9 +31,16 @@ def _dates(n, start="2024-01-01"):
 
 class TestRecoveryN:
 
-    def test_recovery_n_3_components(self):
-        """hrv + rhr + asleep → recovery_n == 3."""
+    def test_recovery_n_3_components(self, monkeypatch):
+        """hrv + rhr + asleep → recovery_n == 3.
+
+        Engine-v3-port: corre contra el motor v2 explícitamente (RECOVERY_ANCHORED=False).
+        Bajo v3 este caso también da recovery_n==3 desde el arreglo de arranque en frío
+        (paso 2 del roadmap), pero el criterio 6 exige que los 8 tests v2 se prueben
+        contra su motor original."""
+        import app.scoring as scoring
         from app.scoring import build_dataset
+        monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
         dates = _dates(3)
         hrv = {d: 55.0 for d in dates}
         rhr = {d: 52.0 for d in dates}

@@ -110,12 +110,17 @@ def _reconstruct_inputs_from_golden(days: list[dict]):
     return sleep, rhr, hrv, resp, steps, azm, spo2, skin
 
 
-def test_build_dataset_reproduces_golden_days():
+def test_build_dataset_reproduces_golden_days(monkeypatch):
     """GATE anti-deriva: reconstruye los inputs del golden y compara el resultado
     de build_dataset() CONTRA EL JSON CONGELADO (no contra un recálculo con las
     constantes en vivo) — mutar STRAIN_V2_K/F_VIG/F_STEPS debe poner este test
-    en rojo. Ver scripts/gen_golden.py (misma lógica de reconstrucción)."""
+    en rojo. Ver scripts/gen_golden.py (misma lógica de reconstrucción).
+
+    Engine-v3-port: el golden se generó contra la ruta v2 (percentil rodante) —
+    se fuerza RECOVERY_ANCHORED=False para correr contra ese motor explícitamente."""
+    import app.scoring as scoring
     from app.scoring import build_dataset
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
     data = load_golden()
     meta = data["meta"]
@@ -164,7 +169,7 @@ def _pct(a, p):
     return a[f] if f + 1 >= len(a) else a[f] + (a[f + 1] - a[f]) * (k - f)
 
 
-def test_build_dataset_recovery_formula():
+def test_build_dataset_recovery_formula(monkeypatch):
     """Verifica la fórmula de recovery: 55% HRV + 25% RHR + 20% sueño.
 
     Ronda 5 (engine v2 — excepción versionada, ver ROADMAP-vitals-ronda5-engine-v2.md):
@@ -178,10 +183,14 @@ def test_build_dataset_recovery_formula():
     - Strain: reemplaza el proxy `vigorous*0.10 + steps/2500` por el híbrido TRIMP
       (sin exercises en este test, no hay trimp → cae al fallback de vigorous*F_VIG
       + NEAT de steps, comprimido asintóticamente vía 21*(1-exp(-L/K))).
+
+    Engine-v3-port: fórmula de recovery v2 (percentil) — forzar RECOVERY_ANCHORED=False.
     """
+    import app.scoring as scoring
     from app.scoring import build_dataset
     from app.scoring import STRAIN_V2_F_VIG, STRAIN_V2_F_STEPS, STRAIN_V2_K
     import math
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
     # Inputs sintéticos con 5 días bien definidos
     hrv  = {"2024-01-01": 60.0, "2024-01-02": 55.0, "2024-01-03": 65.0,
@@ -320,10 +329,15 @@ def test_build_dataset_no_false_recovery():
 
 # ---------------------------------------------------------------- test 4: higiene PARTE A
 
-def test_solo_hrv_surgical():
+def test_solo_hrv_surgical(monkeypatch):
     """PARTE A — regla QUIRÚRGICA en solo-HRV: se suprime SOLO si clampea a extremo (0/100);
-    un solo-HRV razonable CONSERVA su recovery (HRV es la señal dominante, peso 0.55)."""
+    un solo-HRV razonable CONSERVA su recovery (HRV es la señal dominante, peso 0.55).
+
+    Engine-v3-port: la regla quirúrgica es del motor v2 (percentil) — forzar
+    RECOVERY_ANCHORED=False. La lógica v3 no tiene compuerta de supresión por clamp."""
+    import app.scoring as scoring
     from app.scoring import build_dataset
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
     # HRV con spread para que un valor medio no clampee. 40=mínimo→0 (suprimir);
     # 55=medio→recovery presente. 45 y 70 son anclas con rhr+sueño (fijan percentiles).
@@ -352,9 +366,14 @@ def test_solo_hrv_surgical():
     assert "recovery" in d4 and d4["recovery"] > 0
 
 
-def test_nap_fields_excluded():
-    """PARTE A — día de siesta → campos de sueño ausentes; días legítimos intactos."""
+def test_nap_fields_excluded(monkeypatch):
+    """PARTE A — día de siesta → campos de sueño ausentes; días legítimos intactos.
+
+    Engine-v3-port: el assert final depende de la compuerta "2 comps -> recovery
+    presente" del motor v2 — forzar RECOVERY_ANCHORED=False."""
+    import app.scoring as scoring
     from app.scoring import build_dataset
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
     # Siesta: onset 09:00 (bed_min = 540 > 240) con 134 min asleep
     # Noche legítima: onset 23:00 (bed_min = -60) con 420 min asleep
@@ -403,17 +422,22 @@ def test_nap_fields_excluded():
     assert "asleep" not in d4, f"asleep debe estar ausente (evening onset), got {d4.get('asleep')}"
 
 
-def test_normal_day_formula_unchanged():
+def test_normal_day_formula_unchanged(monkeypatch):
     """PARTE A — regresión: día normal (hrv+rhr+asleep, noche legítima).
 
     Ronda 5 (engine v2 — excepción versionada): con 1 sola lectura de hrv/rhr en
     la serie (< _ROLLING_RECOVERY_MIN_PARTIAL=10), la ventana rodante cae en el
     fallback de defaults FIJOS (40,70)/(48,60) — YA NO en el caso especial
     hlo=valor/hhi=valor+1 que usaba el percentil GLOBAL de v1 con un solo dato.
-    Strain usa el híbrido TRIMP v2 (sin exercises → fallback vigorous*F_VIG + NEAT)."""
+    Strain usa el híbrido TRIMP v2 (sin exercises → fallback vigorous*F_VIG + NEAT).
+
+    Engine-v3-port: fórmula de recovery v2 (percentil) — forzar RECOVERY_ANCHORED=False.
+    """
+    import app.scoring as scoring
     from app.scoring import build_dataset
     from app.scoring import STRAIN_V2_F_VIG, STRAIN_V2_F_STEPS, STRAIN_V2_K
     import math
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
     # Día normal: onset 23:30, asleep 450 min (7.5h), hrv=60, rhr=50
     sleep_d = {"2024-01-01": {"asleep": 450, "inbed": 490, "bed_min": -30, "bedtime": "23:30",
