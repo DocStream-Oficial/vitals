@@ -259,7 +259,7 @@ RECOVERY_V3_RSD_FLOOR = 1.5          # piso de sd de RHR (bpm)
 RECOVERY_V3_SLEEP_SPREAD = 0.12      # 1 sd ≈ 12% de desvío vs NEED de sueño
 _ROLLING_BASELINE_WINDOW = 90        # días trailing (solo pasado, incluye el día d)
 _ROLLING_BASELINE_TAKE = 30          # últimas N lecturas dentro de la ventana
-_ROLLING_BASELINE_MIN_N = 5          # <5 lecturas → sin base (el componente se omite)
+_ROLLING_BASELINE_SD_MIN_N = 2       # pstdev necesita ≥2 puntos (hecho matemático, no umbral elegido)
 
 
 def _rolling_baseline_ranges(dates_sorted: list, hrv_by_date: dict, rhr_by_date: dict):
@@ -282,15 +282,23 @@ def _rolling_baseline_ranges(dates_sorted: list, hrv_by_date: dict, rhr_by_date:
                   datetime.timedelta(days=_ROLLING_BASELINE_WINDOW - 1)).isoformat()
         hw = [v for dt, v in hrv_hist if dt >= cutoff][-_ROLLING_BASELINE_TAKE:]
         rw = [v for dt, v in rhr_hist if dt >= cutoff][-_ROLLING_BASELINE_TAKE:]
-        # Cascada de 2 niveles (arranque en frío, roadmap engine-v3-port):
-        #   >=5 lecturas -> media/sd de la ventana        [comportamiento ACTUAL, intacto]
-        #   1..4         -> media de las lecturas que haya, sd=None (el consumidor
-        #                    aplica el piso RECOVERY_V3_*_FLOOR que ya existe)
-        #   0            -> (None, None) -> el componente se OMITE (no hay dato)
+        # Arranque en frío: media y sd de las lecturas que HAYA, sin exigir un mínimo
+        # (antes se exigían 5 y por debajo se devolvía None, lo que hacía que el
+        # consumidor descartara el componente en silencio aunque el día tuviera el dato).
+        #   >=2 lecturas -> media y sd reales de la ventana. Con >=5 el resultado es
+        #                   idéntico al de antes: mismas expresiones, mismos valores.
+        #   1 lectura    -> media = esa lectura; sd = None -> el consumidor aplica el
+        #                   piso RECOVERY_V3_*_FLOOR -> z=0 -> "estás en tu base".
+        #   0            -> (None, None) -> el componente se OMITE (ausencia ≠ base).
+        # 🔴 La sd DEBE ser la real, no el piso: el piso (3.0 ms) está calibrado para
+        # series PLANAS. Aplicarlo a 2 lecturas separadas (p.ej. 119 y 52 ms, sd real
+        # ~34) subestima el ancho ~11x y dispara z≈-11 -> recovery satura en 0/1.
+        # Medido sobre un histórico real: con el piso daba 74,0,0,19,2; con la sd real
+        # da 74,55,59,69,63.
         hb = statistics.mean(hw) if hw else None
-        hsd = statistics.pstdev(hw) if len(hw) >= _ROLLING_BASELINE_MIN_N else None
+        hsd = statistics.pstdev(hw) if len(hw) >= _ROLLING_BASELINE_SD_MIN_N else None
         rb = statistics.mean(rw) if rw else None
-        rsd = statistics.pstdev(rw) if len(rw) >= _ROLLING_BASELINE_MIN_N else None
+        rsd = statistics.pstdev(rw) if len(rw) >= _ROLLING_BASELINE_SD_MIN_N else None
         result[d] = (hb, hsd, rb, rsd)
     return result
 

@@ -102,6 +102,49 @@ def test_cold_start_recovery_n_3_from_day_1_no_jump(monkeypatch):
     )
 
 
+def test_cold_start_dispersed_series_does_not_saturate(monkeypatch):
+    """Arranque en frío con una serie REALISTA: dispersa y con la primera lectura
+    atípica (patrón habitual — el primer dato de un dispositivo suele ser basura).
+
+    Es el caso que el test de arriba NO cubre: con una serie suave (55, 56, 57...)
+    la sd apenas importa y cualquier implementación parece correcta. Con dispersión
+    real, usar el PISO de sd (3.0 ms) en vez de la sd verdadera (~34 ms) subestima
+    el ancho ~11x -> z≈-11 -> recovery satura en 0/1. Cazado en datos reales:
+    daba 74,0,0,19,2 donde debía dar 74,55,59,69,63."""
+    import app.scoring as scoring
+    from app.scoring import build_dataset
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", True)
+
+    # Primera lectura atípica (119.6) seguida de una base ~50: dispersión de 76 ms.
+    hrv_vals = [119.6, 52.3, 43.5, 59.9, 47.0, 53.7, 47.3, 52.6, 55.1, 49.8]
+    base = datetime.date(2026, 1, 1)
+    hrv, rhr, sleep = {}, {}, {}
+    for i, v in enumerate(hrv_vals):
+        d = (base + datetime.timedelta(days=i)).isoformat()
+        hrv[d] = v
+        rhr[d] = 52.0 + (i % 3)
+        sleep[d] = {"asleep": 420, "inbed": 440, "bed_min": 0, "deep": 60,
+                    "rem": 80, "light": 280, "awake": 20, "eff": 95}
+
+    ds = build_dataset(hrv=hrv, rhr=rhr, sleep=sleep, resp={}, vo2={}, steps={}, azm={})
+    recoveries = [d["recovery"] for d in ds["days"]]
+
+    # Ningún día del arranque en frío debe saturar: la logística solo debe llegar a
+    # los extremos con desviaciones fisiológicas reales, nunca por sd subestimada.
+    for day in ds["days"]:
+        assert 5 <= day["recovery"] <= 95, (
+            f"{day['date']}: recovery={day['recovery']} satura — la sd del arranque "
+            f"en frío está subestimada (¿se está usando el piso en vez de la sd real?). "
+            f"serie: {recoveries}"
+        )
+
+    max_jump = max(abs(b - a) for a, b in zip(recoveries, recoveries[1:]))
+    assert max_jump < 25, (
+        f"salto artificial >=25 puntos en arranque en frío con serie dispersa: "
+        f"{recoveries} (max_jump={max_jump})"
+    )
+
+
 def test_cold_start_partial_readings_no_typeerror(monkeypatch):
     """1, 2, 4 y 5 lecturas (tramo sd=None y tramo sd real) no deben producir
     TypeError en max(sd, FLOOR) -- riesgo #5 del roadmap."""
