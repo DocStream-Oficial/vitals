@@ -42,7 +42,10 @@ async def api_insights():
         except Exception as e:
             logger.error(f"compute_cycle_state falló en /api/insights: {e}")
 
-        return JSONResponse(content=evaluate_insights(dataset_with_cycle, locale=locale))
+        # dev-harness/illness-latch: vista del DUEÑO -> latch=True (ver
+        # app/routes/keys.py, que se queda en latch=False por ser lectura
+        # pública/read-only, ver ROADMAP.md §Arquitectura).
+        return JSONResponse(content=evaluate_insights(dataset_with_cycle, locale=locale, latch=True))
     except Exception as e:
         logger.error(f"evaluate_insights falló: {e}")
         return JSONResponse(content=[])

@@ -406,7 +406,9 @@ async def dashboard():
     except Exception as e:
         logger.error(f"compute_cycle_state falló en dashboard: {e}")
 
-    insights = evaluate_insights(dataset_with_cycle, locale=locale)
+    # dev-harness/illness-latch: dashboard es vista del DUEÑO -> latch=True
+    # (la alerta de enfermedad, si disparó hoy, queda fijada el día calendario).
+    insights = evaluate_insights(dataset_with_cycle, locale=locale, latch=True)
 
     # Tier 3: drivers (palancas) — envuelto en try/except, nunca rompe el dashboard
     drivers = []

@@ -1032,3 +1032,181 @@ def test_fresh_insight_has_full_shape_for_template():
     fresh = next(r for r in results if r.get("fresh"))
     for key in ("id", "severity", "category", "icon", "title", "summary", "factors", "recommendation"):
         assert key in fresh
+
+
+# ── Latch (dev-harness/illness-latch) ────────────────────────────────────────
+#
+# `evaluate(dataset, locale="es", latch=False)` — con latch=True el insight
+# illness_early_warning se envuelve con app.illness_state.apply_latch() ANTES
+# del silenciado de positive_hrv. Los datasets de abajo reconstruyen el
+# escenario de referencia: temp elevada con sd alta que enmascara el
+# z-score (ver test_illness_alert_temp_delta_masked_by_high_sd_real_case) +
+# HRV que empieza anómala (pico de la mañana) y se diluye en el mismo día
+# (re-promedio, ver ROADMAP.md).
+
+@pytest.fixture
+def illness_state_isolated(tmp_path, monkeypatch):
+    """Aísla app.illness_state en tmp_path para los tests con latch=True
+    (nunca toca data/ real). Mismo patrón que tests/test_illness_state.py y
+    tests/test_coach_store.py."""
+    from app import illness_state as st
+    monkeypatch.setattr(st, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(st, "_LATCH_FILE", tmp_path / "illness_latch.json")
+    return st
+
+
+_INCIDENT_TEMPS_PREV = [-2.84, -2.46, -2.23, -1.01, -0.29, -0.16, 0.15, 0.27,
+                         0.38, 0.42, -2.01, -2.58, 0.28]
+
+
+def _incident_days(today_hrv):
+    """13 días previos (temp variable, sd alta) + el día de hoy (fijo:
+    skin_temp=0.24, rhr=53.0, resp=15.23, spo2=95.68) con `today_hrv`
+    variable — para simular la misma fecha con la HRV ya diluida por el
+    re-promedio intradía. `today` queda en date_seq(14)[-1] = "2024-01-14"."""
+    dates = date_seq(14)
+    days = [make_day(d, skin_temp=t, rhr=51.6, hrv=57.0, resp=15.0)
+            for d, t in zip(dates[:13], _INCIDENT_TEMPS_PREV)]
+    days.append(make_day(dates[13], skin_temp=0.24, rhr=53.0, hrv=today_hrv,
+                          resp=15.23, spo2=95.68))
+    return days
+
+
+def _incident_summary():
+    return {"hrv_base_recent": 58.8, "hrv_sd": 7.71, "rhr_base": 51.6}
+
+
+def test_latch_false_default_is_byte_identical_and_touches_no_disk(illness_state_isolated):
+    """Criterios 1 y 5 (parte pura): evaluate(dataset) sin `latch` (default
+    False) es idéntico a evaluate(dataset, latch=False) explícito, y NUNCA
+    toca disco — illness_state sigue sin archivo tras la llamada."""
+    ds = make_dataset(_incident_days(today_hrv=79.77), _incident_summary())
+    r_default = evaluate(ds)
+    r_explicit_false = evaluate(ds, latch=False)
+    assert r_default == r_explicit_false
+    assert illness_state_isolated.load_latch() is None, (
+        "evaluate() sin latch=True jamás debe escribir illness_latch.json"
+    )
+
+
+def test_latch_true_real_case_alert_survives_intraday_dilution(illness_state_isolated):
+    """Criterio 7 — el corazón del paquete. 1ª evaluación del día con la HRV
+    en su pico (hrv=79.77, z≈+2.72) dispara `alert` y se persiste. 2ª
+    evaluación del MISMO día calendario con la HRV ya diluida por el
+    re-promedio (hrv=66.07, z≈+0.94 → ya no es señal) SIGUE devolviendo
+    `alert` (latcheado) — la retractación real que exponía el roadmap."""
+    summary = _incident_summary()
+
+    morning = evaluate(make_dataset(_incident_days(today_hrv=79.77), summary), latch=True)
+    morning_illness = next(r for r in morning if r["id"] == "illness_early_warning")
+    assert morning_illness["severity"] == "alert"
+
+    # Sanity check: SIN latch, la HRV diluida ya no sostiene la alerta (así
+    # se reproduce la retractación real que motiva este paquete).
+    evening_fresh = evaluate(make_dataset(_incident_days(today_hrv=66.07), summary), latch=False)
+    evening_fresh_illness = next(r for r in evening_fresh if r["id"] == "illness_early_warning")
+    assert evening_fresh_illness["severity"] == "watch", (
+        "sanity check del escenario: sin latch, la HRV diluida degrada alert->watch "
+        "(si ya no reprodujera la retractación, el test de abajo sería vacuo)"
+    )
+
+    evening_latched = evaluate(make_dataset(_incident_days(today_hrv=66.07), summary), latch=True)
+    evening_illness = next(r for r in evening_latched if r["id"] == "illness_early_warning")
+    assert evening_illness["severity"] == "alert", (
+        "con latch=True, la alerta de la mañana debe seguir devolviéndose aunque "
+        "la señal fresca de la 2ª llamada del mismo día ya no sea alert"
+    )
+    assert evening_illness["summary"] == morning_illness["summary"], (
+        "debe verse el insight COMPLETO del pico (mismo mensaje/factors de la "
+        "mañana), no un alert genérico reconstruido"
+    )
+
+
+def test_latch_true_silences_positive_hrv_when_alert_is_latched(illness_state_isolated):
+    """Criterio 4: el latch se aplica ANTES del silenciado de positive_hrv.
+    Un `alert` que viene del LATCH (no del cómputo fresco de ESTA llamada)
+    debe seguir silenciando un positive_hrv fresco del mismo día, y el
+    evento de cambio 'HRV mejoró' equivalente tampoco debe colarse."""
+    dates = date_seq(14)
+    hrv_rising = [50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 56.0, 57.0,
+                  58.0, 59.0, 60.0, 61.0, 62.0]
+    prev_days = [make_day(d, skin_temp=t, rhr=51.6, hrv=h, resp=15.0)
+                 for d, t, h in zip(dates[:13], _INCIDENT_TEMPS_PREV, hrv_rising)]
+    summary = _incident_summary()
+
+    # 1ª llamada: fresh alert (temp elevada + HRV anómala alta) -> persiste el latch.
+    morning_days = prev_days + [make_day(dates[13], skin_temp=0.24, rhr=53.0,
+                                          hrv=79.77, resp=15.23, spo2=95.68)]
+    first = evaluate(make_dataset(morning_days, summary), latch=True)
+    assert any(r["id"] == "illness_early_warning" and r["severity"] == "alert" for r in first)
+
+    # 2ª llamada MISMO día: HRV diluida (66.07, ya no anómala) -> el fresco de
+    # illness_early_warning baja a watch, pero la racha ascendente previa +
+    # 66.07 > 62.0 SÍ dispara positive_hrv fresco.
+    diluted_days = prev_days + [make_day(dates[13], skin_temp=0.24, rhr=53.0,
+                                          hrv=66.07, resp=15.23, spo2=95.68)]
+    ds_diluted = make_dataset(diluted_days, summary)
+
+    without_latch = evaluate(ds_diluted, latch=False)
+    assert any(r["id"] == "positive_hrv" for r in without_latch), (
+        "sanity check: sin latch, este dataset diluido SÍ dispara positive_hrv "
+        "(si no, el test de silenciado de abajo sería vacuo)"
+    )
+
+    second = evaluate(ds_diluted, latch=True)
+    ids = [r["id"] for r in second]
+    assert "illness_early_warning" in ids
+    illness = next(r for r in second if r["id"] == "illness_early_warning")
+    assert illness["severity"] == "alert", "el latch de la 1ª llamada debe seguir mandando"
+    assert "positive_hrv" not in ids, (
+        "positive_hrv fresco debe seguir silenciado cuando la alerta viene del "
+        "LATCH, no solo cuando viene del cómputo fresco de esta misma llamada"
+    )
+    assert not any(i.startswith("change_hrv") for i in ids), (
+        "el evento de cambio 'HRV mejoró' tampoco debe reintroducir el mensaje contradictorio"
+    )
+
+
+def test_latch_true_resets_on_new_calendar_day(illness_state_isolated):
+    """Criterio 6, vía evaluate(): un latch de AYER no debe fijar HOY, y el
+    estado se re-persiste con la fecha de HOY (no acumula días viejos)."""
+    summary = _incident_summary()
+    evaluate(make_dataset(_incident_days(today_hrv=79.77), summary), latch=True)
+    assert illness_state_isolated.load_latch()["date"] == "2024-01-14"
+
+    # "Hoy" es un día calendario nuevo (2024-01-15), totalmente plano/sano.
+    today_dates = date_seq(15)
+    calm_days = [make_day(d, skin_temp=0.0, rhr=51.6, hrv=58.0, resp=15.0)
+                 for d in today_dates]
+    result = evaluate(make_dataset(calm_days, summary), latch=True)
+    assert not any(r["id"] == "illness_early_warning" for r in result), (
+        "el latch de ayer no debe fijar la alerta hoy"
+    )
+    persisted = illness_state_isolated.load_latch()
+    assert persisted["date"] == "2024-01-15", "debe re-persistirse con la fecha de HOY"
+    assert persisted["severity"] == "none"
+
+
+def test_latch_true_none_safe_corrupt_state_degrades_to_fresh(illness_state_isolated, tmp_path):
+    """Criterio 8: illness_latch.json corrupto -> latch=True se comporta como
+    latch=False para esta llamada (el cómputo fresco sigue funcionando), nunca
+    crashea evaluate()."""
+    (tmp_path / "illness_latch.json").write_text("{not valid json", encoding="utf-8")
+    summary = _incident_summary()
+    result = evaluate(make_dataset(_incident_days(today_hrv=79.77), summary), latch=True)
+    illness = next(r for r in result if r["id"] == "illness_early_warning")
+    assert illness["severity"] == "alert"
+
+
+def test_latch_true_none_safe_missing_date_degrades_to_fresh(illness_state_isolated):
+    """Criterio 8: el último día sin `date` -> apply_latch degrada a fresh sin
+    persistir (no hay forma confiable de comparar "mismo día"), nunca crashea."""
+    days = _incident_days(today_hrv=79.77)
+    days[-1] = {k: v for k, v in days[-1].items() if k != "date"}
+    summary = _incident_summary()
+    result = evaluate(make_dataset(days, summary), latch=True)
+    illness = next(r for r in result if r["id"] == "illness_early_warning")
+    assert illness["severity"] == "alert"
+    assert illness_state_isolated.load_latch() is None, (
+        "sin date confiable no debe persistir nada"
+    )

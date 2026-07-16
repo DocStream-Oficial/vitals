@@ -41,3 +41,25 @@ def _isolate_userctx_data_dir(tmp_path, monkeypatch):
     isolated_dir = tmp_path / "_conftest_userctx_isolation"
     monkeypatch.setattr(_userctx, "_DATA_DIR", isolated_dir)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_illness_state_data_dir(tmp_path, monkeypatch):
+    """Autouse (dev-harness/illness-latch): illness_state._DATA_DIR/_LATCH_FILE
+    apuntan a un tmp_path fresco en CADA test.
+
+    Mismo riesgo que _isolate_userctx_data_dir de arriba, pero disparado por
+    request normal en vez de startup: main.py::/ y app/routes/insights.py::
+    GET /api/insights ahora llaman evaluate(..., latch=True) SIEMPRE (paso 3
+    del roadmap illness-latch), y app/illness_state.py captura _DATA_DIR de
+    settings.DATA_DIR al importar (mismo patrón que app/coach_store.py) — sin
+    este aislamiento, CUALQUIER test que instancie TestClient(main.app) y
+    pegue GET / o GET /api/insights escribiría illness_latch.json en el
+    data/ real del repo, incluso tests que no saben que este módulo existe.
+    Salvo que el test mismo lo sobrescriba explícitamente después (mismo
+    criterio: gana por ser posterior en el setup)."""
+    from app import illness_state as _illness_state
+    isolated_dir = tmp_path / "_conftest_illness_state_isolation"
+    monkeypatch.setattr(_illness_state, "_DATA_DIR", isolated_dir)
+    monkeypatch.setattr(_illness_state, "_LATCH_FILE", isolated_dir / "illness_latch.json")
+    yield

@@ -804,7 +804,7 @@ def _sort_key(insight: dict) -> tuple:
     return (base, 0)
 
 
-def evaluate(dataset: dict, locale: str = "es") -> list[dict]:
+def evaluate(dataset: dict, locale: str = "es", latch: bool = False) -> list[dict]:
     """
     Evalúa todas las reglas sobre el dataset y devuelve la lista de insights
     ordenada: alertas médicas -> cambios frescos significativos -> watch
@@ -819,6 +819,15 @@ def evaluate(dataset: dict, locale: str = "es") -> list[dict]:
     Anti-duplicado: un evento de cambio se omite si una regla existente del
     mismo factor/dirección ya disparó (_CHANGE_ANTI_DUP). Con 0 cambios
     detectados, el comportamiento es EXACTAMENTE el de antes de este paso.
+
+    `latch` (dev-harness/illness-latch, opt-in, default False): con
+    `latch=False` esta función es PURA y BYTE-IDÉNTICA al comportamiento de
+    siempre — ni lee ni escribe disco (ni siquiera importa app.illness_state).
+    Con `latch=True`, el insight `illness_early_warning` fresco se ENVUELVE
+    con app.illness_state.apply_latch() ANTES del silenciado de
+    `positive_hrv` de abajo: si ya disparó una alerta hoy (día calendario de
+    `days[-1]["date"]`), queda fijada aunque la señal fresca se diluya. La
+    lógica/umbrales de la regla NO cambian — solo qué resultado se muestra.
     """
     days: list[dict] = (dataset or {}).get("days", [])
     summary: dict = dict((dataset or {}).get("summary", {}) or {})
@@ -844,6 +853,26 @@ def evaluate(dataset: dict, locale: str = "es") -> list[dict]:
             # Nunca crashear: una regla defectuosa no debe tumbar las demás, pero
             # Ronda 3: el fallo queda LOGUEADO (antes se silenciaba con `pass`).
             logger.warning("Regla %s falló: %s", getattr(rule, "__name__", rule), exc)
+
+    # Latch (dev-harness/illness-latch, opt-in): SOLO si latch=True se importa
+    # app.illness_state y se toca disco — con latch=False (default) esta rama
+    # ni se evalúa, preservando la pureza de evaluate() byte-a-byte.
+    if latch:
+        try:
+            from app import illness_state as _illness_state
+            fresh_illness = next(
+                (r for r in results if r.get("id") == "illness_early_warning"), None
+            )
+            today_date = days[-1].get("date") if days else None
+            latched_illness = _illness_state.apply_latch(fresh_illness, today_date)
+            if latched_illness is not fresh_illness:
+                results = [r for r in results if r.get("id") != "illness_early_warning"]
+                if latched_illness is not None:
+                    results.insert(0, latched_illness)
+        except Exception as exc:
+            # Nunca crashear evaluate() por un fallo del latch — degrada al
+            # resultado fresco tal cual (equivalente a latch=False).
+            logger.warning("Latch de illness_early_warning falló: %s", exc)
 
     # Coherencia de mensaje: el MISMO dato (HRV alta) puede
     # disparar A LA VEZ la alerta de enfermedad (vía la señal hrv_anomala) y el positivo
