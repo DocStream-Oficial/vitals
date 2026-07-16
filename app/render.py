@@ -5,11 +5,64 @@ render.py — inyecta __DATA__/__COACH__/__AUTH__/__INSIGHTS__ en los templates 
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import List, Optional
 
 from app.config import settings
+
+# ── Cache-busting de assets estáticos ────────────────────────────────────────
+# Las URLs de /static se sirven con URL fija (sin versión). Sin Cache-Control
+# explícito, el navegador aplica caché HEURÍSTICA (RFC 9111 §4.2.2: ~10% del
+# tiempo que el archivo llevaba sin cambiar) y no revalida — un archivo quieto
+# unos días recibe horas de "fresco" y el usuario ve el JS viejo tras un deploy.
+# Solución: colgar ?v=<hash-del-contenido> a cada src/href de /static. Al cambiar
+# el archivo cambia el hash -> cambia la URL -> la caché falla por diseño y el
+# navegador baja lo nuevo de inmediato. Los assets versionados se sirven como
+# `immutable` (main.py) -> caché eterna sin revalidar mientras la URL no cambie.
+_STATIC_DIR: Path = settings.ROOT_DIR / "static"
+
+# Solo atributos src="/static/..." y href="/static/..." — NO tocamos URLs que
+# vivan dentro de los JSON de datos (__DATA__ etc.), que podrían contener la
+# cadena /static por casualidad. El [^"?]+ excluye URLs que ya traigan query.
+_ASSET_ATTR_RE = re.compile(r'((?:src|href)=")(/static/[^"?]+)(")')
+
+# Memo por ruta: (mtime, hash). Evita releer/rehashear en cada request; se
+# recomputa solo si el archivo cambió (mtime distinto).
+_asset_hash_cache: dict[str, tuple[float, str]] = {}
+
+
+def _asset_hash(full_path: Path) -> str:
+    """sha1 corto (8 hex) del contenido del archivo, memoizado por mtime.
+    Devuelve '' si el archivo no existe o no se puede leer (en ese caso la URL
+    se deja SIN versionar — nunca rompemos el render por un asset ausente)."""
+    try:
+        mtime = full_path.stat().st_mtime
+    except OSError:
+        return ""
+    key = str(full_path)
+    cached = _asset_hash_cache.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    try:
+        h = hashlib.sha1(full_path.read_bytes()).hexdigest()[:8]
+    except OSError:
+        return ""
+    _asset_hash_cache[key] = (mtime, h)
+    return h
+
+
+def _version_static_urls(html: str) -> str:
+    """Reescribe src/href de /static para colgarles ?v=<hash>. Idempotente-safe:
+    el regex excluye URLs que ya traen query, así reejecutar no duplica el ?v."""
+    def _repl(m: re.Match) -> str:
+        pre, url, post = m.group(1), m.group(2), m.group(3)
+        rel = url[len("/static/"):]
+        h = _asset_hash(_STATIC_DIR / rel)
+        return f"{pre}{url}?v={h}{post}" if h else m.group(0)
+    return _ASSET_ATTR_RE.sub(_repl, html)
 
 TEMPLATE_PATH = settings.TEMPLATES_DIR / "vitals_premium_template.html"
 TEMPLATE_IOS_PATH = settings.TEMPLATES_DIR / "vitals_ios.html"
@@ -86,6 +139,11 @@ def _inject_placeholders(
     # devuelve GET /api/cycle, así el front reusa la misma lógica de render.
     cycle_json = _json_for_script(cycle or {"enabled": False}, ensure_ascii=False)
     html = html.replace("__CYCLE__", cycle_json, 1)
+
+    # Cache-busting: se hace AL FINAL, sobre el HTML ya con los datos inyectados,
+    # para que el ?v= solo toque los src/href reales del template y nunca las
+    # URLs que pudieran venir dentro de los JSON de datos.
+    html = _version_static_urls(html)
 
     return html
 

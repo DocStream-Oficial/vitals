@@ -73,9 +73,31 @@ from app.deps import (  # noqa: E402
 
 STATIC_DIR = settings.ROOT_DIR / "static"
 
+
+class _CachedStaticFiles(StaticFiles):
+    """StaticFiles con Cache-Control explícito, para no depender de la caché
+    HEURÍSTICA del navegador (que servía JS viejo por horas tras un deploy).
+
+    - Con ?v=<hash> (el render versiona los src/href, ver app/render.py):
+      `immutable, max-age=1año` — la URL cambia cuando cambia el contenido, así
+      que cachear para siempre es correcto y elimina revalidaciones.
+    - Sin query (URL pelona, p.ej. acceso directo o un ref futuro sin versionar):
+      `no-cache` — el navegador revalida SIEMPRE, así nunca se queda con una
+      versión vieja pegada. Correcto por defecto, aunque cueste un 304 por visita.
+    """
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        qs = scope.get("query_string", b"") or b""
+        if b"v=" in qs:
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
 # ---------------------------------------------------------------- PWA / static
 if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/static", _CachedStaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Fase 9: manifest/service-worker/ingest-token/qr -> app/routes/pwa.py
 from app.routes.pwa import router as _pwa_router  # noqa: E402
@@ -325,6 +347,7 @@ async def dashboard():
                 "&middot; <a href='/api/sync' style='color:#16c784'>POST /api/sync</a></p>"
                 "</body></html>",
                 status_code=200,
+                headers={"Cache-Control": "no-cache"},
             )
     auth_st = _active_source().auth_state()
 
@@ -406,7 +429,12 @@ async def dashboard():
 
     profile = effective_profile_dict()
     html = render_ios(dataset, card, auth_st, insights, drivers, trends, profile, cycle_state)
-    return HTMLResponse(content=html, status_code=200)
+    # no-cache en el HTML: DEBE revalidarse siempre para recoger los ?v=<hash>
+    # nuevos de los assets tras un deploy. Sin esto, la caché heurística podría
+    # servir un HTML viejo que apunta a las versiones viejas (el bug que este
+    # paquete arregla, un nivel más arriba).
+    return HTMLResponse(content=html, status_code=200,
+                        headers={"Cache-Control": "no-cache"})
 
 
 # ---------------------------------------------------------------- routers (Fase 9)
