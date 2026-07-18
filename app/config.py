@@ -134,6 +134,15 @@ class Settings:
     COACH_MODEL: str = os.getenv("COACH_MODEL", "llama3.1")
     COACH_API_KEY: str = os.getenv("COACH_API_KEY", "")
 
+    # Voz del Coach (roadmap coach-voz): servers STT/TTS que viven en el WSL
+    # del box de prod, localhost-only (nunca expuestos al tailnet). El TTS
+    # (:8100) es COMPARTIDO con Alfred/OpenClaw — no se toca su config ni su
+    # tempo. El STT (:8102) es nuevo, construido en este mismo roadmap
+    # (scripts/voice/stt_server.py). Override por .env si cambian de host/puerto.
+    VITALS_STT_URL: str = os.getenv("VITALS_STT_URL", "http://127.0.0.1:8102")
+    VITALS_TTS_URL: str = os.getenv("VITALS_TTS_URL", "http://127.0.0.1:8100")
+    VITALS_TTS_SPEAKER: str = os.getenv("VITALS_TTS_SPEAKER", "alfred")
+
     # Directorios
     ROOT_DIR: Path = _ROOT
     # Fase 8A (paso A1): en modo demo, DATA_DIR NUNCA apunta a data/ real —
