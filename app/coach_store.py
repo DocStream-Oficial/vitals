@@ -245,6 +245,7 @@ def list_conversations() -> list[dict]:
                 "title": c.get("title") or _DEFAULT_TITLE,
                 "updated": c.get("updated"),
                 "message_count": len(c.get("messages") or []),
+                "kind": c.get("kind") or "chat",
             }
             for c in convs
         ]
@@ -266,8 +267,13 @@ def get_conversation(cid: str) -> Optional[dict]:
         return None
 
 
-def create_conversation(title: Optional[str] = None) -> dict:
-    """Crea una conversación vacía y la persiste. Devuelve el dict completo."""
+def create_conversation(title: Optional[str] = None, kind: Optional[str] = None) -> dict:
+    """Crea una conversación vacía y la persiste. Devuelve el dict completo.
+
+    `kind` es ADITIVO (Coach Deportivo, roadmap coach-mental Paso 2): si viene
+    truthy (p.ej. "mental_master") se guarda `"kind": kind` en el dict de la
+    conversación; si no, NO se añade la clave — las conversaciones de chat
+    normal quedan byte-idénticas a como eran antes de este campo."""
     try:
         with _STORE_LOCK:
             store = _load_store()
@@ -279,6 +285,8 @@ def create_conversation(title: Optional[str] = None) -> dict:
                 "updated": now,
                 "messages": [],
             }
+            if kind:
+                conv["kind"] = kind
             convs = store.setdefault("conversations", [])
             convs.append(conv)
             _save_store(store)
@@ -287,7 +295,46 @@ def create_conversation(title: Optional[str] = None) -> dict:
         logger.error("create_conversation falló: %s", exc)
         # Degradar con gracia: devolver un dict transitorio no-persistido antes que lanzar.
         now = _now_iso()
-        return {"id": _new_id(), "title": title or _DEFAULT_TITLE, "created": now, "updated": now, "messages": []}
+        conv = {"id": _new_id(), "title": title or _DEFAULT_TITLE, "created": now, "updated": now, "messages": []}
+        if kind:
+            conv["kind"] = kind
+        return conv
+
+
+def get_kind(cid: Optional[str]) -> str:
+    """`kind` de la conversación (p.ej. "mental_master"), o "chat" por
+    default — incluye conversaciones viejas sin la clave (backward-compat) y
+    cid None/inexistente. Nunca lanza."""
+    try:
+        store = _load_store()
+        conv = _find(store, cid)
+        if not conv:
+            return "chat"
+        return conv.get("kind") or "chat"
+    except Exception as exc:
+        logger.warning("get_kind falló: %s", exc)
+        return "chat"
+
+
+def append_message(cid: Optional[str], role: str, content: str) -> None:
+    """Agrega UN mensaje suelto a la conversación `cid` (para persistir la
+    apertura del Coach Deportivo, que no es un par pregunta/respuesta). Con
+    lock, atómica, actualiza `updated`, respeta el cap por conversación. NO
+    toca el título. cid inexistente/None -> no-op (nunca lanza)."""
+    try:
+        with _STORE_LOCK:
+            store = _load_store()
+            conv = _find(store, cid)
+            if conv is None:
+                logger.warning("append_message: conversación %r no existe; ignorado.", cid)
+                return
+            ts = _now_iso()
+            msgs = conv.setdefault("messages", [])
+            msgs.append({"role": role, "content": content, "ts": ts})
+            conv["updated"] = ts
+            _save_store(store)
+    except Exception as exc:
+        logger.error("append_message falló: %s", exc)
 
 
 def get_context(cid: Optional[str], n: int = 10) -> list[dict]:
