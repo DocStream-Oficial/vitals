@@ -377,6 +377,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_adapted_reason_recovery": "adaptado por recuperación baja",
         "task_adapted_reason_acwr": "adaptado por carga de entrenamiento alta",
         "task_adapted_reason_both": "adaptado por recuperación baja y carga alta",
+        # coach_mental.py — Coach Deportivo (Sesión Master), roadmap coach-mental
+        "mental_opening_fallback": "Empecemos la Sesión Master. ¿Cómo llegas esta semana — qué es lo primero que se te viene a la cabeza?",
+        "mental_llm_fallback": "Por el momento no puedo conectarme con el Coach Deportivo. Intenta de nuevo en un momento.",
     },
 
     # ── ENGLISH ────────────────────────────────────────────────────────────────
@@ -747,6 +750,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_adapted_reason_recovery": "adapted for low recovery",
         "task_adapted_reason_acwr": "adapted for high training load",
         "task_adapted_reason_both": "adapted for low recovery and high load",
+        # coach_mental.py — Sports Coach (Master Session), coach-mental roadmap
+        "mental_opening_fallback": "Let's start the Master Session. How are you coming into this week — what's the first thing on your mind?",
+        "mental_llm_fallback": "I can't connect with the Sports Coach right now. Try again in a moment.",
     },
 
     # ── FRANÇAIS ───────────────────────────────────────────────────────────────
@@ -1117,6 +1123,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_adapted_reason_recovery": "adapté pour récupération basse",
         "task_adapted_reason_acwr": "adapté pour charge d'entraînement élevée",
         "task_adapted_reason_both": "adapté pour récupération basse et charge élevée",
+        # coach_mental.py — Coach sportif (Séance Master), roadmap coach-mental
+        "mental_opening_fallback": "Commençons la Séance Master. Comment arrives-tu cette semaine — qu'est-ce qui te vient d'abord à l'esprit ?",
+        "mental_llm_fallback": "Je ne peux pas me connecter au Coach sportif pour le moment. Réessaie dans un instant.",
     },
 
     # ── PORTUGUÊS (neutro/Brasil) ──────────────────────────────────────────────
@@ -1487,6 +1496,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_adapted_reason_recovery": "adaptado por recuperação baixa",
         "task_adapted_reason_acwr": "adaptado por carga de treino alta",
         "task_adapted_reason_both": "adaptado por recuperação baixa e carga alta",
+        # coach_mental.py — Coach esportivo (Sessão Master), roadmap coach-mental
+        "mental_opening_fallback": "Vamos começar a Sessão Master. Como você chega nesta semana — o que vem primeiro à sua cabeça?",
+        "mental_llm_fallback": "No momento não consigo me conectar com o Coach esportivo. Tente novamente em instantes.",
     },
 }
 
