@@ -3650,6 +3650,7 @@ function renderCoachTab() {
       _setActiveConvId(_coachConvListCache[0].id);
     }
     _updateConvSwitcherLabel();
+    _updateMasterCloseVisibility();
     if (activeConvId) {
       _loadActiveConversationThread();
     } else {
@@ -3822,7 +3823,7 @@ function newConversation() {
     .then(function(data) {
       if (data && data.id) {
         _setActiveConvId(data.id);
-        _loadConversationList(_updateConvSwitcherLabel);
+        _loadConversationList(function(){ _updateConvSwitcherLabel(); _updateMasterCloseVisibility(); });
         _paintHistoryBubbles([]);
         // Hilo vacío de nuevo: recuperar las sugerencias de arranque.
         _loadCoachSuggestions();
@@ -3837,7 +3838,59 @@ function openConversation(id) {
   _setActiveConvId(id);
   closeCoachConvModal();
   _updateConvSwitcherLabel();
+  _updateMasterCloseVisibility();
   _loadActiveConversationThread();
+}
+
+// ── Coach Deportivo: Sesión Master (roadmap coach-mental, Paso 5) ──────────
+
+function _updateMasterCloseVisibility() {
+  // El botón de cierre solo aparece cuando la conversación ACTIVA es una
+  // Sesión Master (kind=mental_master, ya viene en la metadata ligera de
+  // _coachConvListCache desde el Paso 2 de coach_store.py).
+  var btn = document.getElementById('masterCloseBtn');
+  if (!btn) return;
+  var conv = _coachConvListCache.find(function(c) { return c.id === activeConvId; });
+  btn.style.display = (conv && conv.kind === 'mental_master') ? '' : 'none';
+}
+
+function startMasterSession() {
+  // Misma cola de "listo" que goCoachWithPlanPrompt() (ver su comentario):
+  // evita competir con el auto-render de la primera visita al tab, que
+  // también pinta el historial de forma asíncrona.
+  _onCoachTabReady(function() {
+    fetch('/api/coach/mental/session', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.conversation_id) return;
+        _setActiveConvId(data.conversation_id);
+        _setCoachSuggestionsHidden(true);
+        _loadConversationList(function() {
+          _updateConvSwitcherLabel();
+          _updateMasterCloseVisibility();
+          _loadActiveConversationThread();
+        });
+      })
+      .catch(function() {
+        // Silencioso: si falla, el usuario sigue en la conversación actual.
+      });
+  });
+}
+
+function closeMasterSession() {
+  if (!activeConvId) return;
+  fetch('/api/coach/mental/session/' + encodeURIComponent(activeConvId) + '/close', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var focos = (data && data.focos) || [];
+      var msg = focos.length
+        ? (t('mental_closed_with_focos') + ' ' + focos.join(' · '))
+        : t('mental_closed_no_focos');
+      _appendBubble('assistant', msg);
+    })
+    .catch(function() {
+      _appendBubble('assistant', t('coach_net_error'));
+    });
 }
 
 function deleteConversation(id, evt) {

@@ -71,6 +71,11 @@ var STRINGS = {
     coach_delete_conv_confirm: '¿Borrar esta conversación? No se puede deshacer.',
     coach_default_title: 'Conversación anterior',
     coach_msg_count_fmt: '{n} mensajes',
+    // Coach Deportivo — Sesión Master (roadmap coach-mental)
+    mental_master_btn: 'Sesión Master',
+    mental_close_btn: 'Cerrar Sesión Master',
+    mental_closed_with_focos: 'Sesión cerrada. Focos de la semana:',
+    mental_closed_no_focos: 'Sesión cerrada.',
     // Body age card
     ba_label: 'Edad corporal',
     ba_fitness_lbl: 'Edad de fitness',
@@ -780,6 +785,11 @@ var STRINGS = {
     coach_delete_conv_confirm: 'Delete this conversation? This can\'t be undone.',
     coach_default_title: 'Previous conversation',
     coach_msg_count_fmt: '{n} messages',
+    // Sports Coach — Master Session (coach-mental roadmap)
+    mental_master_btn: 'Master Session',
+    mental_close_btn: 'Close Master Session',
+    mental_closed_with_focos: 'Session closed. Focus for the week:',
+    mental_closed_no_focos: 'Session closed.',
     ba_label: 'Body Age',
     ba_fitness_lbl: 'Fitness Age',
     ba_fitness_sub: 'VO₂max validated',
@@ -1445,6 +1455,11 @@ var STRINGS = {
     coach_delete_conv_confirm: 'Supprimer cette conversation ? Action irréversible.',
     coach_default_title: 'Conversation précédente',
     coach_msg_count_fmt: '{n} messages',
+    // Coach sportif — Séance Master (roadmap coach-mental)
+    mental_master_btn: 'Séance Master',
+    mental_close_btn: 'Terminer la Séance Master',
+    mental_closed_with_focos: 'Séance terminée. Objectifs de la semaine :',
+    mental_closed_no_focos: 'Séance terminée.',
     ba_label: 'Âge corporel',
     ba_fitness_lbl: 'Âge de forme',
     ba_fitness_sub: 'VO₂max validé',
@@ -2110,6 +2125,11 @@ var STRINGS = {
     coach_delete_conv_confirm: 'Excluir esta conversa? Não pode ser desfeito.',
     coach_default_title: 'Conversa anterior',
     coach_msg_count_fmt: '{n} mensagens',
+    // Coach esportivo — Sessão Master (roadmap coach-mental)
+    mental_master_btn: 'Sessão Master',
+    mental_close_btn: 'Encerrar Sessão Master',
+    mental_closed_with_focos: 'Sessão encerrada. Focos da semana:',
+    mental_closed_no_focos: 'Sessão encerrada.',
     ba_label: 'Idade corporal',
     ba_fitness_lbl: 'Idade de aptidão',
     ba_fitness_sub: 'VO₂max validado',

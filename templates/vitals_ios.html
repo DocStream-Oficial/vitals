@@ -472,6 +472,16 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
         <div id="coachBriefBullets"></div>
       </div>
 
+      <!-- Coach Deportivo: Sesión Master (roadmap coach-mental) -->
+      <button id="masterSessionBtn" class="coach-suggestion" onclick="startMasterSession()"
+        style="width:100%;box-sizing:border-box;margin-bottom:14px">
+        <span data-i18n="mental_master_btn">Sesión Master</span>
+        <svg class="coach-suggestion-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button id="masterCloseBtn" class="coach-suggestion" onclick="closeMasterSession()" style="display:none;width:100%;box-sizing:border-box;margin-bottom:14px">
+        <span data-i18n="mental_close_btn">Cerrar Sesión Master</span>
+      </button>
+
       <!-- Sugerencias -->
       <div class="coach-suggestions-lbl" data-i18n="coach_ask_lbl">Pregúntale al coach</div>
       <div id="coachSuggestions"></div>
