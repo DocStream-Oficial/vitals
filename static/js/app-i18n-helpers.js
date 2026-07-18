@@ -73,6 +73,7 @@ var STRINGS = {
     coach_msg_count_fmt: '{n} mensajes',
     // Coach Deportivo — Sesión Master (roadmap coach-mental)
     mental_master_btn: 'Sesión Master',
+    mental_master_starting: 'Abriendo sesión…',
     mental_close_btn: 'Cerrar Sesión Master',
     mental_closed_with_focos: 'Sesión cerrada. Focos de la semana:',
     mental_closed_no_focos: 'Sesión cerrada.',
@@ -792,6 +793,7 @@ var STRINGS = {
     coach_msg_count_fmt: '{n} messages',
     // Sports Coach — Master Session (coach-mental roadmap)
     mental_master_btn: 'Master Session',
+    mental_master_starting: 'Opening session…',
     mental_close_btn: 'Close Master Session',
     mental_closed_with_focos: 'Session closed. Focus for the week:',
     mental_closed_no_focos: 'Session closed.',
@@ -1467,6 +1469,7 @@ var STRINGS = {
     coach_msg_count_fmt: '{n} messages',
     // Coach sportif — Séance Master (roadmap coach-mental)
     mental_master_btn: 'Séance Master',
+    mental_master_starting: 'Ouverture de la séance…',
     mental_close_btn: 'Terminer la Séance Master',
     mental_closed_with_focos: 'Séance terminée. Objectifs de la semaine :',
     mental_closed_no_focos: 'Séance terminée.',
@@ -2142,6 +2145,7 @@ var STRINGS = {
     coach_msg_count_fmt: '{n} mensagens',
     // Coach esportivo — Sessão Master (roadmap coach-mental)
     mental_master_btn: 'Sessão Master',
+    mental_master_starting: 'Abrindo a sessão…',
     mental_close_btn: 'Encerrar Sessão Master',
     mental_closed_with_focos: 'Sessão encerrada. Focos da semana:',
     mental_closed_no_focos: 'Sessão encerrada.',

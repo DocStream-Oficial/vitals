@@ -3812,7 +3812,9 @@ function sendCoach(text) {
 
 // ── COACH: switcher + modal de lista de conversaciones (patrón ecgListModal) ──
 
-function newConversation() {
+function newConversation(onReady) {
+  // onReady (opcional): callback tras pintar el hilo vacío — lo usa
+  // closeMasterSession() para dejar el resumen de focos en el chat nuevo.
   closeCoachConvModal();
   fetch('/api/coach/conversations', {
     method: 'POST',
@@ -3827,6 +3829,7 @@ function newConversation() {
         _paintHistoryBubbles([]);
         // Hilo vacío de nuevo: recuperar las sugerencias de arranque.
         _loadCoachSuggestions();
+        if (typeof onReady === 'function') onReady();
       }
     })
     .catch(function() {
@@ -3845,16 +3848,37 @@ function openConversation(id) {
 // ── Coach Deportivo: Sesión Master (roadmap coach-mental, Paso 5) ──────────
 
 function _updateMasterCloseVisibility() {
-  // El botón de cierre solo aparece cuando la conversación ACTIVA es una
-  // Sesión Master (kind=mental_master, ya viene en la metadata ligera de
-  // _coachConvListCache desde el Paso 2 de coach_store.py).
-  var btn = document.getElementById('masterCloseBtn');
-  if (!btn) return;
+  // Botones mutuamente excluyentes (fix bug reportado 2026-07-18): con una
+  // Sesión Master activa se oculta el botón de ARRANQUE (evita crear una
+  // segunda sesión encima) y se muestra el de CIERRE; en cualquier otra
+  // conversación, al revés. kind viene en la metadata ligera de
+  // _coachConvListCache (Paso 2 de coach_store.py).
+  var closeBtn = document.getElementById('masterCloseBtn');
+  var startBtn = document.getElementById('masterSessionBtn');
   var conv = _coachConvListCache.find(function(c) { return c.id === activeConvId; });
-  btn.style.display = (conv && conv.kind === 'mental_master') ? '' : 'none';
+  var isMaster = !!(conv && conv.kind === 'mental_master');
+  if (closeBtn) closeBtn.style.display = isMaster ? '' : 'none';
+  if (startBtn) startBtn.style.display = isMaster ? 'none' : '';
+}
+
+var _masterBusy = false; // guard anti doble-tap: la apertura/cierre tardan ~10-90s (LLM)
+
+function _setMasterBtnLoading(btnId, loading, idleKey, loadingKey) {
+  var btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.style.opacity = loading ? '0.55' : '';
+  var lbl = btn.querySelector('span');
+  if (lbl) lbl.textContent = t(loading ? loadingKey : idleKey);
 }
 
 function startMasterSession() {
+  // Guard de in-flight (fix bug 2026-07-18): la apertura tarda lo que tarde
+  // el LLM (~10s+); sin guard, cada tap creaba OTRA sesión y el hilo
+  // parpadeaba entre las respuestas que iban llegando.
+  if (_masterBusy) return;
+  _masterBusy = true;
+  _setMasterBtnLoading('masterSessionBtn', true, 'mental_master_btn', 'mental_master_starting');
   // Misma cola de "listo" que goCoachWithPlanPrompt() (ver su comentario):
   // evita competir con el auto-render de la primera visita al tab, que
   // también pinta el historial de forma asíncrona.
@@ -3873,12 +3897,18 @@ function startMasterSession() {
       })
       .catch(function() {
         // Silencioso: si falla, el usuario sigue en la conversación actual.
+      })
+      .finally(function() {
+        _masterBusy = false;
+        _setMasterBtnLoading('masterSessionBtn', false, 'mental_master_btn', 'mental_master_starting');
       });
   });
 }
 
 function closeMasterSession() {
-  if (!activeConvId) return;
+  if (!activeConvId || _masterBusy) return;
+  _masterBusy = true;
+  _setMasterBtnLoading('masterCloseBtn', true, 'mental_close_btn', 'mental_master_starting');
   fetch('/api/coach/mental/session/' + encodeURIComponent(activeConvId) + '/close', { method: 'POST' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -3886,10 +3916,19 @@ function closeMasterSession() {
       var msg = focos.length
         ? (t('mental_closed_with_focos') + ' ' + focos.join(' · '))
         : t('mental_closed_no_focos');
-      _appendBubble('assistant', msg);
+      // Salida real de la sesión (fix bug 2026-07-18: "no te puedes salir"):
+      // cerrada la sesión, se abre una conversación normal nueva y el resumen
+      // de focos se pinta ahí (burbuja informativa, no persistida).
+      newConversation(function() {
+        _appendBubble('assistant', msg);
+      });
     })
     .catch(function() {
       _appendBubble('assistant', t('coach_net_error'));
+    })
+    .finally(function() {
+      _masterBusy = false;
+      _setMasterBtnLoading('masterCloseBtn', false, 'mental_close_btn', 'mental_master_starting');
     });
 }
 
