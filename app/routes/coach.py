@@ -138,9 +138,17 @@ async def api_coach(body: CoachRequest):
     cid = body.conversation_id or _coach_store.get_active_id()
     # Contexto AISLADO: solo los últimos N mensajes de ESTA conversación.
     context_history = _coach_store.get_context(cid, 10)
-    # Ronda 1: offload a threadpool — ask_coach lanza `claude` CLI vía subprocess.run
-    # síncrono (hasta ~90 s); en el event loop congelaba TODA la app mientras tanto.
-    answer = await run_in_threadpool(_main.ask_coach, body.question, dataset, context_history)
+    # Bifurcación Coach Deportivo (roadmap coach-mental, Paso 4): una
+    # conversación kind="mental_master" usa la doctrina/expediente del Coach
+    # Deportivo (ask_master); cualquier otra (incluidas las viejas sin `kind`,
+    # que get_kind() ya degrada a "chat") sigue el camino EXACTO de siempre.
+    kind = _coach_store.get_kind(cid)
+    if kind == "mental_master":
+        answer = await run_in_threadpool(_main.ask_master, body.question, dataset, context_history)
+    else:
+        # Ronda 1: offload a threadpool — ask_coach lanza `claude` CLI vía subprocess.run
+        # síncrono (hasta ~90 s); en el event loop congelaba TODA la app mientras tanto.
+        answer = await run_in_threadpool(_main.ask_coach, body.question, dataset, context_history)
     # Persistir el turno (crea la conversación si cid era None/inexistente).
     used_cid = _coach_store.append_turn(cid, body.question, answer)
     _coach_store.set_active(used_cid)

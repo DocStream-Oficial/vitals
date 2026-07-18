@@ -30,6 +30,7 @@ from app import ecg_store
 from app.sources import get_source
 from app.coach import build_coach, coach_card as build_coach_card
 from app.coach_chat import ask_coach
+from app.coach_mental import ask_master
 from app import coach_store as _coach_store
 from app.coach_store import load_history, clear as clear_history
 from app.insights import evaluate as evaluate_insights
@@ -467,7 +468,9 @@ from app.routes.labs import router as _labs_router  # noqa: E402
 from app.routes.healthspan import router as _healthspan_router  # noqa: E402
 # coach.py lee ask_coach/load_history/clear_history vía `import main` diferido
 # (tests parchean main.ask_coach etc. por nombre — ver app/routes/coach.py).
+# Lo mismo aplica a ask_master (Coach Deportivo, roadmap coach-mental).
 from app.routes.coach import router as _coach_router  # noqa: E402
+from app.routes.coach_mental import router as _coach_mental_router  # noqa: E402
 from app.routes.household import router as _household_router  # noqa: E402
 from app.routes.keys import router as _keys_router  # noqa: E402
 
@@ -475,6 +478,7 @@ for _router in (
     _insights_router, _report_router, _export_router, _sync_router,
     _ecg_router, _auth_router, _profile_router, _sources_router,
     _cycle_router, _journal_router, _programs_router, _labs_router,
-    _healthspan_router, _coach_router, _household_router, _keys_router,
+    _healthspan_router, _coach_router, _coach_mental_router,
+    _household_router, _keys_router,
 ):
     app.include_router(_router)
