@@ -1,0 +1,20 @@
+[Unit]
+Description=Vitals STT server (whisper, :8102)
+After=network.target
+
+[Service]
+Type=simple
+User=mlmtuner
+WorkingDirectory=/home/mlmtuner/vitals-stt
+# Activa el venv existente (~/CosyVoice/venv — trae openai-whisper + torch
+# CUDA ya probados en vivo) y arranca el server. WHISPER_MODEL default
+# "medium" si no se define aquí (ver stt_server.py).
+Environment=WHISPER_MODEL=medium
+ExecStart=/home/mlmtuner/CosyVoice/venv/bin/python /home/mlmtuner/vitals-stt/stt_server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/mlmtuner/vitals-stt/stt_server.log
+StandardError=append:/home/mlmtuner/vitals-stt/stt_server.log
+
+[Install]
+WantedBy=multi-user.target
