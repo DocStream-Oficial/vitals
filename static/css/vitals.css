@@ -1043,6 +1043,24 @@ body.light #glow{
 #coachSendBtn:disabled{opacity:.35;cursor:default}
 #coachSendBtn:not(:disabled):active{opacity:.7}
 
+/* Nota de voz del Coach (roadmap coach-voz) */
+#coachMicBtn{
+  width:34px;height:34px;border-radius:999px;flex:none;cursor:pointer;
+  background:var(--card2);border:1px solid var(--card-border);
+  display:flex;align-items:center;justify-content:center;color:var(--label2);
+  transition:opacity .15s,background .15s,color .15s;
+}
+#coachMicBtn:disabled{opacity:.35;cursor:default}
+#coachMicBtn:not(:disabled):active{opacity:.7}
+#coachMicBtn.recording{
+  background:linear-gradient(180deg,#FF453A,#E0342A);color:#fff;border-color:transparent;
+  animation:coachMicPulse 1.1s ease-in-out infinite;
+}
+@keyframes coachMicPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,69,58,.45)}
+  50%{box-shadow:0 0 0 8px rgba(255,69,58,0)}
+}
+
 /* ── MÁS SCREEN ── */
 #masHeader{display:flex;align-items:flex-start;justify-content:space-between;margin:2px 2px 16px}
 #masTitle{font:700 34px/1.04 -apple-system;letter-spacing:-.022em;color:var(--label)}

@@ -3893,6 +3893,136 @@ function closeMasterSession() {
     });
 }
 
+// ── COACH: notas de voz asíncronas (roadmap coach-voz, Paso 4) ─────────────
+// Botón #coachMicBtn junto a #coachSendBtn: graba con MediaRecorder, sube el
+// blob como raw body a POST /api/coach/voice, pinta transcript + respuesta
+// reusando _appendBubble (mismo helper que sendCoach — sin duplicar pintado).
+
+var _voiceRecorder = null;
+var _voiceChunks = [];
+var _voiceMimeType = 'audio/webm';
+var _voiceState = 'idle'; // idle | recording | uploading
+
+function _voiceSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+
+function _initVoiceMicButton() {
+  // Feature-detect: el botón vive oculto en el template (style="display:none")
+  // y solo se muestra si el navegador soporta grabación (criterio 7 del roadmap).
+  var btn = document.getElementById('coachMicBtn');
+  if (!btn) return;
+  btn.style.display = _voiceSupported() ? '' : 'none';
+}
+
+function _setVoiceState(state) {
+  _voiceState = state;
+  var btn = document.getElementById('coachMicBtn');
+  var input = document.getElementById('coachInput');
+  var sendBtn = document.getElementById('coachSendBtn');
+  if (btn) {
+    btn.classList.toggle('recording', state === 'recording');
+    btn.disabled = (state === 'uploading');
+  }
+  if (sendBtn) sendBtn.disabled = (state !== 'idle');
+  if (input) {
+    if (state === 'recording') input.placeholder = t('voice_recording_ph');
+    else if (state === 'uploading') input.placeholder = t('voice_uploading');
+    else input.placeholder = t('coach_placeholder');
+  }
+}
+
+function toggleVoiceRecording() {
+  if (_voiceState === 'recording') { _stopVoiceRecording(); return; }
+  if (_voiceState !== 'idle') return; // subiendo — ignora doble tap
+  _startVoiceRecording();
+}
+
+function _startVoiceRecording() {
+  if (!_voiceSupported()) return;
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(function(stream) {
+      var mimeType = '';
+      if (window.MediaRecorder.isTypeSupported) {
+        if (window.MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        else if (window.MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+      }
+      _voiceMimeType = mimeType || 'audio/webm';
+      _voiceChunks = [];
+      try {
+        _voiceRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+      } catch (e) {
+        _voiceRecorder = new MediaRecorder(stream);
+      }
+      _voiceRecorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) _voiceChunks.push(e.data);
+      };
+      _voiceRecorder.onstop = function() {
+        stream.getTracks().forEach(function(tr) { tr.stop(); }); // libera el mic
+        var blob = new Blob(_voiceChunks, { type: _voiceMimeType });
+        _uploadVoiceNote(blob);
+      };
+      _voiceRecorder.start();
+      _setVoiceState('recording');
+    })
+    .catch(function() {
+      // Permiso denegado (o mic ocupado/ausente) — burbuja i18n, botón a idle.
+      _setVoiceState('idle');
+      _appendBubble('assistant', t('voice_mic_denied'));
+    });
+}
+
+function _stopVoiceRecording() {
+  _setVoiceState('uploading');
+  if (_voiceRecorder && _voiceRecorder.state !== 'inactive') {
+    _voiceRecorder.stop(); // dispara onstop -> _uploadVoiceNote
+  }
+}
+
+function _uploadVoiceNote(blob) {
+  _setCoachSuggestionsHidden(true);
+  var url = '/api/coach/voice' + (activeConvId ? ('?conversation_id=' + encodeURIComponent(activeConvId)) : '');
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': _voiceMimeType },
+    body: blob,
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error_key) {
+        _appendBubble('assistant', data.message || t('coach_net_error'));
+        return;
+      }
+      if (!data || !data.answer) {
+        _appendBubble('assistant', t('coach_no_answer'));
+        return;
+      }
+      _appendBubble('user', '🎤 ' + (data.transcript || ''));
+      var answerWrap = _appendBubble('assistant', data.answer);
+      if (data.audio_id && answerWrap) {
+        var audio = document.createElement('audio');
+        audio.controls = true;
+        audio.style.marginTop = '6px';
+        audio.style.width = '100%';
+        audio.src = '/api/coach/voice/audio/' + encodeURIComponent(data.audio_id);
+        var bubbleEl = answerWrap.querySelector('.bubble');
+        if (bubbleEl) bubbleEl.appendChild(audio);
+        // Autoplay puede fallar (política del navegador) — no es un error.
+        try { var p = audio.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
+      }
+      if (data.conversation_id && data.conversation_id !== activeConvId) {
+        _setActiveConvId(data.conversation_id);
+      }
+      _loadConversationList(_updateConvSwitcherLabel);
+    })
+    .catch(function() {
+      _appendBubble('assistant', t('coach_net_error'));
+    })
+    .finally(function() {
+      _setVoiceState('idle');
+    });
+}
+
 function deleteConversation(id, evt) {
   if (evt) evt.stopPropagation();
   if (!confirm(t('coach_delete_conv_confirm'))) return;
@@ -5044,4 +5174,5 @@ document.addEventListener('DOMContentLoaded', function() {
   if (PROFILE && PROFILE.onboarded === false) {
     openProfileForm(true);
   }
+  _initVoiceMicButton(); // roadmap coach-voz: feature-detect del botón de mic
 });

@@ -493,6 +493,11 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
       <!-- Composer -->
       <div id="coachComposer">
         <textarea id="coachInput" rows="1" placeholder="Pregúntale a Vitals…" data-i18n-ph="coach_placeholder" onkeydown="coachInputKeydown(event)" oninput="autoResize(this)"></textarea>
+        <!-- Nota de voz (roadmap coach-voz): oculto por default, JS lo muestra
+             solo si el navegador soporta MediaRecorder + getUserMedia. -->
+        <button id="coachMicBtn" onclick="toggleVoiceRecording()" data-i18n-al="voice_mic_al" data-i18n-t="voice_mic_al" aria-label="Nota de voz" title="Nota de voz" style="display:none">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/></svg>
+        </button>
         <button id="coachSendBtn" onclick="sendCoach()" aria-label="Enviar">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </button>

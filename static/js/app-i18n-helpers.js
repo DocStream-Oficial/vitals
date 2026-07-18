@@ -76,6 +76,11 @@ var STRINGS = {
     mental_close_btn: 'Cerrar Sesión Master',
     mental_closed_with_focos: 'Sesión cerrada. Focos de la semana:',
     mental_closed_no_focos: 'Sesión cerrada.',
+    // Notas de voz del Coach (roadmap coach-voz)
+    voice_mic_al: 'Nota de voz',
+    voice_recording_ph: 'Grabando… toca de nuevo para enviar',
+    voice_uploading: 'Transcribiendo y enviando…',
+    voice_mic_denied: 'No pude acceder al micrófono. Revisa los permisos de este sitio.',
     // Body age card
     ba_label: 'Edad corporal',
     ba_fitness_lbl: 'Edad de fitness',
@@ -790,6 +795,11 @@ var STRINGS = {
     mental_close_btn: 'Close Master Session',
     mental_closed_with_focos: 'Session closed. Focus for the week:',
     mental_closed_no_focos: 'Session closed.',
+    // Coach voice notes (coach-voz roadmap)
+    voice_mic_al: 'Voice note',
+    voice_recording_ph: 'Recording… tap again to send',
+    voice_uploading: 'Transcribing and sending…',
+    voice_mic_denied: 'I couldn\'t access the microphone. Check this site\'s permissions.',
     ba_label: 'Body Age',
     ba_fitness_lbl: 'Fitness Age',
     ba_fitness_sub: 'VO₂max validated',
@@ -1460,6 +1470,11 @@ var STRINGS = {
     mental_close_btn: 'Terminer la Séance Master',
     mental_closed_with_focos: 'Séance terminée. Objectifs de la semaine :',
     mental_closed_no_focos: 'Séance terminée.',
+    // Notes vocales du Coach (roadmap coach-voz)
+    voice_mic_al: 'Note vocale',
+    voice_recording_ph: 'Enregistrement… touchez à nouveau pour envoyer',
+    voice_uploading: 'Transcription et envoi…',
+    voice_mic_denied: 'Impossible d\'accéder au microphone. Vérifiez les autorisations de ce site.',
     ba_label: 'Âge corporel',
     ba_fitness_lbl: 'Âge de forme',
     ba_fitness_sub: 'VO₂max validé',
@@ -2130,6 +2145,11 @@ var STRINGS = {
     mental_close_btn: 'Encerrar Sessão Master',
     mental_closed_with_focos: 'Sessão encerrada. Focos da semana:',
     mental_closed_no_focos: 'Sessão encerrada.',
+    // Notas de voz do Coach (roadmap coach-voz)
+    voice_mic_al: 'Nota de voz',
+    voice_recording_ph: 'Gravando… toque novamente para enviar',
+    voice_uploading: 'Transcrevendo e enviando…',
+    voice_mic_denied: 'Não consegui acessar o microfone. Verifique as permissões deste site.',
     ba_label: 'Idade corporal',
     ba_fitness_lbl: 'Idade de aptidão',
     ba_fitness_sub: 'VO₂max validado',
