@@ -468,9 +468,12 @@ from app.routes.labs import router as _labs_router  # noqa: E402
 from app.routes.healthspan import router as _healthspan_router  # noqa: E402
 # coach.py lee ask_coach/load_history/clear_history vía `import main` diferido
 # (tests parchean main.ask_coach etc. por nombre — ver app/routes/coach.py).
-# Lo mismo aplica a ask_master (Coach Deportivo, roadmap coach-mental).
+# Lo mismo aplica a ask_master (Coach Deportivo, roadmap coach-mental) y a
+# las notas de voz (roadmap coach-voz, app/routes/coach_voice.py — mismo
+# patrón de import diferido).
 from app.routes.coach import router as _coach_router  # noqa: E402
 from app.routes.coach_mental import router as _coach_mental_router  # noqa: E402
+from app.routes.coach_voice import router as _coach_voice_router  # noqa: E402
 from app.routes.household import router as _household_router  # noqa: E402
 from app.routes.keys import router as _keys_router  # noqa: E402
 
@@ -479,6 +482,6 @@ for _router in (
     _ecg_router, _auth_router, _profile_router, _sources_router,
     _cycle_router, _journal_router, _programs_router, _labs_router,
     _healthspan_router, _coach_router, _coach_mental_router,
-    _household_router, _keys_router,
+    _coach_voice_router, _household_router, _keys_router,
 ):
     app.include_router(_router)
