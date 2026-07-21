@@ -380,6 +380,7 @@ final class HealthSyncManager {
         var distanceKm: [[String: Any]] = []
         var energyKcal: [[String: Any]] = []
         var sleep: [[String: Any]] = []
+        var hrvSleep: [[String: Any]] = []
         var workouts: [[String: Any]] = []
         // Fase 7 (salud femenina, opt-in): estos arrays quedan vacios (y por
         // tanto fuera del payload, ver `if !x.isEmpty` abajo) para cualquier
@@ -503,6 +504,16 @@ final class HealthSyncManager {
             }
         }
 
+        // hrv_sleep (Fase 1: HRV promediada dentro de la ventana de sueño, con
+        // conteo de muestras n). ADITIVA — el motor NO la usa todavía; se captura
+        // para medir la densidad nocturna de HRV del Apple Watch antes de decidir
+        // el cutover (ver roadmap dev-harness/sleep-hrv-fase1).
+        group.enter()
+        readSleepHRV(bounds: bounds) { result in
+            hrvSleep = result
+            group.leave()
+        }
+
         // Fase 7 (salud femenina, opt-in): basal_temp (media diaria ABSOLUTA,
         // a diferencia de skin_temp que viaja como desviacion — el backend
         // (app/sources/healthkit.py) espera basal_temp en °C tal cual).
@@ -577,6 +588,7 @@ final class HealthSyncManager {
             if !distanceKm.isEmpty { payload["distance_km"] = distanceKm }
             if !energyKcal.isEmpty { payload["energy_kcal"] = energyKcal }
             if !sleep.isEmpty { payload["sleep"] = sleep }
+            if !hrvSleep.isEmpty { payload["hrv_sleep"] = hrvSleep }
             if !workouts.isEmpty { payload["workouts"] = workouts }
             // Fase 7 (salud femenina, opt-in): solo se agregan al payload si hay
             // datos (misma convencion `if !x.isEmpty` que el resto) — una usuaria
@@ -790,6 +802,126 @@ final class HealthSyncManager {
             DispatchQueue.main.async { completion(out) }
         }
         store.execute(query)
+    }
+
+    // MARK: - Sleep HRV (Fase 1: captura ADITIVA — el motor NO la usa todavía)
+
+    /// HRV (SDNN, ms) promediada SOLO dentro de la ventana de sueño de cada noche,
+    /// junto con `n` = número de muestras crudas usadas. Emite
+    /// `[{date: <día de despertar>, value: <media ms>, n: <#muestras>}]`.
+    ///
+    /// Por qué existe (roadmap dev-harness/sleep-hrv-fase1): la HRV diaria
+    /// (`dailyAverage`) promedia TODO el día y deriva conforme entran lecturas —
+    /// el pico parasimpático de la madrugada se diluye. WHOOP/Oura usan la HRV
+    /// del sueño justo para evitarlo. Esta función la captura EN PARALELO a la
+    /// diaria, sin que el motor la consuma, para MEDIR si el Apple Watch toma
+    /// suficientes muestras nocturnas (por eso se manda `n`). El cutover del
+    /// motor es Fase 2, solo si la medición lo respalda.
+    ///
+    /// Self-contained a PROPÓSITO: duplica la agrupación en "noches" (gap>3h) y
+    /// el criterio de la ventana [dormir, despertar] de `readSleep`, para NO
+    /// acoplarse a esa función (que ya funciona en producción). Fase 2 lo
+    /// consolida si el enfoque se adopta.
+    private func readSleepHRV(bounds: WindowBounds,
+                               completion: @escaping ([[String: Any]]) -> Void) {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis),
+              let hrvType = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
+            completion([])
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: bounds.start, end: bounds.end, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        let sleepQuery = HKSampleQuery(sampleType: sleepType, predicate: predicate,
+                                       limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+            guard let self = self,
+                  let categorySamples = samples as? [HKCategorySample], !categorySamples.isEmpty else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+
+            // Agrupar en noches: nueva noche si el gap desde el fin del segmento
+            // anterior es > 3h (MISMA lógica que readSleep, duplicada a propósito).
+            var nights: [[HKCategorySample]] = []
+            var current: [HKCategorySample] = []
+            var lastEnd: Date?
+            for sample in categorySamples {
+                if let le = lastEnd, sample.startDate.timeIntervalSince(le) > 3 * 3600 {
+                    if !current.isEmpty { nights.append(current) }
+                    current = []
+                }
+                current.append(sample)
+                if lastEnd == nil || sample.endDate > lastEnd! { lastEnd = sample.endDate }
+            }
+            if !current.isEmpty { nights.append(current) }
+
+            // Valores "dormido" (mismo criterio que readSleep).
+            let asleepValues: Set<Int> = {
+                var s: Set<Int> = [HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue]
+                if #available(iOS 16.0, *) {
+                    s.insert(HKCategoryValueSleepAnalysis.asleepCore.rawValue)
+                    s.insert(HKCategoryValueSleepAnalysis.asleepDeep.rawValue)
+                    s.insert(HKCategoryValueSleepAnalysis.asleepREM.rawValue)
+                }
+                return s
+            }()
+
+            // Ventana [dormir, despertar] por noche: earliestStart = primer
+            // segmento; latestAsleepEnd = fin del último segmento DORMIDO. Idéntico
+            // a readSleep, y la date-key es el día LOCAL de despertar (dayString).
+            struct NightWindow { let start: Date; let end: Date; let dateKey: String }
+            var windows: [NightWindow] = []
+            for night in nights {
+                var earliestStart: Date?
+                var latestAsleepEnd: Date?
+                for sample in night {
+                    if earliestStart == nil || sample.startDate < earliestStart! {
+                        earliestStart = sample.startDate
+                    }
+                    if asleepValues.contains(sample.value) {
+                        if latestAsleepEnd == nil || sample.endDate > latestAsleepEnd! {
+                            latestAsleepEnd = sample.endDate
+                        }
+                    }
+                }
+                guard let bedtime = earliestStart, let waketime = latestAsleepEnd, waketime > bedtime else {
+                    continue
+                }
+                windows.append(NightWindow(start: bedtime, end: waketime, dateKey: self.dayString(waketime)))
+            }
+
+            if windows.isEmpty {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+
+            // Por cada ventana, promediar las muestras CRUDAS de HRV SDNN dentro de
+            // ella (HKSampleQuery, no el dailyAverage). Queries anidadas -> un
+            // DispatchGroup interno; cada enter() tiene exactamente un leave() vía
+            // defer (incluso en el early-return de "sin muestras"), y el append va
+            // bajo lock porque los handlers corren en cola de fondo concurrente.
+            var out: [[String: Any]] = []
+            let group = DispatchGroup()
+            let lock = NSLock()
+            let msUnit = HKUnit.secondUnit(with: .milli)
+            for w in windows {
+                group.enter()
+                let p = HKQuery.predicateForSamples(withStart: w.start, end: w.end, options: .strictStartDate)
+                let q = HKSampleQuery(sampleType: hrvType, predicate: p,
+                                      limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, hrvSamples, _ in
+                    defer { group.leave() }
+                    guard let qs = hrvSamples as? [HKQuantitySample], !qs.isEmpty else { return }
+                    let values = qs.map { $0.quantity.doubleValue(for: msUnit) }
+                    guard !values.isEmpty else { return }
+                    let avg = values.reduce(0, +) / Double(values.count)
+                    lock.lock()
+                    out.append(["date": w.dateKey, "value": avg, "n": values.count])
+                    lock.unlock()
+                }
+                self.store.execute(q)
+            }
+            group.notify(queue: .main) { completion(out) }
+        }
+        self.store.execute(sleepQuery)
     }
 
     // MARK: - Fase 7 (salud femenina, opt-in): categorias de Cycle Tracking

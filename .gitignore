@@ -43,3 +43,4 @@ ios/App/Pods/
 # ── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store
 _dev-harness/
+ios/App/build-mic/
