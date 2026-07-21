@@ -112,6 +112,15 @@ def run_sync(days: int = 45):
             raise errors[sources[0]]
 
         data = merge_sources(fetched)
+        # Probe de "HRV matutina" (aditivo, best-effort, NO toca el motor): registra
+        # la HRV por fuente + canónica de este momento, para medir si la HRV de la
+        # mañana (cron 9am, Google Health fresco) es más estable que la del final
+        # del día. Envuelto para que un fallo del probe jamás tumbe el sync.
+        try:
+            from app import hrv_trail as _hrv_trail
+            _hrv_trail.record_snapshot(fetched, data)
+        except Exception as _exc:
+            logger.warning("hrv_trail.record_snapshot falló (no bloqueante): %s", _exc)
         # Ronda 5: umbral de sueño único, configurable por perfil (default 480 =
         # comportamiento idéntico a antes). Cascada de effective() ya maneja
         # profile.json -> .env -> default; envuelto en try/except por si el

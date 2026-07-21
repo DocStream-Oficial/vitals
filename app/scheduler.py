@@ -4,6 +4,7 @@ scheduler.py — APScheduler: job diario a SYNC_HOUR:00 + sync al arranque (best
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Optional
 
@@ -97,8 +98,24 @@ def start_scheduler():
         name="Sync diario de Google Health",
         replace_existing=True,
     )
+    # Probe de "HRV matutina": un segundo sync de NOCHE, para que el hrv_trail
+    # capture de forma determinista el valor de la mañana (cron de SYNC_HOUR=9) Y
+    # el del final del día — y así medir la deriva intradía de la HRV de Google
+    # Health (pull). No afecta datos: el sync de noche solo re-jala/re-calcula
+    # (idempotente). Configurable por env (default 22:00).
+    _evening_hour = int(os.getenv("SYNC_EVENING_HOUR", "22"))
+    _scheduler.add_job(
+        _sync_job,
+        trigger=CronTrigger(hour=_evening_hour, minute=0),
+        id="evening_sync",
+        name="Sync de noche (probe HRV matutina)",
+        replace_existing=True,
+    )
     _scheduler.start()
-    logger.info(f"Scheduler iniciado — sync diario a las {settings.SYNC_HOUR:02d}:00.")
+    logger.info(
+        "Scheduler iniciado — sync diario a las %02d:00 + sync de noche a las %02d:00.",
+        settings.SYNC_HOUR, _evening_hour,
+    )
     # Sync best-effort al arranque
     _startup_sync()
 
