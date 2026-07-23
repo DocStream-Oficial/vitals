@@ -4330,7 +4330,24 @@ function _sourceRowHtml(name, info) {
   if (isHealthKit) {
     // HealthKit: badge y hint PROPIOS, nunca comparte el label "Expirado" de OAuth
     // (ese fue el bug reportado — HealthKit no tiene concepto de expiración).
-    if (connected && status === 'active') {
+    // Auditoría 23-jul (H6): "Activo" solo prueba que el servidor recibió ALGUNA
+    // VEZ — no que el dispositivo siga empujando. Caso real: 9 días con el dato
+    // congelado y el badge verde (la app del iPhone había muerto por certificado).
+    // Si el último push tiene >=2 días, badge de advertencia honesto + hint de
+    // reconexión — la muerte silenciosa deja de ser silenciosa.
+    var hkStaleDays = null;
+    if (info.last_ingest) {
+      var _li = new Date(info.last_ingest);
+      if (!isNaN(_li.getTime())) hkStaleDays = Math.floor((Date.now() - _li.getTime()) / 864e5);
+    }
+    if (connected && status === 'active' && hkStaleDays != null && hkStaleDays >= 2) {
+      badgeClass = 'warn';
+      badgeText = t('mas_healthkit_status_stale').replace('{d}', hkStaleDays);
+      sub = t('mas_healthkit_stale_hint');
+      actionsHtml = (_isNativeApp()
+        ? '<button type="button" id="hkConnectBtn" class="mas-source-btn" onclick="healthkitConnect()">' + t('mas_healthkit_connect_btn') + '</button>'
+        : '') + _disconnectBtnHtml(name, label);
+    } else if (connected && status === 'active') {
       badgeClass = 'ok';
       badgeText = t('mas_healthkit_status_active');
       sub = t('mas_source_healthkit_sync_hint');

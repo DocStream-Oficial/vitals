@@ -24,7 +24,7 @@ from pathlib import Path
 
 logger = logging.getLogger("vitals.hrv_trail")
 
-_MAX_SNAPSHOTS = 500   # ~2 crons/día * varios meses; se evicta lo más viejo
+_MAX_SNAPSHOTS = 1500  # ~6 syncs/día (SYNC_HOURS) * ~8 meses; se evicta lo más viejo
 _TRACK_DAYS = 3        # cuántos de los últimos días con HRV se registran por snapshot
 
 

@@ -1,5 +1,6 @@
 """
-scheduler.py — APScheduler: job diario a SYNC_HOUR:00 + sync al arranque (best-effort).
+scheduler.py — APScheduler: syncs periódicos (SYNC_HOURS, default 7-22 cada 3h)
++ sync al arranque (best-effort).
 """
 from __future__ import annotations
 
@@ -10,8 +11,6 @@ from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-
-from app.config import settings
 
 logger = logging.getLogger("vitals.scheduler")
 
@@ -88,34 +87,27 @@ def _startup_sync():
 
 
 def start_scheduler():
-    """Inicia el BackgroundScheduler con el job diario y dispara el sync de arranque."""
+    """Inicia el BackgroundScheduler con los jobs de sync y dispara el sync de arranque."""
     global _scheduler
     _scheduler = BackgroundScheduler()
+    # Auditoría 23-jul (H2, verificado en vivo): con UN solo sync diario (9am), una
+    # noche que Google aún no consolidaba a esa hora se quedaba PARCIAL en pantalla
+    # todo el día (caso real: 171 min a las 09:01 -> 574 min con un sync manual a las
+    # 16h; el dato completo llevaba horas en Google y nadie lo pedía). Fix: syncs
+    # cada 3 horas en horario de vigilia. Idempotente y barato (Google es pull;
+    # HealthKit fetch() solo reusa el último push). Sustituye al par daily+evening
+    # anterior (el de 22h del probe HRV queda cubierto por esta malla).
+    # Configurable por env: SYNC_HOURS="7,10,13,16,19,22" (CSV de horas locales).
+    _hours = os.getenv("SYNC_HOURS", "7,10,13,16,19,22")
     _scheduler.add_job(
         _sync_job,
-        trigger=CronTrigger(hour=settings.SYNC_HOUR, minute=0),
+        trigger=CronTrigger(hour=_hours, minute=0),
         id="daily_sync",
-        name="Sync diario de Google Health",
-        replace_existing=True,
-    )
-    # Probe de "HRV matutina": un segundo sync de NOCHE, para que el hrv_trail
-    # capture de forma determinista el valor de la mañana (cron de SYNC_HOUR=9) Y
-    # el del final del día — y así medir la deriva intradía de la HRV de Google
-    # Health (pull). No afecta datos: el sync de noche solo re-jala/re-calcula
-    # (idempotente). Configurable por env (default 22:00).
-    _evening_hour = int(os.getenv("SYNC_EVENING_HOUR", "22"))
-    _scheduler.add_job(
-        _sync_job,
-        trigger=CronTrigger(hour=_evening_hour, minute=0),
-        id="evening_sync",
-        name="Sync de noche (probe HRV matutina)",
+        name="Sync periódico (Google pull + recompute)",
         replace_existing=True,
     )
     _scheduler.start()
-    logger.info(
-        "Scheduler iniciado — sync diario a las %02d:00 + sync de noche a las %02d:00.",
-        settings.SYNC_HOUR, _evening_hour,
-    )
+    logger.info("Scheduler iniciado — syncs a las horas: %s.", _hours)
     # Sync best-effort al arranque
     _startup_sync()
 

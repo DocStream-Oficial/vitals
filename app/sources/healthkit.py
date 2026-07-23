@@ -310,6 +310,24 @@ class HealthKitSource(Source):
                         "HealthKit ingest: campo 'segments' inválido para %s — "
                         "se descarta solo ese campo, la noche entra igual.", day,
                     )
+            # Auditoría 23-jul (H4): el iOS puede mandar DOS entradas con el mismo
+            # día de despertar (noche interrumpida >3h partida en fragmentos, o
+            # noche + siesta que termina el mismo día). Antes la última SOBRESCRIBÍA
+            # a la anterior sin criterio (caso real medido: una noche de 8.2h quedó
+            # mostrada como la siesta de 1.2h — se perdieron 7 horas). Regla ahora:
+            # gana el registro con MAYOR `asleep` — el mismo criterio "gana el más
+            # completo" que ya usan _merge_sleep (merge.py) y parse_sleep
+            # (parsers.py) para dedup de noches. NO se suman fragmentos a propósito:
+            # sumar inflaría cuando el duplicado es una siesta, y distinguir
+            # fragmento-de-noche vs siesta con solo "HH:MM" es ambiguo.
+            prev = out.get(day)
+            if prev is not None and (rec.get("asleep") or 0) <= (prev.get("asleep") or 0):
+                logger.info(
+                    "HealthKit ingest: entrada duplicada para %s (asleep=%s) — se "
+                    "conserva la más completa ya registrada (asleep=%s).",
+                    day, rec.get("asleep"), prev.get("asleep"),
+                )
+                continue
             out[day] = rec
         return out
 
