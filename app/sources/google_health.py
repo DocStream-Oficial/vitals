@@ -91,41 +91,51 @@ class GoogleHealthSource(Source):
         start = today - datetime.timedelta(days=days)
         print(f"=== SYNC (google_health): últimos {days} días · fuente preferida: {prefer} ===")
 
-        # ── Sueño ─────────────────────────────────────────────────────────────
-        sleep = parse_sleep(
-            health_api.list_all("sleep", token, save_name="sleep"), prefer=prefer
-        )
+        # Perf 23-jul: las ~12 llamadas HTTP de abajo eran SECUENCIALES y el sync
+        # tardaba ~57s medidos (cada list_all pagina contra la API de Google). Son
+        # independientes entre sí: token read-only, requests sin Session compartida,
+        # y cada save_name escribe a un archivo DISTINTO -> se lanzan en paralelo
+        # (6 workers) y el muro de espera se reduce a la llamada más lenta.
+        # _try_rollup_candidates conserva su prueba SECUENCIAL interna (prueba
+        # candidatos hasta que uno funcione), solo corre en paralelo CON las demás.
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=6) as _pool:
+            _f_sleep = _pool.submit(health_api.list_all, "sleep", token, save_name="sleep")
+            _f_rhr = _pool.submit(health_api.list_all, DAILY_TYPES["rhr"], token, save_name="daily_rhr")
+            _f_hrv = _pool.submit(health_api.list_all, DAILY_TYPES["hrv"], token, save_name="daily_hrv")
+            _f_resp = _pool.submit(health_api.list_all, DAILY_TYPES["resp"], token, save_name="daily_resp")
+            _f_vo2 = _pool.submit(health_api.list_all, DAILY_TYPES["vo2"], token, save_name="daily_vo2")
+            _f_steps = _pool.submit(health_api.daily_rollup, "steps", token, start, today,
+                                    "steps", "countSum", save_name="steps")
+            _f_azm = _pool.submit(health_api.daily_rollup, "active-zone-minutes", token, start, today,
+                                  "activeZoneMinutes", ["sumInCardioHeartZone", "sumInPeakHeartZone"],
+                                  save_name="azm")
+            _f_dist = _pool.submit(_try_rollup_candidates, _DISTANCE_CANDIDATES, token, start, today,
+                                   "distance", "sumInMeters", unit_factor=0.001, save_prefix="distance")
+            _f_ener = _pool.submit(_try_rollup_candidates, _ENERGY_CANDIDATES, token, start, today,
+                                   "calories", "sumInKilocalories", save_prefix="energy")
+            _f_spo2 = _pool.submit(health_api.list_all, "daily-oxygen-saturation", token, save_name="daily_spo2")
+            _f_skin = _pool.submit(health_api.list_all, "daily-sleep-temperature-derivations", token,
+                                   save_name="daily_skintemp")
+            _f_exer = _pool.submit(health_api.list_all, "exercise", token, save_name="exercise")
+            _f_zones = _pool.submit(health_api.list_all, "daily-heart-rate-zones", token,
+                                    max_pages=1, save_name="daily_hrzones")
+
+            sleep = parse_sleep(_f_sleep.result(), prefer=prefer)
+            rhr = parse_daily(_f_rhr.result(), "beatsPerMinute", prefer)
+            hrv = parse_daily(_f_hrv.result(), "averageHeartRateVariability", prefer)
+            resp = parse_daily(_f_resp.result(), "breathsPerMinute", prefer)
+            vo2 = parse_daily(_f_vo2.result(), "value", prefer)
+            steps = _f_steps.result()
+            azm = _f_azm.result()
+            distance_km = _f_dist.result()
+            energy_kcal = _f_ener.result()
+
         print(f"  sueño: {len(sleep)} noches")
-
-        # ── Métricas diarias ───────────────────────────────────────────────────
-        rhr  = parse_daily(health_api.list_all(DAILY_TYPES["rhr"],  token, save_name="daily_rhr"), "beatsPerMinute", prefer)
-        hrv  = parse_daily(health_api.list_all(DAILY_TYPES["hrv"],  token, save_name="daily_hrv"), "averageHeartRateVariability", prefer)
-        resp = parse_daily(health_api.list_all(DAILY_TYPES["resp"], token, save_name="daily_resp"), "breathsPerMinute", prefer)
-        vo2  = parse_daily(health_api.list_all(DAILY_TYPES["vo2"],  token, save_name="daily_vo2"), "value", prefer)
         print(f"  FCR:{len(rhr)}  HRV:{len(hrv)}  Resp:{len(resp)}  VO2:{len(vo2)}")
-
-        # ── Actividad ─────────────────────────────────────────────────────────
-        steps = health_api.daily_rollup("steps", token, start, today, "steps", "countSum", save_name="steps")
-        azm   = health_api.daily_rollup(
-            "active-zone-minutes", token, start, today,
-            "activeZoneMinutes", ["sumInCardioHeartZone", "sumInPeakHeartZone"], save_name="azm"
-        )
         print(f"  pasos:{len(steps)}  AZM(vigorosos):{len(azm)}")
-
-        # ── Distancia (degradación silenciosa) ────────────────────────────────
-        print("  [nuevo] probando datatypes de distancia...")
-        distance_km = _try_rollup_candidates(
-            _DISTANCE_CANDIDATES, token, start, today,
-            "distance", "sumInMeters", unit_factor=0.001, save_prefix="distance"
-        )
         print(f"  distancia: {len(distance_km)} días con datos")
-
-        # ── Energía (degradación silenciosa) ──────────────────────────────────
-        print("  [nuevo] probando datatypes de energía...")
-        energy_kcal = _try_rollup_candidates(
-            _ENERGY_CANDIDATES, token, start, today,
-            "calories", "sumInKilocalories", save_prefix="energy"
-        )
         print(f"  energía: {len(energy_kcal)} días con datos")
 
         # ── Active hours (diferido — siempre {}) ──────────────────────────────
@@ -134,9 +144,9 @@ class GoogleHealthSource(Source):
         # con timeRange horario — requiere token con scope activity.read intraday.
         active_hours = {}  # Diferido — siempre vacío, se propaga como None en build_dataset
 
-        # ── Métricas adicionales ──────────────────────────────────────────────
-        spo2 = parse_daily(health_api.list_all("daily-oxygen-saturation", token, save_name="daily_spo2"), "average", prefer)
-        skin = parse_daily(health_api.list_all("daily-sleep-temperature-derivations", token, save_name="daily_skintemp"), "elsius", prefer)
+        # ── Métricas adicionales (ya descargadas en paralelo arriba) ─────────
+        spo2 = parse_daily(_f_spo2.result(), "average", prefer)
+        skin = parse_daily(_f_skin.result(), "elsius", prefer)
 
         # Google da 'daily-sleep-temperature-derivations' en Celsius ABSOLUTO (~32-35°C), NO como
         # desviación — a pesar del nombre "derivations". El motor (scoring.py::compute_wellbeing)
@@ -146,8 +156,8 @@ class GoogleHealthSource(Source):
             _skin_mean = sum(skin.values()) / len(skin)
             skin = {d: round(v - _skin_mean, 2) for d, v in skin.items()}
 
-        exercises = parse_exercises(health_api.list_all("exercise", token, save_name="exercise"))
-        health_api.list_all("daily-heart-rate-zones", token, max_pages=1, save_name="daily_hrzones")
+        exercises = parse_exercises(_f_exer.result())
+        _f_zones.result()  # dump crudo de zonas (solo se persiste el archivo, sin parse)
         print(f"  SpO2:{len(spo2)}  TempPiel:{len(skin)}  Entrenamientos:{len(exercises)}")
 
         return {

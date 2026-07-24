@@ -894,32 +894,43 @@ final class HealthSyncManager {
                 return
             }
 
-            // Por cada ventana, promediar las muestras CRUDAS de HRV SDNN dentro de
-            // ella (HKSampleQuery, no el dailyAverage). Queries anidadas -> un
-            // DispatchGroup interno; cada enter() tiene exactamente un leave() vía
-            // defer (incluso en el early-return de "sin muestras"), y el append va
-            // bajo lock porque los handlers corren en cola de fondo concurrente.
-            var out: [[String: Any]] = []
-            let group = DispatchGroup()
-            let lock = NSLock()
+            // Perf 23-jul: antes se lanzaba UNA HKSampleQuery POR VENTANA (~1 por
+            // noche -> ~170 queries secuenciales sobre un año; el sync desde la app
+            // tardaba ~2 min). Ahora: UNA sola query de TODAS las muestras HRV del
+            // rango, y el bucketing por ventana se hace en memoria (ventanas y
+            // muestras vienen ordenadas por fecha -> two-pointer O(n+m)). Mismo
+            // resultado {date, value, n}, sin DispatchGroup anidado.
             let msUnit = HKUnit.secondUnit(with: .milli)
-            for w in windows {
-                group.enter()
-                let p = HKQuery.predicateForSamples(withStart: w.start, end: w.end, options: .strictStartDate)
-                let q = HKSampleQuery(sampleType: hrvType, predicate: p,
-                                      limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, hrvSamples, _ in
-                    defer { group.leave() }
-                    guard let qs = hrvSamples as? [HKQuantitySample], !qs.isEmpty else { return }
-                    let values = qs.map { $0.quantity.doubleValue(for: msUnit) }
-                    guard !values.isEmpty else { return }
-                    let avg = values.reduce(0, +) / Double(values.count)
-                    lock.lock()
-                    out.append(["date": w.dateKey, "value": avg, "n": values.count])
-                    lock.unlock()
+            let hrvPredicate = HKQuery.predicateForSamples(withStart: bounds.start, end: bounds.end,
+                                                           options: .strictStartDate)
+            let hrvSort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let hrvQuery = HKSampleQuery(sampleType: hrvType, predicate: hrvPredicate,
+                                         limit: HKObjectQueryNoLimit, sortDescriptors: [hrvSort]) { _, hrvSamples, _ in
+                var out: [[String: Any]] = []
+                let qs = (hrvSamples as? [HKQuantitySample]) ?? []
+                // windows viene en orden cronológico (nights se construyó recorriendo
+                // muestras ascendentes); qs también (sort ascendente) -> two-pointer.
+                var i = 0
+                for w in windows {
+                    // saltar muestras anteriores a la ventana
+                    while i < qs.count && qs[i].startDate < w.start { i += 1 }
+                    var values: [Double] = []
+                    var j = i
+                    while j < qs.count && qs[j].startDate < w.end {
+                        values.append(qs[j].quantity.doubleValue(for: msUnit))
+                        j += 1
+                    }
+                    // NO avanzamos i hasta j a ciegas: ventanas no se solapan en la
+                    // práctica (noches disjuntas), pero si lo hicieran, re-escanear
+                    // desde i mantiene la corrección. i solo avanza lo ya descartado.
+                    if !values.isEmpty {
+                        let avg = values.reduce(0, +) / Double(values.count)
+                        out.append(["date": w.dateKey, "value": avg, "n": values.count])
+                    }
                 }
-                self.store.execute(q)
+                DispatchQueue.main.async { completion(out) }
             }
-            group.notify(queue: .main) { completion(out) }
+            self.store.execute(hrvQuery)
         }
         self.store.execute(sleepQuery)
     }
