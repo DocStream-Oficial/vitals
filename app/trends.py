@@ -6,6 +6,12 @@ Feature B del Roadmap Tier 2:
   mann_kendall(ys)     → {S, z, significant} (None si n<7)
   trend_summary(ys)    → {slope, direction, significant, n}
 
+Roadmap edad-corporal-credibilidad Paso 3:
+  theil_sen_slope(ys)  → pendiente ROBUSTA (mediana de pendientes por pares,
+                         None si n<4) — usada por app/healthspan.py para el
+                         pace of aging en vez de linreg_slope (un solo punto
+                         atípico ya no distorsiona la pendiente).
+
 Reglas de dirección:
   - Si significant=True y slope>0  → "subiendo"
   - Si significant=True y slope<0  → "bajando"
@@ -16,6 +22,7 @@ Sin dependencias externas (solo math, statistics stdlib).
 from __future__ import annotations
 
 import math
+import statistics
 from typing import Optional
 
 
@@ -40,6 +47,34 @@ def linreg_slope(ys: list) -> Optional[float]:
         return None
 
     return num / den
+
+
+def theil_sen_slope(ys: list) -> Optional[float]:
+    """
+    Roadmap edad-corporal-credibilidad Paso 3: pendiente ROBUSTA de Theil-Sen
+    con x = 0..n-1 — mediana de las pendientes (v[j]-v[i])/(j-i) sobre todos
+    los pares i<j de valores no-None. A diferencia de linreg_slope (OLS), un
+    solo punto atípico no puede arrastrar la pendiente entera: la mediana
+    ignora los outliers en vez de promediarlos.
+
+    Devuelve None si n < 4 (con 3 puntos o menos, un solo outlier ya
+    contamina la mayoría de los pares — se prefiere "sin señal" a un número
+    poco confiable).
+    """
+    vals = [v for v in ys if v is not None]
+    n = len(vals)
+    if n < 4:
+        return None
+
+    slopes = []
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            slopes.append((vals[j] - vals[i]) / (j - i))
+
+    if not slopes:
+        return None
+
+    return statistics.median(slopes)
 
 
 def mann_kendall(ys: list) -> Optional[dict]:

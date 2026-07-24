@@ -3,6 +3,39 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Edad corporal — credibilidad (unreleased)
+
+Cuatro mejoras aditivas al motor de edad corporal (ver
+`_dev-harness/edad-corporal-credibilidad/ROADMAP.md`), disparadas por el
+diagnóstico de dos usuarias reales (Mariana F/49, el Doc M/40) cuyo número
+saturaba en el piso duro de 20 y perdía credibilidad:
+
+1. **VO2 medido manda**: `build_dataset()` deja de ignorar el parámetro
+   `vo2` (HealthKit/Google ya lo ingestan y `merge.py` ya lo fusiona, pero se
+   tiraba). Con >=3 lecturas del reloj en las últimas 60 entradas,
+   `compute_body_age()["vo2max"]` es la media medida en vez de la regresión
+   NTNU (que queda de fallback etiquetado vía `vo2max_source`/
+   `vo2max_estimated`/`confidence.vo2_readings`). Sin lecturas suficientes,
+   comportamiento byte-idéntico a antes.
+2. **Piso relativo de display**: nunca se muestra una edad >15 años menor
+   que la cronológica — claves nuevas `fitness_age_display`,
+   `body_age_display`, `body_age_stable_display`, `age_floored`. Los valores
+   crudos (los que alimentan healthspan/series/golden) no se tocan.
+3. **Pace robusto**: `app/healthspan.py`'s `pace` pasa de OLS (`linreg_slope`)
+   a Theil-Sen (`app/trends.py::theil_sen_slope`, mediana de pendientes por
+   pares — robusta a un solo gap ruidoso), clampeado a `[0.5, 1.5]`, `None`
+   con <4 puntos de serie (antes OLS daba un valor con 3).
+4. **Atribución de cambios de perfil**: si un PUT `/api/profile` mueve
+   waist_cm/sex/birthdate y eso desplaza `body_age` >=2 años (recomputado
+   sobre el MISMO dataset), se escribe `profile_impact.json` (TTL 14 días)
+   que el siguiente sync inyecta como `summary.bodyage.profile_note` — la
+   card lo muestra en vez de un salto silencioso de -9 años sin explicación.
+
+Guard adicional en `changes.py::_check_vo2max`: si la fuente del vo2max
+cambió entre syncs (estimated↔measured), se suprime el evento de mejora/
+decline ese día (evita la falsa alarma "tu VO2 cayó 8 puntos" el día del
+deploy). Golden (`test_regression.py`) intacto, sin regenerar el fixture.
+
 ## Fase 9 — Des-monolitizar routing (unreleased)
 
 Refactor estructural: sin cambios funcionales. `main.py` (2,271 → 438 líneas)

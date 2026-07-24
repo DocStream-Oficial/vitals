@@ -423,6 +423,12 @@ def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, 
         if d in azm:  o["vigorous"] = azm[d]
         if d in spo2: o["spo2"] = spo2[d]
         if d in skin: o["skin_temp"] = skin[d]
+        # Roadmap edad-corporal-credibilidad Paso 1: VO2 medido del reloj se
+        # copia al day (antes se ignoraba pese a que el parámetro `vo2` ya
+        # llegaba a la firma). OJO: NO se agrega a `dates` (arriba) — un día
+        # que SOLO traiga vo2 no debe crear un day nuevo (mantiene intacto el
+        # golden test byte-a-byte de días, ver tests/test_regression.py).
+        if d in vo2: o["vo2"] = vo2[d]
         # Fase 3.5 — campos nuevos (tolerantes a None/ausentes)
         o["distance_km"]  = distance_km.get(d)   # None si no disponible
         o["energy_kcal"]  = energy_kcal.get(d)   # None si no disponible

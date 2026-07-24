@@ -107,6 +107,18 @@ def _profile_path() -> Path:
     return _PROFILE_FILE
 
 
+def profile_impact_path() -> Path:
+    """Roadmap edad-corporal-credibilidad Paso 4: ruta a profile_impact.json,
+    SIEMPRE junto a profile.json (decisión cerrada del roadmap). Replica
+    EXACTO el mismo criterio de resolución que _profile_path() (household si
+    está activo, si no el legacy _PROFILE_FILE.parent) — deliberado, en vez
+    de userctx.current_data_dir() a secas, para que ambos archivos vivan
+    SIEMPRE en el mismo directorio sin importar si la instancia ya migró a
+    household o sigue en layout legacy (single-user, la mayoría de los tests
+    preexistentes). Nunca lanza."""
+    return _profile_path().parent / "profile_impact.json"
+
+
 def load_profile() -> Optional[dict]:
     """Lee data/profile.json → dict.
     Si no existe o está corrupto → None (nunca lanza excepción)."""

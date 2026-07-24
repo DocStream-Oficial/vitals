@@ -217,6 +217,27 @@ def run_sync(days: int = 45):
             except Exception as exc:
                 logger.warning("body_age_stable falló en este sync (best-effort, ignorado): %s", exc)
 
+        # ── Roadmap edad-corporal-credibilidad Paso 4: nota de atribución de
+        # cambios de perfil — si PUT /api/profile escribió profile_impact.json
+        # (waist/sex/birthdate movió body_age >=2 años), la inyectamos en
+        # summary.bodyage.profile_note para que la card la muestre. TTL 14
+        # días: pasado ese umbral la nota ya no es relevante y se borra.
+        # Best-effort TOTAL — un fallo aquí NUNCA debe tumbar el sync (mismo
+        # patrón try/except + logger.warning que los bloques vecinos).
+        try:
+            impact_path = _profile.profile_impact_path()
+            if impact_path.exists():
+                impact = json.loads(impact_path.read_text(encoding="utf-8"))
+                impact_date = datetime.date.fromisoformat(impact["date"])
+                age_days = (datetime.date.today() - impact_date).days
+                if age_days <= 14:
+                    if dataset["summary"].get("bodyage") is not None:
+                        dataset["summary"]["bodyage"]["profile_note"] = impact
+                else:
+                    impact_path.unlink(missing_ok=True)
+        except Exception as exc:
+            logger.warning("profile_impact (nota de perfil) falló en este sync (best-effort, ignorado): %s", exc)
+
         # ── Frescura de Alertas + Coach (Paso 4): vo2max ANTERIOR para el evento
         # de cambio de changes.py. Se lee del health_compact.json VIEJO (antes
         # de sobrescribirlo abajo) — best-effort, None-safe: si no existe o está
@@ -226,9 +247,15 @@ def run_sync(days: int = 45):
         try:
             if data_out.exists():
                 old_dataset = json.loads(data_out.read_text(encoding="utf-8"))
-                prev_vo2max = ((old_dataset.get("summary") or {}).get("bodyage") or {}).get("vo2max")
+                prev_bodyage = (old_dataset.get("summary") or {}).get("bodyage") or {}
+                prev_vo2max = prev_bodyage.get("vo2max")
                 if prev_vo2max is not None:
                     dataset["summary"]["_prev_vo2max"] = prev_vo2max
+                # Roadmap edad-corporal-credibilidad Paso 1: fuente del vo2max
+                # ANTERIOR (None-safe idéntico al patrón de arriba), para que
+                # changes.py pueda detectar un cambio estimated<->measured y
+                # suprimir el evento de mejora/decline ese día (Paso 1d).
+                dataset["summary"]["_prev_vo2max_source"] = prev_bodyage.get("vo2max_source")
         except Exception as exc:
             logger.warning("No pude leer vo2max previo para changes.py: %s", exc)
 

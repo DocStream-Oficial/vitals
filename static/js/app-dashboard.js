@@ -863,13 +863,23 @@ function renderHoy(){
   document.getElementById('strainVal').innerHTML = (day.strain!=null?day.strain.toFixed(1):'—') + '<span class="ring-sub" style="margin-left:2px">/ 21</span>';
 
   // ── EDAD CORPORAL ──
-  document.getElementById('fitnessAge').textContent = bodyage.fitness_age != null ? bodyage.fitness_age : '—';
+  // Roadmap edad-corporal-credibilidad Paso 2: #fitnessAge muestra el valor
+  // con PISO relativo (fitness_age_display, nunca >15 años bajo la edad real)
+  // con fallback a fitness_age crudo para datasets viejos que no lo traigan.
+  var fitnessAgeShown = bodyage.fitness_age_display != null ? bodyage.fitness_age_display : bodyage.fitness_age;
+  document.getElementById('fitnessAge').textContent = fitnessAgeShown != null ? fitnessAgeShown : '—';
   // Roadmap edad-corporal-estable: el número grande de Hoy pasa a ser el
   // ESTABLE (media rodante de 30 días cerrados, compute_body_age_stable en
   // app/bodyage.py) — deja de saltar a diario. Fallback al instantáneo si el
   // backend no lo pudo poblar (datasets viejos antes de este cambio, o el
   // best-effort de sync.py falló).
-  var bodyAgeMain = bodyage.body_age_stable != null ? bodyage.body_age_stable : bodyage.body_age;
+  // Roadmap edad-corporal-credibilidad Paso 2: se prefiere el estable CON
+  // piso (body_age_stable_display) sobre el estable crudo, y el instantáneo
+  // CON piso (body_age_display) sobre el instantáneo crudo — cadena de
+  // fallback completa para no romper datasets viejos.
+  var bodyAgeMain = bodyage.body_age_stable_display != null ? bodyage.body_age_stable_display :
+                    (bodyage.body_age_stable != null ? bodyage.body_age_stable :
+                    (bodyage.body_age_display != null ? bodyage.body_age_display : bodyage.body_age));
   document.getElementById('bodyAge').textContent = bodyAgeMain != null ? bodyAgeMain : '—';
   var ba = bodyage;
 
@@ -918,6 +928,26 @@ function renderHoy(){
     }
     if(ba.vo2max_percentile != null){
       segs.push(t('ba_detail_percentil')+' <strong>'+ba.vo2max_percentile+'</strong>'+(ba.vo2max_label ? ' ('+ba.vo2max_label+')' : ''));
+    }
+    // Roadmap edad-corporal-credibilidad Paso 2: nota de "tope aplicado"
+    // cuando el piso relativo de display realmente actuó.
+    if(ba.age_floored === true){
+      segs.push(t('ba_floor_note'));
+    }
+    // Roadmap edad-corporal-credibilidad Paso 4: nota de atribución cuando un
+    // cambio reciente de perfil (waist/sex/birthdate) movió body_age >=2
+    // años — profile_note viene armado por sync.py desde profile_impact.json
+    // (TTL 14 días, ya expirado/borrado del lado del servidor si aplica).
+    if(ba.profile_note){
+      var pn = ba.profile_note;
+      var deltaTxt = (pn.delta_years > 0 ? '+' : '') + Math.round(pn.delta_years);
+      // Mapeo campo->clave i18n (waist_cm es el nombre interno del perfil,
+      // pero la clave i18n del roadmap es 'ba_field_waist', sin '_cm').
+      var _baFieldKeys = {waist_cm: 'ba_field_waist', sex: 'ba_field_sex', birthdate: 'ba_field_birthdate'};
+      var fieldsTxt = (pn.fields || []).map(function(f){
+        return (_baFieldKeys[f] ? t(_baFieldKeys[f]) : f);
+      }).join(', ');
+      segs.push(t('ba_profile_note').replace('{delta}', deltaTxt).replace('{fields}', fieldsTxt));
     }
     document.getElementById('baDetail').innerHTML = segs.join(' · ');
   })();

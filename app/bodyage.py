@@ -11,6 +11,20 @@ Añadido aditivo (roadmap edad-corporal-estable, modelo dos-números estilo
 WHOOP): compute_body_age_stable() promedia body_age_raw sobre una ventana de
 días CERRADOS para dar un número que no salta a diario. NO reimplementa la
 fórmula: solo LLAMA a compute_body_age() y promedia sus salidas crudas.
+
+Añadidos roadmap edad-corporal-credibilidad (VO2 medido + piso relativo +
+pace robusto + atribución de perfil — ver _dev-harness/edad-corporal-
+credibilidad/ROADMAP.md):
+- VO2 MEDIDO del reloj (clave "vo2" en >=3 days de las últimas 60 entradas)
+  manda sobre la regresión NTNU: vo2max_source ("measured"/"estimated"),
+  vo2max_estimated (el valor de la regresión, siempre presente) y
+  confidence.vo2_readings. La regresión SIGUE siendo el fallback — cero
+  cambio de comportamiento cuando no hay lecturas medidas (golden intacto).
+- Piso relativo de DISPLAY (nunca mostrar una edad >15 años bajo la
+  cronológica): fitness_age_display, body_age_display, age_floored en
+  compute_body_age(); body_age_stable_display en compute_body_age_stable().
+  Los valores crudos (fitness_age/body_age/body_age_raw/body_age_stable) NO
+  se tocan — el piso es puramente aditivo, solo para mostrar.
 """
 import statistics
 import datetime as _dt
@@ -134,6 +148,17 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
     else:
         vo2 = 74.736 - 0.247*age + 0.198*PA - 0.259*waist - 0.114*rhr
     vo2 = round(vo2, 1)
+
+    # Roadmap edad-corporal-credibilidad Paso 1: VO2 MEDIDO del reloj manda.
+    # Aditivo por datos: days sin clave "vo2" (golden, datasets viejos) → camino
+    # idéntico al de siempre. La regresión NTNU queda intacta como fallback.
+    vo2_meas = recent("vo2", 60)
+    vo2_estimated = vo2
+    vo2_source = "estimated"
+    if len(vo2_meas) >= 3:
+        vo2 = round(statistics.mean(vo2_meas), 1)
+        vo2_source = "measured"
+
     intercept = 55.1 if male else 49.0
     fitness_age = max(20, min(80, (intercept - vo2) / 0.363))
     pen = 0.0
@@ -147,6 +172,16 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
     cat = ("Superior" if vo2 > 53 else "Excelente" if vo2 >= 48 else "Sobre promedio"
            if vo2 >= 43 else "Promedio" if vo2 >= 36 else "Bajo")
 
+    # ── Roadmap edad-corporal-credibilidad Paso 2: piso relativo de DISPLAY ──
+    # Solo afecta cómo se MUESTRA (claves *_display, aditivas) — fitness_age/
+    # body_age crudos siguen intactos para healthspan/series/golden. Nunca
+    # mostrar una edad más de 15 años menor que la cronológica (el piso solo
+    # SUBE el valor, jamás lo baja).
+    floor_age = max(18.0, age - 15)
+    fitness_age_display = round(max(fitness_age, floor_age))
+    body_age_display = round(max(body_age, floor_age))
+    age_floored = fitness_age < floor_age or body_age < floor_age
+
     # ── Tier 1 aditivos ──────────────────────────────────────────────────────
     # confidence: cobertura de datos que alimentó este cómputo
     n = {
@@ -154,6 +189,10 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
         "hrv_days": len(hrv_v),
         "sleep_days": len(slp_v),
         "exercise_sessions": len(rec),
+        # Roadmap edad-corporal-credibilidad Paso 1: cuántas lecturas de VO2
+        # MEDIDO (reloj) alimentaron este cómputo, presente SIEMPRE (0 si no
+        # hay ninguna) — ver vo2_source abajo para saber si mandó o no.
+        "vo2_readings": len(vo2_meas),
     }
     min_core = min(n["rhr_days"], n["hrv_days"], n["sleep_days"])
     conf_level = "high" if min_core >= 10 else ("med" if min_core >= 5 else "low")
@@ -173,7 +212,20 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
             # Aditivo (roadmap edad-corporal-estable, paso 1): valor crudo SIN
             # redondear, para que compute_body_age_stable pueda promediar sin
             # duplicar la fórmula (evita drift si esta función cambia).
-            "body_age_raw": body_age}
+            "body_age_raw": body_age,
+            # Roadmap edad-corporal-credibilidad Paso 1: de dónde salió el
+            # vo2max final ("measured" = media de lecturas reales del reloj,
+            # "estimated" = regresión NTNU de siempre) + el valor estimado
+            # crudo (por si se quiere comparar/mostrar ambos).
+            "vo2max_source": vo2_source,
+            "vo2max_estimated": vo2_estimated,
+            # Roadmap edad-corporal-credibilidad Paso 2: valores de display
+            # con piso relativo (nunca >15 años por debajo de la edad
+            # cronológica) + flag para que la UI muestre la nota "tope
+            # aplicado" cuando el piso realmente actuó.
+            "fitness_age_display": fitness_age_display,
+            "body_age_display": body_age_display,
+            "age_floored": age_floored}
 
 
 # ── Edad corporal ESTABLE (roadmap edad-corporal-estable, paso 2) ────────────
@@ -240,7 +292,11 @@ def compute_body_age_stable(days, exercises, age_at, waist, sex,
         instant = compute_body_age(days or [], exercises or [], age_val, waist, sex,
                                     sleep_penalty_h=sleep_penalty_h)
         return {"body_age_stable": instant["body_age"], "n_days_stable": 0,
-                "stable_confidence": "low"}
+                "stable_confidence": "low",
+                # Roadmap edad-corporal-credibilidad Paso 2: en el fallback el
+                # display es el mismo body_age_display del instantáneo (ya
+                # trae su propio piso relativo calculado con age_val).
+                "body_age_stable_display": instant["body_age_display"]}
 
     if len(valid) < 2:
         # 0 ó 1 día: nada que promediar -> instantáneo (criterio 4 /
@@ -277,5 +333,16 @@ def compute_body_age_stable(days, exercises, age_at, waist, sex,
     if len(raws) < MIN_STABLE_DAYS:
         return _fallback()
 
-    stable = round(statistics.mean(raws))
-    return {"body_age_stable": stable, "n_days_stable": len(raws), "stable_confidence": "ok"}
+    stable_raw = statistics.mean(raws)
+    stable = round(stable_raw)
+    # Roadmap edad-corporal-credibilidad Paso 2: piso relativo también sobre
+    # el ESTABLE, evaluado con la edad cronológica EN LA FECHA del último día
+    # cerrado (age_now), no la de "hoy" — consistente con el resto de esta
+    # función. Si age_now no se pudo calcular (birthdate inválido/ausente),
+    # el display es el estable SIN piso (nunca lanza).
+    if age_now is not None:
+        stable_display = round(max(stable_raw, max(18.0, age_now - 15)))
+    else:
+        stable_display = stable
+    return {"body_age_stable": stable, "n_days_stable": len(raws), "stable_confidence": "ok",
+            "body_age_stable_display": stable_display}
