@@ -161,6 +161,38 @@ def test_flat_metrics_yields_pace_below_1_not_above():
     assert result["pace"] <= 1.0
 
 
+# ── Roadmap edad-corporal-credibilidad Paso 3: pace robusto (Theil-Sen) ─────
+# Nuevo contrato de `pace`: clampeado a [0.5, 1.5] SIEMPRE (nunca negativo ni
+# disparatado), y None si la serie tiene <4 puntos (antes OLS con linreg_slope
+# daba un valor incluso con solo 3 — contrato aceptado, ver ROADMAP §Paso 3).
+
+def test_pace_none_with_less_than_4_series_points():
+    """Serie de exactamente 3 puntos (n=151 días, window=90/step=30) -> pace
+    None bajo el nuevo contrato Theil-Sen (n<4), aunque la serie en sí
+    (>=2 puntos) siga siendo válida y se devuelva."""
+    days = _make_days(151)
+    result = compute_healthspan(days, [], _profile())
+    assert result is not None
+    assert len(result["series"]) == 3
+    assert result["pace"] is None
+
+
+def test_pace_is_always_clamped_to_0_5_1_5_range():
+    """Deterioro EXTREMO y sostenido (RHR subiendo de 90 a 20, HRV bajando de
+    20 a 80, sin clamp esto daría un pace disparatado tipo el -5.46/... del
+    diagnóstico original) -> pace nunca sale de [0.5, 1.5]."""
+    n = 330
+    def rhr_fn(i, n):
+        return 90.0 - (i / n) * 70.0
+    def hrv_fn(i, n):
+        return 20.0 + (i / n) * 60.0
+    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480)
+    result = compute_healthspan(days, [], _profile())
+    assert result is not None
+    assert result["pace"] is not None
+    assert 0.5 <= result["pace"] <= 1.5
+
+
 # ── endpoint ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture()

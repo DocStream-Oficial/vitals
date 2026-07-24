@@ -456,6 +456,16 @@ def _check_vo2max(dataset: dict, locale: str) -> list[dict]:
     prev = summary.get("_prev_vo2max")  # inyectado opcionalmente por el caller; None-safe si ausente
     if curr is None or prev is None:
         return events
+    # Roadmap edad-corporal-credibilidad Paso 1d: si la FUENTE del vo2max
+    # cambió entre syncs (estimated -> measured, o viceversa) y ambas fuentes
+    # son conocidas, el salto es un artefacto de "empezamos a medir" — no un
+    # cambio fisiológico real. Se suprime el evento ese día (evita la falsa
+    # alarma "tu VO2 cayó 8 puntos" el día del deploy). Datasets viejos sin
+    # esta clave (cualquiera de las dos es None) -> comportamiento actual.
+    curr_source = bodyage.get("vo2max_source")
+    prev_source = summary.get("_prev_vo2max_source")
+    if curr_source is not None and prev_source is not None and curr_source != prev_source:
+        return events
     curr, prev = float(curr), float(prev)
     delta = curr - prev
     if abs(delta) < VO2MAX_DELTA:

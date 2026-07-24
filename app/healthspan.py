@@ -9,9 +9,13 @@ app/bodyage.py::compute_body_age SIN tocar su fórmula (roadmap §Arquitectura,
 MISMO cálculo que ya corre en vivo en sync.py, solo que congelado en el
 tiempo y repetido mes a mes.
 
-pace = pendiente anualizada del gap (body_age - chrono_age) vía
-app/trends.py::linreg_slope. pace < 1 = el gap se achica con el tiempo
-(envejeciendo más lento que el calendario); pace > 1 = se agranda.
+pace = pendiente anualizada del gap (body_age - chrono_age), clampeada a
+[0.5, 1.5], vía app/trends.py::theil_sen_slope (roadmap edad-corporal-
+credibilidad Paso 3: mediana de pendientes por pares, robusta a outliers —
+reemplaza el linreg_slope/OLS de antes, que un solo gap ruidoso podía
+arrastrar a valores como -5.46). None si la serie tiene <4 puntos. pace < 1 =
+el gap se achica con el tiempo (envejeciendo más lento que el calendario);
+pace > 1 = se agranda.
 
 <120 días de historial -> None (gate duro, mismo criterio que confidence=low
 de bodyage pero a nivel de serie completa: con tan poco historial la
@@ -30,7 +34,7 @@ import statistics
 from typing import Any, Optional
 
 from app.bodyage import compute_body_age
-from app.trends import linreg_slope
+from app.trends import theil_sen_slope
 
 logger = logging.getLogger("vitals.healthspan")
 
@@ -191,7 +195,13 @@ def compute_healthspan(days: list, exercises: list, profile: Optional[dict]) -> 
             return None
 
         gaps = [pt["gap"] for pt in series]
-        slope_per_step = linreg_slope(gaps)
+        # Roadmap edad-corporal-credibilidad Paso 3: pace ROBUSTO vía
+        # Theil-Sen (mediana de pendientes por pares) en vez de OLS —
+        # linreg_slope sigue existiendo en trends.py para otros consumidores,
+        # pero el pace ya no se deja arrastrar por un solo gap ruidoso.
+        # <4 puntos de serie -> None (antes OLS daba un valor con solo 3;
+        # contrato aceptado: "sin señal suficiente -> —", ver ROADMAP).
+        slope_per_step = theil_sen_slope(gaps)
         if slope_per_step is None:
             pace = None
         else:
@@ -202,7 +212,10 @@ def compute_healthspan(days: list, exercises: list, profile: Optional[dict]) -> 
             # documentada: el punto final irregular introduce un pequeño sesgo
             # que se acepta por simplicidad (no-ML, auditable).
             slope_per_day = slope_per_step / STEP_DAYS
-            pace = round(1.0 + slope_per_day * 365.25, 2)
+            pace = 1.0 + slope_per_day * 365.25
+            # Clamp [0.5, 1.5]: un pace fuera de ese rango no es creíble (ver
+            # roadmap, criterio 4) — nunca sale un valor negativo ni disparatado.
+            pace = round(max(0.5, min(1.5, pace)), 2)
 
         # delta_quarter: cambio del gap en los últimos ~90 días de la SERIE
         # (no del dataset crudo) — compara el punto más reciente contra el

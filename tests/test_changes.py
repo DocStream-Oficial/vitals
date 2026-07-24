@@ -444,6 +444,39 @@ def test_vo2max_below_threshold_no_trigger():
     assert not any(e["factor"] == "vo2max" for e in evs)
 
 
+# ── Roadmap edad-corporal-credibilidad Paso 1d: guard de cambio de fuente ──
+
+def test_vo2max_source_changed_estimated_to_measured_no_event():
+    """Delta grande pero la FUENTE cambió (estimated -> measured) -> sin
+    evento (evita la falsa alarma "tu VO2 cayó/subió" el día del deploy)."""
+    ds = {
+        "days": [{"date": "2026-01-01"}],
+        "summary": {
+            "bodyage": {"vo2max": 45.0, "vo2max_source": "measured"},
+            "_prev_vo2max": 38.0,
+            "_prev_vo2max_source": "estimated",
+        },
+    }
+    evs = detect_changes(ds)
+    assert not any(e["factor"] == "vo2max" for e in evs)
+
+
+def test_vo2max_source_unchanged_still_fires():
+    """Ambas fuentes iguales (measured->measured o estimated->estimated) ->
+    el evento normal SIGUE disparando (el guard no debe suprimir cambios
+    fisiológicos legítimos)."""
+    ds = {
+        "days": [{"date": "2026-01-01"}],
+        "summary": {
+            "bodyage": {"vo2max": 45.0, "vo2max_source": "measured"},
+            "_prev_vo2max": 38.0,
+            "_prev_vo2max_source": "measured",
+        },
+    }
+    evs = detect_changes(ds)
+    assert any(e["factor"] == "vo2max" and e["direction"] == "up" for e in evs)
+
+
 # ── i18n: cada evento trae title/summary/recommendation en el locale pedido ──
 
 def test_events_localized_en():
