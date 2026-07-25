@@ -1,16 +1,22 @@
 """
-test_bodyage_vo2_measured.py — Roadmap edad-corporal-credibilidad, Paso 1:
-VO2 MEDIDO del reloj manda sobre la regresión NTNU cuando hay señal suficiente.
+test_bodyage_vo2_measured.py — Roadmap vo2-sin-inventar, Paso 1:
+VO2 MEDIDO del reloj manda sobre la regresión NTNU, contado por MEDICIONES
+deduplicadas dentro de una ventana de validez (no por entradas repetidas de
+las últimas 60).
 
-Cubre el criterio de aceptación 1 del roadmap:
-- >=3 lecturas "vo2" en las últimas 60 entradas de `days` -> vo2max = media
-  exacta (round 1), vo2max_source == "measured", fitness_age derivada de ESE
-  valor.
-- <3 lecturas -> comportamiento IDÉNTICO a un run sin vo2 en absoluto,
-  vo2max_source == "estimated".
-- lecturas fuera de las últimas 60 entradas no cuentan (recent() opera sobre
-  ENTRADAS, no fechas calendario).
-- confidence.vo2_readings presente siempre (incluso en 0).
+Contrato ACTUALIZADO (reemplaza el umbral ">=3 entradas de las últimas 60"
+del roadmap edad-corporal-credibilidad — cambio POR DISEÑO, ver ROADMAP
+vo2-sin-inventar, contexto): ese umbral premiaba al aparato que re-emite el
+MISMO valor a diario (caso Fitbit) y castigaba al que mide bien pero pocas
+veces (caso Apple Watch). Ahora:
+- >=1 MEDICIÓN deduplicada (por round(valor, 2)) dentro de
+  MEASUREMENT_VALIDITY_DAYS (180) respecto a la fecha del último day ->
+  vo2max_source == "measured".
+- 0 lecturas (o todas fuera de la ventana de validez) -> comportamiento
+  IDÉNTICO a un run sin vo2 en absoluto ("estimated").
+- La ventana/dedup en sí (grupos, boundary de 180 días) se cubren en detalle
+  en tests/test_vo2_gate.py (criterios 1 y 2 del roadmap); este archivo cubre
+  el contrato de compute_body_age tal como lo consume el resto del repo.
 """
 from __future__ import annotations
 
@@ -44,9 +50,10 @@ def _make_days(n, vo2_by_index=None, start="2025-01-01"):
     return days
 
 
-def test_three_or_more_readings_yields_measured_mean():
-    """>=3 lecturas de vo2 en las últimas 60 entradas -> vo2max = media exacta
-    (round 1) de esas lecturas, vo2max_source == 'measured'."""
+def test_three_distinct_readings_yields_measured_mean():
+    """3 mediciones DISTINTAS dentro de la ventana de validez -> vo2max =
+    media exacta (round 1) de esas lecturas, vo2max_source == 'measured',
+    confidence.vo2_measurements == 3 (sin duplicados, mediciones == entradas)."""
     n = 20
     readings = {17: 50.0, 18: 52.0, 19: 48.0}
     days = _make_days(n, vo2_by_index=readings)
@@ -56,6 +63,7 @@ def test_three_or_more_readings_yields_measured_mean():
     assert result["vo2max"] == expected_mean
     assert result["vo2max_source"] == "measured"
     assert result["confidence"]["vo2_readings"] == 3
+    assert result["confidence"]["vo2_measurements"] == 3
 
 
 def test_measured_vo2_drives_fitness_age():
@@ -79,42 +87,56 @@ def test_measured_vo2_drives_fitness_age():
     assert result_measured["vo2max_estimated"] == result_no_vo2["vo2max"]
 
 
-def test_two_readings_falls_back_to_estimated_identical():
-    """<3 lecturas -> comportamiento IDÉNTICO a un run sin vo2 en absoluto."""
+def test_single_reading_now_counts_as_measured():
+    """Cambio de contrato explícito: 1 SOLA medición dentro de la ventana ya
+    basta (antes exigía >=3 entradas) — 'una medición real vale más que tres
+    copias de la misma' (decisión cerrada del roadmap)."""
+    n = 5
+    days = _make_days(n, vo2_by_index={4: 41.5})
+    result = compute_body_age(days, [], BIRTHDATE_AGE, WAIST, SEX)
+
+    assert result["vo2max_source"] == "measured"
+    assert result["vo2max"] == 41.5
+    assert result["confidence"]["vo2_measurements"] == 1
+
+
+def test_zero_readings_stays_estimated_identical():
+    """0 lecturas -> comportamiento IDÉNTICO a un run sin vo2 en absoluto."""
     n = 20
-    readings = {17: 50.0, 18: 52.0}  # solo 2
-    days_with_vo2 = _make_days(n, vo2_by_index=readings)
     days_without_vo2 = _make_days(n)
+    result = compute_body_age(days_without_vo2, [], BIRTHDATE_AGE, WAIST, SEX)
 
-    result_with = compute_body_age(days_with_vo2, [], BIRTHDATE_AGE, WAIST, SEX)
-    result_without = compute_body_age(days_without_vo2, [], BIRTHDATE_AGE, WAIST, SEX)
-
-    assert result_with["vo2max_source"] == "estimated"
-    assert result_with["vo2max"] == result_without["vo2max"]
-    assert result_with["fitness_age"] == result_without["fitness_age"]
-    assert result_with["confidence"]["vo2_readings"] == 2
+    assert result["vo2max_source"] == "estimated"
+    assert result["confidence"]["vo2_readings"] == 0
+    assert result["confidence"]["vo2_measurements"] == 0
 
 
-def test_readings_outside_last_60_entries_dont_count():
-    """recent() opera sobre las últimas 60 ENTRADAS de `days`, no fechas
-    calendario — lecturas viejas fuera de esa ventana no cuentan aunque el
-    dataset tenga >>60 días en total."""
-    n = 100
-    # 3 lecturas viejas, muy al principio (índices 0,1,2) -> fuera de los
-    # últimos 60 (índices 40..99).
-    readings = {0: 50.0, 1: 52.0, 2: 48.0}
+def test_readings_outside_validity_window_dont_count():
+    """El umbral ahora es de CALENDARIO (MEASUREMENT_VALIDITY_DAYS=180
+    respecto a la fecha del último day), no de entradas: 3 lecturas viejas muy
+    al principio de un dataset largo (fuera de la ventana de 180 días desde
+    el último day) no cuentan -> estimated, aunque sean >=1 medición."""
+    n = 300
+    readings = {0: 50.0, 1: 52.0, 2: 48.0}  # días calendario ~299/298/297 antes del último
     days = _make_days(n, vo2_by_index=readings)
     result = compute_body_age(days, [], BIRTHDATE_AGE, WAIST, SEX)
 
     assert result["vo2max_source"] == "estimated"
     assert result["confidence"]["vo2_readings"] == 0
+    assert result["confidence"]["vo2_measurements"] == 0
+    # Diagnóstico: vo2_last_measured_date SÍ refleja la última lectura real
+    # (aunque esté fuera de ventana) — ver criterio 6 del roadmap (UI puede
+    # mostrar "última medición: <fecha>" incluso sin gate).
+    assert result["vo2_last_measured_date"] == days[2]["date"]
 
 
 def test_confidence_vo2_readings_present_even_with_zero():
-    """confidence.vo2_readings está presente siempre, incluso en 0."""
+    """confidence.vo2_readings y confidence.vo2_measurements están presentes
+    siempre, incluso en 0."""
     days = _make_days(10)
     result = compute_body_age(days, [], BIRTHDATE_AGE, WAIST, SEX)
     assert result["confidence"]["vo2_readings"] == 0
+    assert result["confidence"]["vo2_measurements"] == 0
 
 
 def test_vo2max_estimated_key_present_always():
@@ -123,3 +145,9 @@ def test_vo2max_estimated_key_present_always():
     days_no_vo2 = _make_days(10)
     result = compute_body_age(days_no_vo2, [], BIRTHDATE_AGE, WAIST, SEX)
     assert result["vo2max_estimated"] == result["vo2max"]  # estimated: son el mismo valor
+
+
+def test_vo2_last_measured_date_none_when_never_measured():
+    days_no_vo2 = _make_days(10)
+    result = compute_body_age(days_no_vo2, [], BIRTHDATE_AGE, WAIST, SEX)
+    assert result["vo2_last_measured_date"] is None

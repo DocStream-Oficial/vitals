@@ -95,6 +95,9 @@ var STRINGS = {
     ba_profile_note: 'Tu edad corporal cambió {delta} años por actualizar tu perfil ({fields})',
     ba_field_waist: 'cintura',
     ba_field_sex: 'sexo',
+    // Roadmap vo2-sin-inventar Paso 5: CTA cuando no hay medición real vigente
+    ba_no_measurement: 'Sal a correr 10 min al aire libre con tu reloj para medir tu VO₂máx y calcular tu edad real',
+    ba_last_measured: 'Última medición: {date}',
     ba_field_birthdate: 'fecha de nacimiento',
     // Health monitor
     hm_label: 'Monitor de salud',
@@ -823,6 +826,9 @@ var STRINGS = {
     ba_field_waist: 'waist',
     ba_field_sex: 'sex',
     ba_field_birthdate: 'birthdate',
+    // Roadmap vo2-sin-inventar Step 5: CTA when there's no valid real measurement
+    ba_no_measurement: 'Go for a 10-min outdoor run with your watch to measure your VO2max and calculate your real age',
+    ba_last_measured: 'Last measured: {date}',
     hm_label: 'Health Monitor',
     hm_sub: '3d vs base',
     hm_rhr: 'Resting HR',
@@ -1507,6 +1513,9 @@ var STRINGS = {
     ba_field_waist: 'tour de taille',
     ba_field_sex: 'sexe',
     ba_field_birthdate: 'date de naissance',
+    // Roadmap vo2-sin-inventar Étape 5 : CTA sans mesure réelle valide
+    ba_no_measurement: 'Cours 10 min en extérieur avec ta montre pour mesurer ton VO2max et calculer ton âge réel',
+    ba_last_measured: 'Dernière mesure : {date}',
     hm_label: 'Moniteur de santé',
     hm_sub: '3j vs base',
     hm_rhr: 'FC repos',
@@ -2191,6 +2200,9 @@ var STRINGS = {
     ba_field_waist: 'cintura',
     ba_field_sex: 'sexo',
     ba_field_birthdate: 'data de nascimento',
+    // Roadmap vo2-sin-inventar Passo 5: CTA sem medição real vigente
+    ba_no_measurement: 'Corra 10 min ao ar livre com seu relógio para medir seu VO2máx e calcular sua idade real',
+    ba_last_measured: 'Última medição: {date}',
     hm_label: 'Monitor de saúde',
     hm_sub: '3d vs base',
     hm_rhr: 'FC repouso',

@@ -30,7 +30,7 @@ from typing import Optional
 from app.config import settings
 from app.auth import TokenExpired, NoToken  # re-exportadas para callers/tests
 from app.scoring import build_dataset
-from app.bodyage import compute_body_age, compute_body_age_stable
+from app.bodyage import compute_body_age, compute_body_age_stable, gate_unmeasured
 from app.sources import get_source
 from app.merge import merge_sources, last_merge_info
 from app.fsutil import atomic_write_text
@@ -79,40 +79,6 @@ def _data_out_path() -> Path:
 # demás fuentes (Google ya trae casi todo su histórico sin límite de fecha; Oura/WHOOP sí
 # acotan sus queries HTTP por 'days' — no queremos pedirles más de lo que ya piden hoy).
 _SOURCE_WINDOW_OVERRIDE = {"healthkit": 365}
-
-
-def _vo2_last_measured_date() -> Optional[str]:
-    """Roadmap coach-objetivo-vo2, Paso 2: fecha ISO (YYYY-MM-DD) de la
-    lectura de VO2 MEDIDO más reciente en el ingest crudo de HealthKit del
-    usuario activo, o None si no hay archivo / no hay clave "vo2" / el JSON
-    está corrupto. Reutiliza app.sources.healthkit._ingest_path() (import
-    local, patrón de imports perezosos del repo) — NO replica la resolución
-    de rutas a mano, así que respeta el mismo contextvar de usuario que ya
-    usa ese módulo. Alimenta el factor de staleness del insight
-    fitness_age_gap (app/insights.py). Nunca lanza."""
-    try:
-        from app.sources.healthkit import _ingest_path as _hk_ingest_path
-        path = _hk_ingest_path()
-        if not path.exists():
-            return None
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            return None
-        entries = raw.get("vo2") or []
-        if not isinstance(entries, list):
-            return None
-        # Solo entradas con VALOR: una entrada {"date": ..., "value": null}
-        # (HealthKit los tolera — ver healthkit._array_to_dict, que pasa los
-        # None tal cual) NO es una lectura de VO2, y contarla haría pasar por
-        # "fresca" una medición que nunca ocurrió — justo el caso que el
-        # factor de calibración del insight fitness_age_gap debe detectar.
-        dates = [
-            e.get("date") for e in entries
-            if isinstance(e, dict) and e.get("date") and e.get("value") is not None
-        ]
-        return max(dates) if dates else None
-    except Exception:
-        return None
 
 
 def run_sync(days: int = 45):
@@ -272,15 +238,23 @@ def run_sync(days: int = 45):
         except Exception as exc:
             logger.warning("profile_impact (nota de perfil) falló en este sync (best-effort, ignorado): %s", exc)
 
-        # ── Roadmap coach-objetivo-vo2 Paso 2: vo2_last_measured_date (aditivo,
-        # best-effort TOTAL) — alimenta el factor de staleness del insight
-        # fitness_age_gap. Sin archivo/sin clave "vo2"/JSON corrupto -> None,
-        # el sync NUNCA falla por esto (_vo2_last_measured_date() nunca lanza).
+        # ── Roadmap vo2-sin-inventar Paso 2: gate "sin VO2 medido NO hay edad
+        # corporal" — aplicado AQUÍ, DESPUÉS de stable/healthspan/profile_note
+        # (arriba) para que también anule body_age_stable*/pace cuando
+        # corresponda (`profile_note` NO se anula: no está en la lista del
+        # criterio 3 y el frontend no lo renderiza en la rama gateada)
+        # (riesgo #2 del roadmap: aplicarlo antes los
+        # repoblaría con un número inventado). vo2_last_measured_date ya lo
+        # trae compute_body_age (Paso 1, derivado de `days` — el lector del
+        # ingest crudo de HealthKit que vivía aquí se ELIMINÓ, quedaba
+        # redundante y solo veía una fuente). Best-effort TOTAL: un fallo
+        # aquí jamás debe tumbar el sync (deja el bodyage instantáneo tal
+        # cual, sin gatear, antes que romper el sync completo).
         try:
             if dataset["summary"].get("bodyage") is not None:
-                dataset["summary"]["bodyage"]["vo2_last_measured_date"] = _vo2_last_measured_date()
+                dataset["summary"]["bodyage"] = gate_unmeasured(dataset["summary"]["bodyage"])
         except Exception as exc:
-            logger.warning("vo2_last_measured_date falló en este sync (best-effort, ignorado): %s", exc)
+            logger.warning("gate_unmeasured falló en este sync (best-effort, ignorado): %s", exc)
 
         # ── Frescura de Alertas + Coach (Paso 4): vo2max ANTERIOR para el evento
         # de cambio de changes.py. Se lee del health_compact.json VIEJO (antes

@@ -3,6 +3,69 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Sin VO2máx medido NO hay edad corporal (unreleased)
+
+Decisión explícita del dueño del producto (ver
+`_dev-harness/vo2-sin-inventar/ROADMAP.md`): la regresión NTNU infla
+sistemáticamente la edad fitness cuando no hay VO2 medido (Doc 37.15 medido
+vs 52.7 estimado; Mariana 29.1 medido vs 41.6 estimado — ambos suben de
+"Bajo" a "Excelente"). Si no se puede medir, ya NO se inventa: se muestra el
+CTA para habilitarlo.
+
+1. **Conteo por mediciones + ventana de validez** (`app/bodyage.py`): el VO2
+   medido ahora cuenta por MEDICIONES deduplicadas (`round(valor, 2)`), no
+   por entradas repetidas — reemplaza el umbral anterior (`>=3` entradas de
+   las últimas 60, que premiaba al aparato que re-emite el mismo valor a
+   diario). `MEASUREMENT_VALIDITY_DAYS = 180`: solo cuentan mediciones a
+   ≤180 días de la fecha del último day del dataset (nunca `date.today()`).
+   `confidence.vo2_measurements` (grupos) + `confidence.vo2_readings`
+   (entradas crudas, diagnóstico) + `vo2_last_measured_date` (diagnóstico
+   puro, independiente de si cuenta o no para el gate).
+2. **`gate_unmeasured(ba)`** (`app/bodyage.py`, función nueva, separada de
+   `compute_body_age` — el golden no se toca): con `vo2max_source !=
+   "measured"` anula `vo2max`, `fitness_age`, `body_age`, `category`,
+   `vo2max_percentile`, `vo2max_label`, `fitness_age_display`,
+   `body_age_display`, `age_floored`, `penalty`, `body_age_stable`,
+   `body_age_stable_display`, `pace` (todos `None`) + agrega
+   `unavailable_reason: "no_vo2_measurement"`. Conserva `vo2max_estimated`,
+   `vo2_last_measured_date`, `age`, `rhr`, `hrv`, `sleep_h`, `confidence`.
+   Identidad si `vo2max_source == "measured"`.
+3. **`sync.py`**: aplica el gate DESPUÉS de stable/healthspan/profile_note
+   (para anular también esos campos), así todo lo persistido en
+   `health_compact.json` ya viene gateado. Se elimina
+   `_vo2_last_measured_date()` (lector redundante del ingest crudo de
+   HealthKit) — la fecha ya sale de `days` vía `compute_body_age`.
+4. **Healthspan honesto** (`app/healthspan.py`): `compute_healthspan` solo
+   agrega puntos a la serie con `vo2max_source == "measured"` — con <2 puntos
+   válidos, `None` (nunca inventa una tendencia con edades no respaldadas).
+5. **Insight `vo2_unmeasured`** (info, `app/insights.py`): dispara cuando
+   `unavailable_reason == "no_vo2_measurement"`, mutuamente excluyente con
+   `fitness_age_gap` por construcción (esa regla exige `vo2max_source ==
+   "measured"`). Chip sugerido `coach_q_vo2_unmeasured`.
+6. **Coach** (`coach.py`, `coach_chat.py`): bullet alternativo "Edad
+   corporal: no disponible" + línea explícita en el contexto del LLM para que
+   RECOMIENDE la calibración en vez de inventar un número.
+7. **UI** (`app-dashboard.js`, `app-i18n-helpers.js`): con
+   `unavailable_reason`, `#fitnessAge`/`#bodyAge` muestran "—",
+   `#baPaceRow`/`#bodyAgeBadge`/`#baPenalty` ocultos, `#baDetail` muestra el
+   CTA (`ba_no_measurement` + `ba_last_measured` si hay fecha). La tarjeta
+   métrica `bodyage` y `_renderFitnessDeep` ya no concatenan campos
+   potencialmente `None` a pelo (antes renderizaban "undefined").
+8. **Programa `vo2_boost`**: la tarea de calibración se renombra
+   `task_walk_outdoor_calibrate` → `task_run_outdoor_calibrate` — caminar no
+   activa la medición de VO2máx en el formato nuevo de Apple/Fitbit, hace
+   falta correr/trotar 10 min al aire libre con GPS.
+9. **MCP** (`app/mcp_tools.py::bodyage_summary`): propaga
+   `unavailable_reason` cuando el gate está activo.
+
+Fuera de alcance (sin cambios): la fórmula NTNU y sus constantes/percentiles
+(`_VO2_NORMS`), el golden (`tests/fixtures/golden_synthetic.json`),
+`merge.py`/`sources/*`/scoring de recovery-strain-sueño,
+`compute_body_age_stable` (su mecánica de promediado), atribución de perfil,
+motor de programas. Los 22 fails pre-existentes de `test_mcp_tools.py`
+(dataset real ausente del repo) no se tocaron — verificados idénticos
+(mismo conjunto de nombres, no solo el conteo) antes y después.
+
 ## Objetivo del coach: bajar la edad fitness (unreleased)
 
 Cinco piezas aditivas (ver `_dev-harness/coach-objetivo-vo2/ROADMAP.md`) que

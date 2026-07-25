@@ -113,6 +113,22 @@ def test_fitness_age_gap_dataset_chip_present(monkeypatch):
     assert chip["text"] == "¿Cómo bajo mi edad fitness?"
 
 
+def test_vo2_unmeasured_dataset_chip_present():
+    """Roadmap vo2-sin-inventar, Paso 3: con el insight vo2_unmeasured activo
+    (bodyage.unavailable_reason == 'no_vo2_measurement'), su chip
+    (coach_q_vo2_unmeasured) debe aparecer en las preguntas sugeridas."""
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {"bodyage": {"unavailable_reason": "no_vo2_measurement", "vo2max_source": "estimated"}}
+    dataset = {"days": days, "summary": summary, "exercises": []}
+
+    qs = suggested_questions(dataset, locale="es", limit=4)
+    ids = [q["id"] for q in qs]
+    assert "vo2_unmeasured" in ids
+    chip = next(q for q in qs if q["id"] == "vo2_unmeasured")
+    assert chip["text"] == "¿Cómo mido mi VO₂máx?"
+
+
 def test_all_insight_question_keys_exist_in_i18n():
     """Todas las claves de INSIGHT_QUESTION_KEYS y GENERIC_QUESTION_KEYS deben
     existir en los 4 locales (red de seguridad adicional al audit de i18n)."""

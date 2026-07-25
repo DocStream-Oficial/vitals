@@ -617,6 +617,45 @@ def rule_fitness_age_gap(days: list[dict], summary: dict, locale: str = "es") ->
     }
 
 
+# ── Regla 7c: vo2_unmeasured (Roadmap vo2-sin-inventar, Paso 3) ────────────────
+# Sin VO2 medido no hay edad corporal (decisión de producto): el gate
+# gate_unmeasured() (app/bodyage.py) deja summary.bodyage.unavailable_reason
+# == "no_vo2_measurement" cuando no hubo ninguna medición real vigente. Esta
+# regla lo convierte en un insight explícito (en vez de una card vacía sin
+# explicación) con la instrucción concreta para habilitar la métrica.
+
+def rule_vo2_unmeasured(days: list[dict], summary: dict, locale: str = "es") -> dict | None:
+    """Info: sin VO2 medido dentro de la ventana de validez -> explica por qué
+    no hay edad corporal + receta la carrera/trote de calibración outdoor.
+
+    Mutuamente excluyente con rule_fitness_age_gap POR CONSTRUCCIÓN: esa regla
+    exige `vo2max_source == "measured"`, y `unavailable_reason ==
+    "no_vo2_measurement"` solo aparece cuando el gate corrió porque
+    vo2max_source != "measured" — nunca pueden disparar los dos a la vez para
+    el mismo dataset."""
+    bodyage = summary.get("bodyage")
+    if not bodyage:
+        return None
+    if bodyage.get("unavailable_reason") != "no_vo2_measurement":
+        return None
+
+    last_measured = bodyage.get("vo2_last_measured_date")
+    factors = []
+    if last_measured:
+        factors.append(tr("vo2_unmeasured_factor", locale, date=last_measured))
+
+    return {
+        "id": "vo2_unmeasured",
+        "severity": "info",
+        "category": "entrenamiento",
+        "icon": "🏃",
+        "title": tr("vo2_unmeasured_title", locale),
+        "summary": tr("vo2_unmeasured_summary", locale),
+        "factors": factors,
+        "recommendation": tr("vo2_unmeasured_rec", locale),
+    }
+
+
 # ── Regla 8: positive_hrv ──────────────────────────────────────────────────────
 
 def rule_positive_hrv(days: list[dict], summary: dict, locale: str = "es") -> dict | None:
@@ -813,6 +852,7 @@ _RULES = [
     rule_bedtime_inconsistency,
     rule_strength_gap,
     rule_fitness_age_gap,
+    rule_vo2_unmeasured,
     rule_positive_hrv,
     rule_positive_sleep,
     rule_cycle_phase,
