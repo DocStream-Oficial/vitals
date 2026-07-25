@@ -35,6 +35,7 @@ INSIGHT_QUESTION_KEYS: dict = {
     "recovery_declining": "coach_q_recovery_declining",
     "bedtime_inconsistency": "coach_q_bedtime_inconsistency",
     "strength_gap": "coach_q_strength_gap",
+    "fitness_age_gap": "coach_q_fitness_age_gap",
     "positive_hrv": "coach_q_positive_hrv",
     "positive_sleep": "coach_q_positive_sleep",
     "cycle_phase": "coach_q_cycle_phase",

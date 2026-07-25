@@ -3,11 +3,14 @@ programs.py — Biblioteca de programas predefinidos del coach (Roadmap P1, F4,
 paso 4).
 
 CATÁLOGO fijo en código (`_CATALOG`), NO archivos sueltos ni generación por
-LLM (fuera de alcance del roadmap — v2). 4 programas plantilla:
+LLM (fuera de alcance del roadmap — v2). 5 programas plantilla:
     sleep_reset   (14 días) — recuperar higiene de sueño
     aerobic_base  (28 días) — base aeróbica progresiva
     strength_3x   (28 días) — fuerza 3x/semana
     stress_reset  (14 días) — manejo de estrés / recuperación mental
+    vo2_boost     (28 días) — zona 2 + calibración outdoor del VO2máx del
+                  reloj, receta del insight fitness_age_gap (Roadmap
+                  coach-objetivo-vo2, ver app/insights.py)
 
 Cada programa es una lista de tareas por día-índice (0-based): {task_key,
 kind, params, light: {task_key, params}}. `kind` ∈ {sleep, cardio, strength,
@@ -100,6 +103,21 @@ _STRENGTH_WEEK = [
 ]
 _STRENGTH_3X_DAYS = _STRENGTH_WEEK * 4
 
+# ── vo2_boost (28 días) — Roadmap coach-objetivo-vo2, Paso 1 ────────────────
+# 4 semanas, ciclo de 7 días: zona 2 + 1 caminata outdoor de calibración
+# (recalibra el VO2máx del reloj, ver app/insights.py::rule_fitness_age_gap) +
+# el deporte del usuario cuenta como su día de intensidad + descansos.
+_VO2_BOOST_WEEK = [
+    _task("task_cardio_easy", "cardio", {"min": 30}, light_params={"min": 15}),
+    _task("task_rest_active", "habit", {"habit": "stretching"}),
+    _task("task_walk_outdoor_calibrate", "cardio", {"min": 30}, light_params={"min": 20}),
+    _task("task_play_sport", "cardio", {"min": 60}, light_task_key="task_cardio_easy", light_params={"min": 20}),
+    _task("task_cardio_moderate", "cardio", {"min": 35}, light_task_key="task_cardio_easy", light_params={"min": 15}),
+    _task("task_rest_active", "habit", {"habit": "stretching"}),
+    _task("task_rest_full", "habit", {"habit": "nap_today"}),
+]
+_VO2_BOOST_DAYS = _VO2_BOOST_WEEK * 4
+
 # ── stress_reset (14 días) ───────────────────────────────────────────────────
 _STRESS_RESET_DAYS = [
     _task("task_breathwork", "habit", {"habit": "breathwork"}),
@@ -123,6 +141,8 @@ _CATALOG: dict[str, dict] = {
     "aerobic_base": {"duration_days": 28, "days": _AEROBIC_BASE_DAYS},
     "strength_3x": {"duration_days": 28, "days": _STRENGTH_3X_DAYS},
     "stress_reset": {"duration_days": 14, "days": _STRESS_RESET_DAYS},
+    # Roadmap coach-objetivo-vo2, Paso 1.
+    "vo2_boost": {"duration_days": 28, "days": _VO2_BOOST_DAYS},
 }
 
 PROGRAM_IDS = tuple(_CATALOG.keys())

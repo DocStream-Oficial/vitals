@@ -218,6 +218,31 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
         penalty_str = ""
         if penalty and penalty > 0:
             penalty_str = tr("bullet_body_age_penalty", locale, penalty=penalty, sleep_h_avg=sleep_h_avg)
+        # Roadmap coach-objetivo-vo2 Paso 4: fuente del VO2 (medido/estimado)
+        # + objetivo explícito si el gap fitness>real supera 2 años. None-safe:
+        # sin vo2max_source (datasets viejos) ninguna de las dos cadenas se
+        # agrega -> bullet idéntico al de hoy (cero regresión).
+        vo2_source_str = ""
+        vo2_source = bodyage.get("vo2max_source")
+        if vo2_source == "measured":
+            pct = bodyage.get("vo2max_percentile")
+            if pct is not None:
+                vo2_source_str = tr("bullet_body_age_vo2_measured", locale, percentile=pct)
+            else:
+                vo2_source_str = tr("bullet_body_age_vo2_measured_generic", locale)
+        elif vo2_source == "estimated":
+            vo2_source_str = tr("bullet_body_age_vo2_estimated", locale)
+
+        # El objetivo explícito solo se muestra con VO2 MEDIDO (mismo criterio
+        # que rule_fitness_age_gap en app/insights.py: con estimado el número
+        # no es confiable) — así el objetivo nunca aparece en un dataset viejo
+        # sin vo2max_source (age/fitness_age SÍ existían antes de este roadmap).
+        goal_str = ""
+        age_raw = bodyage.get("age")
+        if vo2_source == "measured" and age_raw is not None and fitness_age > age_raw + 2:
+            fitness_age_display = bodyage.get("fitness_age_display", fitness_age)
+            goal_str = tr("bullet_body_age_goal", locale, display=fitness_age_display, age=age_raw)
+
         body_body = tr(
             "bullet_body_age_body", locale,
             vo2max=vo2max,
@@ -225,7 +250,7 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
             real_age=real_age,
             rhr=bodyage.get("rhr", summary.get("rhr_base", "")),
             hrv=bodyage.get("hrv", summary.get("hrv_base", "")),
-        ) + penalty_str
+        ) + penalty_str + vo2_source_str + goal_str
         # Rango degenerado (fitness_age == body_age): "~20–20 años" → "~20 años"
         if fitness_age == body_age:
             title = tr("bullet_body_age_title_single", locale, body_age=body_age)

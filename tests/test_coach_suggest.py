@@ -88,6 +88,31 @@ def test_evaluate_exception_falls_back_to_generic(monkeypatch):
     assert len(qs) == 4
 
 
+def test_fitness_age_gap_dataset_chip_present(monkeypatch):
+    """Roadmap coach-objetivo-vo2, Paso 3: con el insight fitness_age_gap
+    activo, su chip (coach_q_fitness_age_gap) debe aparecer en las preguntas
+    sugeridas (mismo mecanismo INSIGHT_QUESTION_KEYS, cero lógica nueva)."""
+    from app import profile as _profile
+    monkeypatch.setattr(_profile, "effective_sources", lambda: ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {
+        "bodyage": {
+            "vo2max_source": "measured", "vo2max_percentile": 35,
+            "fitness_age": 56, "fitness_age_display": 56, "age": 49,
+        },
+    }
+    dataset = {"days": days, "summary": summary, "exercises": []}
+
+    qs = suggested_questions(dataset, locale="es", limit=4)
+    ids = [q["id"] for q in qs]
+    assert "fitness_age_gap" in ids
+    # VALIDACIÓN (validador): el chip debe traer el TEXTO traducido, no la
+    # clave cruda — un fallo de i18n aquí se vería como "coach_q_..." en la UI.
+    chip = next(q for q in qs if q["id"] == "fitness_age_gap")
+    assert chip["text"] == "¿Cómo bajo mi edad fitness?"
+
+
 def test_all_insight_question_keys_exist_in_i18n():
     """Todas las claves de INSIGHT_QUESTION_KEYS y GENERIC_QUESTION_KEYS deben
     existir en los 4 locales (red de seguridad adicional al audit de i18n)."""

@@ -57,13 +57,15 @@ def plan_client_no_data(tmp_path):
 
 # ── GET /api/programs ────────────────────────────────────────────────────
 
-def test_api_programs_get_returns_4_programs(plan_client):
+def test_api_programs_get_returns_5_programs(plan_client):
+    """Roadmap coach-objetivo-vo2, Paso 1: el catálogo gana el programa
+    `vo2_boost` (28 días) -> 4 pasa a 5."""
     resp = plan_client.get("/api/programs")
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body) == 4
+    assert len(body) == 5
     ids = {p["id"] for p in body}
-    assert ids == {"sleep_reset", "aerobic_base", "strength_3x", "stress_reset"}
+    assert ids == {"sleep_reset", "aerobic_base", "strength_3x", "stress_reset", "vo2_boost"}
 
 
 # ── GET /api/plan (sin plan activo) ──────────────────────────────────────

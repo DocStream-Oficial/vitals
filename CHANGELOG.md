@@ -3,6 +3,44 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Objetivo del coach: bajar la edad fitness (unreleased)
+
+Cinco piezas aditivas (ver `_dev-harness/coach-objetivo-vo2/ROADMAP.md`) que
+convierten el VO2 medido honesto-pero-duro (roadmap "edad-corporal-
+credibilidad") en un objetivo accionable del coach, motivadas por el caso
+real de Mariana (F/49, VO2 medido 29.1 → edad fitness 55-56).
+
+1. **Insight `fitness_age_gap`**: dispara cuando `bodyage.vo2max_source ==
+   "measured"` y la edad fitness cruda supera la real por >2 años —
+   `app/insights.py::rule_fitness_age_gap`, calcado de `rule_strength_gap`.
+   Factor adicional de staleness ("caminata outdoor para recalibrar") si el
+   perfil conecta HealthKit y `vo2_last_measured_date` es `None` o tiene más
+   de 45 días vs el último día del dataset. NO dispara con VO2 estimado, gap
+   ≤2, o sin `bodyage` (dataset viejo).
+2. **Chip sugerido** `coach_q_fitness_age_gap` ("¿Cómo bajo mi edad
+   fitness?") vía el mismo mecanismo `INSIGHT_QUESTION_KEYS` de
+   `app/coach_suggest.py` — cero lógica nueva.
+3. **Programa `vo2_boost`** (28 días) en el catálogo de `app/programs.py`:
+   zona 2 + 1 caminata outdoor de calibración por semana
+   (`task_walk_outdoor_calibrate`) + el deporte del usuario como su día de
+   intensidad (`task_play_sport`) + descansos.
+4. **Contexto del coach** (`coach_chat.py::_build_context` y
+   `coach.py::coach_card`, bullet de edad corporal): ahora menciona si el
+   VO2 es medido (con percentil) o estimado y, si el gap fitness>real supera
+   2 años, el objetivo explícito ("bajar edad fitness de X a Y"). Solo con
+   VO2 medido — None-safe: datasets sin `vo2max_source` (previos a este
+   roadmap) quedan byte-idénticos.
+5. **`sync.py::_vo2_last_measured_date()`**: aditivo, best-effort TOTAL —
+   lee la fecha de la última lectura "vo2" del ingest crudo de HealthKit
+   (`app.sources.healthkit._ingest_path()`) y la escribe en
+   `summary.bodyage.vo2_last_measured_date`. Sin archivo/clave/JSON válido →
+   `None`, el sync nunca falla por esto.
+
+Sin cambios en `bodyage.py`/`scoring.py`/`healthspan.py`/`trends.py`/
+`merge.py`/`app/sources/*` ni en el motor de programas existente
+(`task_for_day`, degradación light, `_acwr_is_caution`) — solo una entrada
+nueva al catálogo. Golden y reglas de insights existentes intactos.
+
 ## Edad corporal — credibilidad (unreleased)
 
 Cuatro mejoras aditivas al motor de edad corporal (ver
