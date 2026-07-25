@@ -106,3 +106,49 @@ class TestBodyAgeBulletVo2Enrichment:
             # VALIDACIÓN (validador): el texto ES usa "VO₂" (subíndice), no
             # "VO2" — buscar "VO2" a secas hacía la aserción casi vacía.
             assert "VO₂" not in b["body"] and "Objetivo" not in b["body"]
+
+
+class TestBodyAgeGateUnavailable:
+    """Roadmap vo2-sin-inventar, Paso 4: sin VO2 medido vigente, el gate deja
+    body_age/fitness_age en None + unavailable_reason — ni el chip ni el
+    bullet de siempre deben emitirse, y un bullet ALTERNATIVO con el CTA debe
+    aparecer en su lugar."""
+
+    def _gated_bodyage(self, **overrides):
+        base = {
+            "vo2max": None, "fitness_age": None, "body_age": None, "category": None,
+            "vo2max_percentile": None, "penalty": None,
+            "unavailable_reason": "no_vo2_measurement",
+            "vo2max_source": "estimated", "vo2max_estimated": 52.7,
+            "age": 49, "rhr": 55.0, "hrv": 45.0,
+        }
+        base.update(overrides)
+        return base
+
+    def test_no_body_age_chip_when_gated(self):
+        card = coach_card(_dataset(self._gated_bodyage()))
+        chip_texts = [c["t"] for c in card["chips"]]
+        assert not any("Edad corporal" in t for t in chip_texts)
+
+    def test_no_normal_body_age_bullet_when_gated(self):
+        bullet = _body_age_bullet(_dataset(self._gated_bodyage()))
+        # El bullet normal NUNCA menciona VO₂máx (usa el body de siempre) —
+        # con el gate, debe ser el bullet ALTERNATIVO, no el de siempre.
+        assert bullet is not None
+        assert "VO₂máx ~" not in bullet["body"]
+
+    def test_alternative_bullet_present_when_gated(self):
+        bullet = _body_age_bullet(_dataset(self._gated_bodyage()))
+        assert bullet is not None
+        assert bullet["title"] == "Edad corporal: no disponible"
+        assert "Sal a correr" in bullet["body"]
+
+    def test_no_bullet_at_all_without_gate_or_body_age(self):
+        """Sin body_age Y sin unavailable_reason (bodyage vacío) -> ningún
+        bullet de edad corporal (ni el normal ni el alternativo) entre TODOS
+        los bullets de la card (bullets[0] puede ser el de Fuerza, que sí
+        dispara con exercises=[])."""
+        card = coach_card(_dataset({}))
+        titles = [b["title"] for b in card["bullets"]]
+        assert "Edad corporal: no disponible" not in titles
+        assert not any(t.startswith("Tu cuerpo rinde") for t in titles)

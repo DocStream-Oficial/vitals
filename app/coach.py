@@ -260,6 +260,14 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
             "title": title,
             "body": body_body,
         })
+    elif bodyage.get("unavailable_reason") == "no_vo2_measurement":
+        # Roadmap vo2-sin-inventar Paso 4: sin VO2 medido vigente, gate_unmeasured
+        # anuló body_age/fitness_age — bullet alternativo con el CTA en vez de
+        # simplemente omitir la card sin explicación.
+        bullets.append({
+            "title": tr("bullet_body_age_unavailable_title", locale),
+            "body": tr("bullet_body_age_unavailable_body", locale),
+        })
 
     # ── BULLET 2: Fuerza ─────────────────────────────────────────────────────
     # Cuenta ejercicios de cardio en últimos 7d para el mensaje

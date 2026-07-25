@@ -372,6 +372,23 @@ def _gen_plan() -> dict:
     }
 
 
+def _gen_vo2():
+    """Mediciones de VO2máx del reloj (roadmap vo2-sin-inventar).
+
+    El persona demo SALE A CORRER, así que su reloj sí produce lecturas: una
+    cada ~30 días con una mejora leve (47.9 -> 49.5). Sin esto el demo caería
+    en el gate de "sin medición" y mostraría el CTA en vez del feature — y
+    ANTES de este roadmap mostraba algo peor: una edad corporal de 20 años
+    derivada 100% de la regresión, es decir el número inventado que este
+    roadmap vino a eliminar. Fechas fijas (no rng) para diff-cero."""
+    vals = [47.9, 48.2, 48.6, 49.1, 49.5]
+    out = {}
+    for i, v in enumerate(vals):
+        d = _END_DATE - _dt.timedelta(days=(len(vals) - 1 - i) * 30)
+        out[d.isoformat()] = v
+    return out
+
+
 def main():
     from app.scoring import build_dataset
     from app.bodyage import compute_body_age
@@ -386,7 +403,7 @@ def main():
     sleep, rhr, hrv, steps, azm, exercises = _gen_inputs(rng, journal["entries"])
 
     ds = build_dataset(
-        sleep, rhr, hrv, {}, {}, steps, azm,
+        sleep, rhr, hrv, {}, _gen_vo2(), steps, azm,
         exercises=exercises,
         age=DEMO_AGE, sex=DEMO_SEX,
         sleep_target_min=480,

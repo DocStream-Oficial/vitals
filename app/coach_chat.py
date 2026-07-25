@@ -342,6 +342,13 @@ def _build_context(dataset: dict) -> str:
             display = bodyage.get("fitness_age_display", fitness_age)
             s += f" · OBJETIVO: bajar edad fitness de {display} a {age}"
         ba.append(s)
+    elif bodyage.get("unavailable_reason") == "no_vo2_measurement":
+        # Roadmap vo2-sin-inventar Paso 4 (criterio 7): sin gate, el coach NO
+        # debe inventar un número — línea explícita para que el LLM
+        # RECOMIENDE la carrera de calibración en vez de fabricar una edad.
+        ba.append(
+            "EDAD CORPORAL: no disponible — requiere carrera outdoor 10 min con GPS"
+        )
 
     # ── BANDERAS ──
     flags = []

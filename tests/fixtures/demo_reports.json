@@ -10,14 +10,14 @@
       "end": "2026-06-28",
       "n_days": 7,
       "means": {
-        "recovery": 76.9,
+        "recovery": 73.9,
         "hrv": 60.9,
         "strain": 8.2,
         "asleep": 444.0,
         "sleep_perf": 92.3
       },
       "deltas": {
-        "recovery": 6.9,
+        "recovery": 3.1,
         "hrv": 2.4,
         "strain": -1.0,
         "asleep": -12.1,
@@ -32,7 +32,7 @@
       },
       "top_insight": null,
       "trend_recovery": {
-        "slope": 0.0357,
+        "slope": -0.25,
         "direction": "estable",
         "significant": false,
         "n": 7
@@ -51,14 +51,14 @@
       "end": "2026-06-30",
       "n_days": 30,
       "means": {
-        "recovery": 77.3,
+        "recovery": 75.5,
         "hrv": 60.9,
         "strain": 9.6,
         "asleep": 448.7,
         "sleep_perf": 93.5
       },
       "deltas": {
-        "recovery": 15.2,
+        "recovery": 7.0,
         "hrv": 4.9,
         "strain": 0.1,
         "asleep": 4.5,
@@ -73,7 +73,7 @@
       },
       "top_insight": null,
       "trend_recovery": {
-        "slope": -0.0641,
+        "slope": -0.1706,
         "direction": "estable",
         "significant": false,
         "n": 30

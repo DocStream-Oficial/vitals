@@ -39,6 +39,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_vo2_measured_generic": " VO₂ medido.",
         "bullet_body_age_vo2_estimated": " VO₂ estimado.",
         "bullet_body_age_goal": " Objetivo: baja tu edad fitness de {display} a {age} años.",
+        # Roadmap vo2-sin-inventar Paso 4: bullet alternativo cuando el gate
+        # anuló la edad corporal (sin medición real vigente).
+        "bullet_body_age_unavailable_title": "Edad corporal: no disponible",
+        "bullet_body_age_unavailable_body": "Sin una medición real de VO₂máx no mostramos un número inventado. Sal a correr 10 min al aire libre con tu reloj para medirlo.",
         "bullet_strength_title": "Lo urgente:",
         "bullet_strength_body": "0 minutos de fuerza en {n_sessions} sesiones esta semana. Cardio élite, pero tu meta #2 es fuerza. Hoy mete 1 sesión de pesas.",
         "bullet_sleep_title": "Sueño:",
@@ -107,8 +111,17 @@ STRINGS: dict[str, dict[str, str]] = {
         "fitness_age_gap_title": "Tu edad fitness puede bajar",
         "fitness_age_gap_summary": "Tu VO₂máx medido pone tu edad fitness en ~{fitness_age_display} años, {gap} años más que tu edad real ({age}). Es reversible con el programa correcto.",
         "fitness_age_gap_factor_vo2": "VO₂máx medido: percentil {percentile} para tu edad y sexo",
-        "fitness_age_gap_factor_stale": "Tu última lectura de VO₂ con el reloj está vieja o no existe — una caminata outdoor con el reloj recalibra la medición",
-        "fitness_age_gap_rec": "Prueba el programa Impulso VO2 (28 días): zona 2 + 1 caminata outdoor semanal de calibración con tu reloj (tu deporte cuenta como tu día de intensidad).",
+        # Roadmap vo2-sin-inventar (fix del validador): la CAMINATA no dispara
+        # la medición de VO2máx en el formato nuevo de Apple/Fitbit — decir lo
+        # contrario es justo la instrucción errónea que este roadmap elimina
+        # (ver task_run_outdoor_calibrate).
+        "fitness_age_gap_factor_stale": "Tu última lectura de VO₂ con el reloj está vieja o no existe — una carrera/trote de 10 min al aire libre con el reloj recalibra la medición",
+        "fitness_age_gap_rec": "Prueba el programa Impulso VO2 (28 días): zona 2 + 1 carrera/trote outdoor de 10 min semanal de calibración con tu reloj (tu deporte cuenta como tu día de intensidad).",
+        # insights.py — vo2_unmeasured (Roadmap vo2-sin-inventar Paso 3)
+        "vo2_unmeasured_title": "No podemos calcular tu edad corporal",
+        "vo2_unmeasured_summary": "Ningún dato medido respalda tu VO₂máx todavía — sin eso, mostrar una edad corporal sería inventarla.",
+        "vo2_unmeasured_factor": "Última medición real: {date} (fuera de la ventana de validez o no vigente)",
+        "vo2_unmeasured_rec": "Sal a correr 10 min al aire libre con tu reloj para medir tu VO₂máx y calcular tu edad real.",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recuperación",
         "pos_hrv_title": "HRV en racha ascendente",
@@ -354,6 +367,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_strength_gap": "¿Cómo agrego fuerza esta semana?",
         # Roadmap coach-objetivo-vo2 Paso 3: chip del insight fitness_age_gap.
         "coach_q_fitness_age_gap": "¿Cómo bajo mi edad fitness?",
+        "coach_q_vo2_unmeasured": "¿Cómo mido mi VO₂máx?",
         "coach_q_positive_hrv": "¿Qué está mejorando mi HRV?",
         "coach_q_positive_sleep": "¿Cómo mantengo esta racha de sueño?",
         "coach_q_cycle_phase": "¿Cómo ajusto mi entrenamiento a mi ciclo?",
@@ -385,7 +399,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_rest_active": "Descanso activo — estiramiento",
         "task_rest_full": "Descanso completo hoy",
         # Roadmap coach-objetivo-vo2 Paso 1: tareas nuevas del programa vo2_boost.
-        "task_walk_outdoor_calibrate": "Camina 30 min al aire libre con tu reloj — recalibra tu VO2máx",
+        # Roadmap vo2-sin-inventar Paso 6: renombrada de task_walk_outdoor_calibrate
+        # -> task_run_outdoor_calibrate — la caminata NO activa la medición de
+        # VO2máx en el formato nuevo de Apple/Fitbit, hace falta correr/trotar.
+        "task_run_outdoor_calibrate": "Corre/trota 10 min al aire libre con tu reloj — recalibra tu VO2máx",
         "task_play_sport": "Tu deporte (pádel, fútbol…): tu día de intensidad",
         "task_strength_full": "40 min de fuerza estructurada",
         "task_breathwork": "10 min de respiración",
@@ -433,6 +450,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_vo2_measured_generic": " VO2 measured.",
         "bullet_body_age_vo2_estimated": " VO2 estimated.",
         "bullet_body_age_goal": " Goal: lower your fitness age from {display} to {age} years.",
+        # Roadmap vo2-sin-inventar Step 4: alternate bullet when the gate
+        # nulled body age (no valid real measurement).
+        "bullet_body_age_unavailable_title": "Body age: unavailable",
+        "bullet_body_age_unavailable_body": "Without a real VO2max measurement we won't show a made-up number. Go for a 10-min outdoor run/jog with your watch to measure it.",
         "bullet_strength_title": "The urgent item:",
         "bullet_strength_body": "0 strength minutes across {n_sessions} sessions this week. Elite cardio, but your goal #2 is strength. Add 1 weight session today.",
         "bullet_sleep_title": "Sleep:",
@@ -501,8 +522,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "fitness_age_gap_title": "Your fitness age can come down",
         "fitness_age_gap_summary": "Your measured VO2max puts your fitness age at ~{fitness_age_display} years, {gap} years above your real age ({age}). It's reversible with the right program.",
         "fitness_age_gap_factor_vo2": "Measured VO2max: percentile {percentile} for your age and sex",
-        "fitness_age_gap_factor_stale": "Your last watch VO2 reading is old or missing — an outdoor walk with your watch recalibrates the measurement",
-        "fitness_age_gap_rec": "Try the VO2 boost program (28 days): zone 2 + 1 weekly outdoor calibration walk with your watch (your sport counts as your intensity day).",
+        # Roadmap vo2-sin-inventar (validator fix): walking does NOT trigger
+        # the VO2max measurement on the new Apple/Fitbit format.
+        "fitness_age_gap_factor_stale": "Your last watch VO2 reading is old or missing — a 10-min outdoor run/jog with your watch recalibrates the measurement",
+        "fitness_age_gap_rec": "Try the VO2 boost program (28 days): zone 2 + 1 weekly 10-min outdoor calibration run with your watch (your sport counts as your intensity day).",
+        # insights.py — vo2_unmeasured (Roadmap vo2-sin-inventar Step 3)
+        "vo2_unmeasured_title": "We can't calculate your body age",
+        "vo2_unmeasured_summary": "No measured data backs your VO2max yet — without it, showing a body age would mean making it up.",
+        "vo2_unmeasured_factor": "Last real measurement: {date} (outside the validity window or no longer current)",
+        "vo2_unmeasured_rec": "Go for a 10-min outdoor run with your watch to measure your VO2max and calculate your real age.",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recovery",
         "pos_hrv_title": "HRV on an upward streak",
@@ -748,6 +776,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_strength_gap": "How do I add strength training this week?",
         # Roadmap coach-objetivo-vo2 Step 3: chip for the fitness_age_gap insight.
         "coach_q_fitness_age_gap": "How do I lower my fitness age?",
+        "coach_q_vo2_unmeasured": "How do I measure my VO2max?",
         "coach_q_positive_hrv": "What's improving my HRV?",
         "coach_q_positive_sleep": "How do I keep this sleep streak going?",
         "coach_q_cycle_phase": "How should I adjust training to my cycle?",
@@ -779,7 +808,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_rest_active": "Active rest — stretching",
         "task_rest_full": "Full rest today",
         # Roadmap coach-objetivo-vo2 Step 1: new tasks for the vo2_boost program.
-        "task_walk_outdoor_calibrate": "Walk 30 min outdoors with your watch — recalibrate your VO2max",
+        # Roadmap vo2-sin-inventar Step 6: renamed from task_walk_outdoor_calibrate
+        # -> task_run_outdoor_calibrate — walking doesn't trigger the VO2max
+        # measurement on the new Apple/Fitbit format, it needs a run/jog.
+        "task_run_outdoor_calibrate": "Run/jog 10 min outdoors with your watch — recalibrate your VO2max",
         "task_play_sport": "Your sport (padel, soccer…): your intensity day",
         "task_strength_full": "40 min of structured strength",
         "task_breathwork": "10 min of breathwork",
@@ -827,6 +859,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_vo2_measured_generic": " VO2 mesuré.",
         "bullet_body_age_vo2_estimated": " VO2 estimé.",
         "bullet_body_age_goal": " Objectif : faire baisser votre âge fitness de {display} à {age} ans.",
+        # Roadmap vo2-sin-inventar Étape 4 : bullet alternatif quand le gate a
+        # annulé l'âge corporel (pas de mesure réelle valide).
+        "bullet_body_age_unavailable_title": "Âge corporel : indisponible",
+        "bullet_body_age_unavailable_body": "Sans mesure réelle de VO2max, on n'affiche pas un chiffre inventé. Cours/trotte 10 min en extérieur avec ta montre pour la mesurer.",
         "bullet_strength_title": "L'urgent :",
         "bullet_strength_body": "0 minutes de musculation sur {n_sessions} séances cette semaine. Cardio d'élite, mais votre objectif #2 c'est la force. Ajoutez 1 séance de poids aujourd'hui.",
         "bullet_sleep_title": "Sommeil :",
@@ -895,8 +931,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "fitness_age_gap_title": "Ton âge fitness peut baisser",
         "fitness_age_gap_summary": "Ton VO2max mesuré place ton âge fitness à ~{fitness_age_display} ans, {gap} ans de plus que ton âge réel ({age}). C'est réversible avec le bon programme.",
         "fitness_age_gap_factor_vo2": "VO2max mesuré : percentile {percentile} pour ton âge et sexe",
-        "fitness_age_gap_factor_stale": "Ta dernière lecture VO2 de la montre est ancienne ou absente — une marche en extérieur avec ta montre recalibre la mesure",
-        "fitness_age_gap_rec": "Essaie le programme Boost VO2 (28 jours) : zone 2 + 1 marche outdoor de calibration par semaine avec ta montre (ton sport compte comme ton jour d'intensité).",
+        # Roadmap vo2-sin-inventar (fix du validateur) : la marche NE déclenche
+        # PAS la mesure du VO2max dans le nouveau format Apple/Fitbit.
+        "fitness_age_gap_factor_stale": "Ta dernière lecture VO2 de la montre est ancienne ou absente — une course/trot de 10 min en extérieur avec ta montre recalibre la mesure",
+        "fitness_age_gap_rec": "Essaie le programme Boost VO2 (28 jours) : zone 2 + 1 course/trot outdoor de 10 min par semaine pour la calibration avec ta montre (ton sport compte comme ton jour d'intensité).",
+        # insights.py — vo2_unmeasured (Roadmap vo2-sin-inventar Étape 3)
+        "vo2_unmeasured_title": "On ne peut pas calculer ton âge corporel",
+        "vo2_unmeasured_summary": "Aucune donnée mesurée ne confirme ton VO2max pour l'instant — sans ça, afficher un âge corporel reviendrait à l'inventer.",
+        "vo2_unmeasured_factor": "Dernière mesure réelle : {date} (hors de la fenêtre de validité ou plus à jour)",
+        "vo2_unmeasured_rec": "Cours 10 min en extérieur avec ta montre pour mesurer ton VO2max et calculer ton âge réel.",
         # insights.py — positive_hrv
         "pos_hrv_cat": "récupération",
         "pos_hrv_title": "VFC en série ascendante",
@@ -1142,6 +1185,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_strength_gap": "Comment ajouter de la force cette semaine ?",
         # Roadmap coach-objetivo-vo2 Étape 3 : chip de l'insight fitness_age_gap.
         "coach_q_fitness_age_gap": "Comment faire baisser mon âge fitness ?",
+        "coach_q_vo2_unmeasured": "Comment mesurer mon VO2max ?",
         "coach_q_positive_hrv": "Qu'est-ce qui améliore ma VFC ?",
         "coach_q_positive_sleep": "Comment maintenir cette bonne série de sommeil ?",
         "coach_q_cycle_phase": "Comment adapter mon entraînement à mon cycle ?",
@@ -1173,7 +1217,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_rest_active": "Repos actif — étirements",
         "task_rest_full": "Repos complet aujourd'hui",
         # Roadmap coach-objetivo-vo2 Étape 1 : nouvelles tâches du programme vo2_boost.
-        "task_walk_outdoor_calibrate": "Marche 30 min en extérieur avec ta montre — recalibre ton VO2max",
+        # Roadmap vo2-sin-inventar Étape 6 : renommée de task_walk_outdoor_calibrate
+        # -> task_run_outdoor_calibrate — la marche ne déclenche pas la mesure
+        # du VO2max dans le nouveau format Apple/Fitbit, il faut courir/trotter.
+        "task_run_outdoor_calibrate": "Cours/trotte 10 min en extérieur avec ta montre — recalibre ton VO2max",
         "task_play_sport": "Ton sport (padel, foot…) : ton jour d'intensité",
         "task_strength_full": "40 min de force structurée",
         "task_breathwork": "10 min de respiration",
@@ -1221,6 +1268,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_vo2_measured_generic": " VO2 medido.",
         "bullet_body_age_vo2_estimated": " VO2 estimado.",
         "bullet_body_age_goal": " Objetivo: baixar sua idade fitness de {display} para {age} anos.",
+        # Roadmap vo2-sin-inventar Passo 4: bullet alternativo quando o gate
+        # anulou a idade corporal (sem medição real vigente).
+        "bullet_body_age_unavailable_title": "Idade corporal: indisponível",
+        "bullet_body_age_unavailable_body": "Sem uma medição real de VO2máx não mostramos um número inventado. Corra 10 min ao ar livre com seu relógio para medi-lo.",
         "bullet_strength_title": "O urgente:",
         "bullet_strength_body": "0 minutos de musculação em {n_sessions} sessões esta semana. Cardio de elite, mas sua meta #2 é força. Faça 1 sessão de pesos hoje.",
         "bullet_sleep_title": "Sono:",
@@ -1289,8 +1340,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "fitness_age_gap_title": "Sua idade fitness pode baixar",
         "fitness_age_gap_summary": "Seu VO₂máx medido coloca sua idade fitness em ~{fitness_age_display} anos, {gap} anos a mais que sua idade real ({age}). É reversível com o programa certo.",
         "fitness_age_gap_factor_vo2": "VO₂máx medido: percentil {percentile} para sua idade e sexo",
-        "fitness_age_gap_factor_stale": "Sua última leitura de VO2 do relógio está velha ou ausente — uma caminhada outdoor com o relógio recalibra a medição",
-        "fitness_age_gap_rec": "Experimente o programa Impulso VO2 (28 dias): zona 2 + 1 caminhada outdoor de calibração por semana com seu relógio (seu esporte conta como seu dia de intensidade).",
+        # Roadmap vo2-sin-inventar (fix do validador): caminhar NÃO ativa a
+        # medição de VO2máx no novo formato Apple/Fitbit.
+        "fitness_age_gap_factor_stale": "Sua última leitura de VO2 do relógio está velha ou ausente — uma corrida/trote de 10 min ao ar livre com o relógio recalibra a medição",
+        "fitness_age_gap_rec": "Experimente o programa Impulso VO2 (28 dias): zona 2 + 1 corrida/trote outdoor de 10 min por semana de calibração com seu relógio (seu esporte conta como seu dia de intensidade).",
+        # insights.py — vo2_unmeasured (Roadmap vo2-sin-inventar Passo 3)
+        "vo2_unmeasured_title": "Não conseguimos calcular sua idade corporal",
+        "vo2_unmeasured_summary": "Nenhum dado medido respalda seu VO2máx ainda — sem isso, mostrar uma idade corporal seria inventá-la.",
+        "vo2_unmeasured_factor": "Última medição real: {date} (fora da janela de validade ou não mais atual)",
+        "vo2_unmeasured_rec": "Corra 10 min ao ar livre com seu relógio para medir seu VO2máx e calcular sua idade real.",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recuperação",
         "pos_hrv_title": "VFC em sequência ascendente",
@@ -1536,6 +1594,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_strength_gap": "Como adiciono treino de força esta semana?",
         # Roadmap coach-objetivo-vo2 Passo 3: chip do insight fitness_age_gap.
         "coach_q_fitness_age_gap": "Como abaixo minha idade fitness?",
+        "coach_q_vo2_unmeasured": "Como meço meu VO2máx?",
         "coach_q_positive_hrv": "O que está melhorando meu HRV?",
         "coach_q_positive_sleep": "Como mantenho essa sequência de bom sono?",
         "coach_q_cycle_phase": "Como ajusto meu treino ao meu ciclo?",
@@ -1567,7 +1626,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_rest_active": "Descanso ativo — alongamento",
         "task_rest_full": "Descanso completo hoje",
         # Roadmap coach-objetivo-vo2 Passo 1: novas tarefas do programa vo2_boost.
-        "task_walk_outdoor_calibrate": "Caminhe 30 min ao ar livre com seu relógio — recalibre seu VO2máx",
+        # Roadmap vo2-sin-inventar Passo 6: renomeada de task_walk_outdoor_calibrate
+        # -> task_run_outdoor_calibrate — caminhar não ativa a medição de
+        # VO2máx no novo formato Apple/Fitbit, é preciso correr/trotar.
+        "task_run_outdoor_calibrate": "Corra/trote 10 min ao ar livre com seu relógio — recalibre seu VO2máx",
         "task_play_sport": "Seu esporte (padel, futebol…): seu dia de intensidade",
         "task_strength_full": "40 min de força estruturada",
         "task_breathwork": "10 min de respiração",

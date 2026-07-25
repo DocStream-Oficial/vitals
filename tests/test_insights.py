@@ -767,6 +767,109 @@ def test_fitness_age_gap_uses_last_day_date_not_today(monkeypatch):
     assert len(insight["factors"]) == 1  # fresca vs el día 2020-01-07, no vs hoy
 
 
+# ── Regla 7c: vo2_unmeasured (Roadmap vo2-sin-inventar, Paso 3) ─────────────────
+# Dispara cuando summary.bodyage.unavailable_reason == "no_vo2_measurement"
+# (dejado por gate_unmeasured en app/bodyage.py). Mutuamente excluyente con
+# fitness_age_gap POR CONSTRUCCIÓN: esa regla exige vo2max_source ==
+# "measured"; unavailable_reason solo aparece con vo2max_source != "measured".
+
+def _bodyage_unavailable(**overrides):
+    base = {
+        "vo2max": None, "fitness_age": None, "body_age": None, "category": None,
+        "vo2max_percentile": None, "vo2max_label": None, "fitness_age_display": None,
+        "body_age_display": None, "age_floored": None, "penalty": None,
+        "body_age_stable": None, "body_age_stable_display": None, "pace": None,
+        "unavailable_reason": "no_vo2_measurement",
+        "vo2max_source": "estimated", "vo2max_estimated": 52.7,
+        "vo2_last_measured_date": None, "age": 49, "rhr": 55.0, "hrv": 45.0,
+        "sleep_h": 7.0, "confidence": {"level": "high"},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_vo2_unmeasured_triggers_with_unavailable_reason():
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage_unavailable()}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "vo2_unmeasured" in ids
+    insight = next(r for r in results if r["id"] == "vo2_unmeasured")
+    assert insight["severity"] == "info"
+    assert insight["category"] == "entrenamiento"
+
+
+def test_vo2_unmeasured_no_trigger_when_measured(monkeypatch):
+    """Con vo2max_source == 'measured' (gate identidad, sin
+    unavailable_reason) -> no dispara."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage()}  # vo2max_source measured, sin unavailable_reason
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "vo2_unmeasured" not in ids
+
+
+def test_vo2_unmeasured_no_trigger_without_bodyage():
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    results = evaluate(make_dataset(days, summary=make_summary()))
+    ids = [r["id"] for r in results]
+    assert "vo2_unmeasured" not in ids
+
+
+def test_vo2_unmeasured_factor_present_with_last_measured_date():
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage_unavailable(vo2_last_measured_date="2025-08-01")}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "vo2_unmeasured")
+    assert any("2025-08-01" in f for f in insight["factors"])
+
+
+def test_vo2_unmeasured_no_factor_without_last_measured_date():
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage_unavailable(vo2_last_measured_date=None)}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "vo2_unmeasured")
+    assert insight["factors"] == []
+
+
+def test_vo2_unmeasured_recommendation_mentions_run_outdoor():
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage_unavailable()}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "vo2_unmeasured")
+    assert "correr" in insight["recommendation"].lower() or "10 min" in insight["recommendation"]
+
+
+def test_vo2_unmeasured_and_fitness_age_gap_are_mutually_exclusive(monkeypatch):
+    """Criterio de aceptación 8 (exclusión mutua): ningún dataset puede
+    disparar los DOS insights a la vez. fitness_age_gap exige
+    vo2max_source=='measured'; vo2_unmeasured exige unavailable_reason
+    (que solo el gate deja cuando vo2max_source!='measured') — verificado
+    explícitamente aquí para ambos casos posibles."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+
+    # Caso 1: measured + gap>2 -> fitness_age_gap sí, vo2_unmeasured no.
+    summary_measured = {**make_summary(), "bodyage": _bodyage()}
+    ids_measured = [r["id"] for r in evaluate(make_dataset(days, summary=summary_measured))]
+    assert "fitness_age_gap" in ids_measured
+    assert "vo2_unmeasured" not in ids_measured
+
+    # Caso 2: gate activo (unavailable_reason) -> vo2_unmeasured sí, fitness_age_gap no.
+    summary_unavail = {**make_summary(), "bodyage": _bodyage_unavailable()}
+    ids_unavail = [r["id"] for r in evaluate(make_dataset(days, summary=summary_unavail))]
+    assert "vo2_unmeasured" in ids_unavail
+    assert "fitness_age_gap" not in ids_unavail
+
+
 # ── Regla 8: positive_hrv ──────────────────────────────────────────────────────
 
 def test_positive_hrv():

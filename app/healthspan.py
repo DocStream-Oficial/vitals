@@ -182,6 +182,12 @@ def compute_healthspan(days: list, exercises: list, profile: Optional[dict]) -> 
             body_age = ba.get("body_age")
             if body_age is None:
                 continue
+            # Roadmap vo2-sin-inventar Paso 2: healthspan honesto — una
+            # ventana sin VO2 MEDIDO (regresión NTNU de fallback) no aporta un
+            # punto real a la serie de Pace of Aging; incluirla mezclaría
+            # tramos medidos con tramos inventados en el mismo pace/gap.
+            if ba.get("vo2max_source") != "measured":
+                continue
 
             series.append({
                 "month": cutoff_date.strftime("%Y-%m"),

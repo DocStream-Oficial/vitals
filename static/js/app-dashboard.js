@@ -863,6 +863,27 @@ function renderHoy(){
   document.getElementById('strainVal').innerHTML = (day.strain!=null?day.strain.toFixed(1):'—') + '<span class="ring-sub" style="margin-left:2px">/ 21</span>';
 
   // ── EDAD CORPORAL ──
+  // Roadmap vo2-sin-inventar Paso 5: sin VO2 medido vigente, el backend gatea
+  // summary.bodyage (gate_unmeasured en app/bodyage.py) y TODOS los números
+  // derivados llegan en None — nunca concatenarlos a pelo (riesgo #1 de la
+  // UI, roadmap): mostrar "—" + el CTA en vez de "undefined". Sale temprano
+  // de este bloque (else de abajo) para no ejecutar la lógica de displays
+  // sobre valores que ya sabemos que son None.
+  if(bodyage && bodyage.unavailable_reason){
+    document.getElementById('fitnessAge').textContent = '—';
+    document.getElementById('bodyAge').textContent = '—';
+    var baPaceRowGate = document.getElementById('baPaceRow');
+    if(baPaceRowGate) baPaceRowGate.style.display = 'none';
+    var bodyAgeBadgeGate = document.getElementById('bodyAgeBadge');
+    if(bodyAgeBadgeGate){ bodyAgeBadgeGate.textContent = ''; bodyAgeBadgeGate.style.display = 'none'; }
+    var baPenaltyGate = document.getElementById('baPenalty');
+    if(baPenaltyGate) baPenaltyGate.style.display = 'none';
+    var ctaSegs = [t('ba_no_measurement')];
+    if(bodyage.vo2_last_measured_date != null){
+      ctaSegs.push(t('ba_last_measured').replace('{date}', bodyage.vo2_last_measured_date));
+    }
+    document.getElementById('baDetail').innerHTML = ctaSegs.join(' · ');
+  } else {
   // Roadmap edad-corporal-credibilidad Paso 2: #fitnessAge muestra el valor
   // con PISO relativo (fitness_age_display, nunca >15 años bajo la edad real)
   // con fallback a fitness_age crudo para datasets viejos que no lo traigan.
@@ -971,6 +992,7 @@ function renderHoy(){
   } else {
     document.getElementById('baPenalty').style.display = 'none';
   }
+  } // fin else (bodyage.unavailable_reason) — Roadmap vo2-sin-inventar Paso 5
 
   // ── MONITOR DE SALUD ──
   renderHealthMonitor(day);
@@ -1851,14 +1873,29 @@ var DETAIL_CFG = {
     dataFn:function(days){return days.map(function(d){return d.hrv!=null?d.hrv:null;}).filter(function(v){return v!=null;});},
     dateFn:function(days){return days.filter(function(d){return d.hrv!=null;}).map(function(d){return d.date;});},
     valFn:function(){return bodyage.body_age!=null?String(bodyage.body_age):'—';},
+    // Roadmap vo2-sin-inventar Paso 5 (riesgo #3 de la UI): sin medición
+    // vigente, bodyage.fitness_age/age llegan en None — la concatenación
+    // directa de antes ('...'+bodyage.fitness_age+'...') renderizaba
+    // "undefined". Con el gate activo se devuelve el CTA en vez del texto.
     subFn:function(){
+      if(bodyage.unavailable_reason){
+        return t('ba_no_measurement');
+      }
       var pct = bodyage.vo2max_percentile;
       var lbl = bodyage.vo2max_label;
-      var base = t('ba_fitness_lbl')+' '+bodyage.fitness_age+' · '+t('ba_detail_real')+' '+bodyage.age;
+      var base = t('ba_fitness_lbl')+' '+(bodyage.fitness_age!=null?bodyage.fitness_age:'—')+' · '+t('ba_detail_real')+' '+(bodyage.age!=null?bodyage.age:'—');
       return pct != null ? base + ' · '+t('ba_detail_percentil')+' '+pct+(lbl?' ('+lbl+')':'') : base;
     },
     minVal:30,maxVal:80,yTicks:[35,50,65,80],
-    get ctx(){return [
+    get ctx(){
+      if(bodyage.unavailable_reason){
+        var ctas = [t('ba_no_measurement')];
+        if(bodyage.vo2_last_measured_date != null){
+          ctas.push(t('ba_last_measured').replace('{date}', bodyage.vo2_last_measured_date));
+        }
+        return ctas;
+      }
+      return [
       t('vo2max_lbl')+' '+(bodyage.vo2max||'—')+' ('+(bodyage.category||'')+') → '+t('ba_fitness_lbl')+' ~'+(bodyage.fitness_age||'—')+'.'
       + (bodyage.vo2max_percentile != null ? ' '+t('ba_detail_percentil')+' '+bodyage.vo2max_percentile+'.' : ''),
       'HRV & '+t('ba_detail_sleep')+': +'+(bodyage.penalty||0)+' '+t('ba_ctx_penalty_suffix'),
@@ -2588,6 +2625,12 @@ function _renderFitnessDeep(){
     if(pct != null) vo2sub += (vo2sub ? ' · ' : '') + t('ba_detail_percentil')+' '+pct;
     html += _deepCard({lbl:t('df_vo2max'), val:String(bodyage.vo2max), unit:'mL/kg/min',
       sub:vo2sub, status:'in_range', color:'#30D158', sparkVals:null});
+  } else if(bodyage && bodyage.unavailable_reason){
+    // Roadmap vo2-sin-inventar Paso 5: sin gate, no se omite la tarjeta sin
+    // explicación — estado no_data + CTA de calibración (patrón status:
+    // 'no_data' que ya usa este archivo, ver _deepCard/_pill arriba).
+    html += _deepCard({lbl:t('df_vo2max'), val:null, unit:'mL/kg/min',
+      sub:t('ba_no_measurement'), status:'no_data', color:'#30D158', sparkVals:null});
   }
 
   html += _deepSection('deep_section_fitness_cardio');

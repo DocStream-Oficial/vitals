@@ -299,6 +299,13 @@ def bodyage_summary(ds: Optional[dict]) -> dict:
         "edad_real": bodyage.get("age"),
     }
 
+    # Roadmap vo2-sin-inventar Paso 6 (criterio 9): sin VO2 medido vigente,
+    # gate_unmeasured() ya deja los campos de arriba en None — propagamos
+    # unavailable_reason para que el consumidor MCP sepa POR QUÉ (en vez de
+    # solo ver None sin explicación) y nunca reciba un número inventado.
+    if bodyage.get("unavailable_reason") is not None:
+        result["unavailable_reason"] = bodyage["unavailable_reason"]
+
     # Drivers: sub-métricas que componen el score
     drivers: dict[str, Any] = {}
     for key in ("rhr", "hrv", "sleep_h", "pa_index", "waist"):

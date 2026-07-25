@@ -104,13 +104,21 @@ _STRENGTH_WEEK = [
 _STRENGTH_3X_DAYS = _STRENGTH_WEEK * 4
 
 # ── vo2_boost (28 días) — Roadmap coach-objetivo-vo2, Paso 1 ────────────────
-# 4 semanas, ciclo de 7 días: zona 2 + 1 caminata outdoor de calibración
+# 4 semanas, ciclo de 7 días: zona 2 + 1 carrera/trote outdoor de calibración
 # (recalibra el VO2máx del reloj, ver app/insights.py::rule_fitness_age_gap) +
 # el deporte del usuario cuenta como su día de intensidad + descansos.
 _VO2_BOOST_WEEK = [
     _task("task_cardio_easy", "cardio", {"min": 30}, light_params={"min": 15}),
     _task("task_rest_active", "habit", {"habit": "stretching"}),
-    _task("task_walk_outdoor_calibrate", "cardio", {"min": 30}, light_params={"min": 20}),
+    # Roadmap vo2-sin-inventar Paso 6: renombrada de task_walk_outdoor_calibrate
+    # -> task_run_outdoor_calibrate — caminar no dispara la medición de VO2máx
+    # en el formato nuevo de Apple/Fitbit, hace falta correr/trotar (10 min).
+    # La variante light NO acorta la carrera: por debajo de ~10 min el reloj no
+    # produce medición de VO2máx, así que una versión "corta" sería trabajo sin
+    # el único resultado que justifica la tarea. En día de baja recuperación se
+    # cae a cardio suave (mismo patrón que task_play_sport) y se calibra otro día.
+    _task("task_run_outdoor_calibrate", "cardio", {"min": 10},
+          light_task_key="task_cardio_easy", light_params={"min": 20}),
     _task("task_play_sport", "cardio", {"min": 60}, light_task_key="task_cardio_easy", light_params={"min": 20}),
     _task("task_cardio_moderate", "cardio", {"min": 35}, light_task_key="task_cardio_easy", light_params={"min": 15}),
     _task("task_rest_active", "habit", {"habit": "stretching"}),

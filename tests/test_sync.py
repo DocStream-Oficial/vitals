@@ -525,12 +525,12 @@ def test_run_sync_captures_prev_vo2max_from_old_dataset(sync_env, monkeypatch):
     assert "_prev_vo2max" in dataset2["summary"] or dataset2["summary"].get("bodyage") is None
 
 
-# ── Roadmap coach-objetivo-vo2, Paso 2: vo2_last_measured_date ──────────────
-# best-effort desde el ingest crudo de HealthKit (healthkit_ingest.json). El
-# fixture sync_env ya apunta settings.DATA_DIR a tmp_path, y la app no está
-# household-aware en tests (conftest.py aísla userctx._DATA_DIR a un tmp_path
-# vacío) -> app.sources.healthkit._ingest_path() cae a settings.DATA_DIR,
-# igual que health_compact.json.
+# ── Roadmap vo2-sin-inventar, Paso 2: vo2_last_measured_date + gate ─────────
+# El lector del ingest crudo de HealthKit (_vo2_last_measured_date(), que
+# vivía aquí) se ELIMINÓ — quedaba redundante y solo veía una fuente.
+# vo2_last_measured_date ahora sale de `days` (fusión de TODAS las fuentes),
+# lo pone compute_body_age (app/bodyage.py, Paso 1) y sync.py ya no lo
+# sobreescribe.
 
 def _profile_json_with_bodyage_fields():
     return json.dumps({
@@ -539,31 +539,36 @@ def _profile_json_with_bodyage_fields():
     })
 
 
-def test_run_sync_reads_vo2_last_measured_date_from_healthkit_ingest(sync_env):
+def _sample_source_data_no_vo2(steps=8423, hrv=54.6):
+    """Variante de _sample_source_data() SIN la clave "vo2" — simula una
+    fuente que nunca reporta VO2máx medido (o un usuario sin reloj que lo mida)."""
+    data = _sample_source_data(steps=steps, hrv=hrv)
+    data = dict(data)
+    data["vo2"] = {}
+    return data
+
+
+def test_run_sync_vo2_last_measured_date_comes_from_days(sync_env):
+    """vo2_last_measured_date sale de `days` (vía compute_body_age), no de un
+    ingest crudo aparte — con vo2 presente en el único day del fixture, la
+    fecha coincide con la de ESE day."""
     tmp_path, sync_mod = sync_env
     (tmp_path / "profile.json").write_text(_profile_json_with_bodyage_fields())
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [
-            {"date": "2026-06-10", "value": 42.0},
-            {"date": "2026-06-24", "value": 44.1},
-        ],
-        "_ingested_at": "2026-06-24T08:00:00",
-    }))
     fake_source = MagicMock()
     fake_source.fetch.return_value = _sample_source_data()
 
     with patch("app.sync.get_source", return_value=fake_source):
         dataset = sync_mod.run_sync(45)
 
-    assert dataset["summary"]["bodyage"]["vo2_last_measured_date"] == "2026-06-24"
+    assert dataset["summary"]["bodyage"]["vo2_last_measured_date"] == "2026-06-28"
 
 
-def test_run_sync_vo2_last_measured_date_none_without_ingest_file(sync_env):
-    """Sin healthkit_ingest.json en absoluto -> clave en None, sync no falla."""
+def test_run_sync_vo2_last_measured_date_none_without_vo2_in_days(sync_env):
+    """Sin clave "vo2" en ningún day -> None, sync no falla."""
     tmp_path, sync_mod = sync_env
     (tmp_path / "profile.json").write_text(_profile_json_with_bodyage_fields())
     fake_source = MagicMock()
-    fake_source.fetch.return_value = _sample_source_data()
+    fake_source.fetch.return_value = _sample_source_data_no_vo2()
 
     with patch("app.sync.get_source", return_value=fake_source):
         dataset = sync_mod.run_sync(45)
@@ -572,109 +577,46 @@ def test_run_sync_vo2_last_measured_date_none_without_ingest_file(sync_env):
     assert dataset["summary"]["bodyage"]["vo2_last_measured_date"] is None
 
 
-def test_run_sync_vo2_last_measured_date_none_without_vo2_key(sync_env):
-    """Ingest existe pero sin la clave 'vo2' -> None, sync no falla."""
+# ── Roadmap vo2-sin-inventar, Paso 2: el gate se aplica dentro de run_sync ──
+
+def test_run_sync_applies_gate_when_no_vo2_measurement(sync_env):
+    """Criterio de aceptación (Paso 2): un dataset SIN ninguna lectura de vo2
+    -> summary.bodyage.body_age es None y unavailable_reason está presente
+    tras run_sync() (el gate corrió y quedó persistido en el dict final)."""
     tmp_path, sync_mod = sync_env
     (tmp_path / "profile.json").write_text(_profile_json_with_bodyage_fields())
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({
-        "hrv": [{"date": "2026-06-24", "value": 54.6}],
-    }))
+    fake_source = MagicMock()
+    fake_source.fetch.return_value = _sample_source_data_no_vo2()
+
+    with patch("app.sync.get_source", return_value=fake_source):
+        dataset = sync_mod.run_sync(45)
+
+    ba = dataset["summary"]["bodyage"]
+    assert ba is not None
+    assert ba["body_age"] is None
+    assert ba["unavailable_reason"] == "no_vo2_measurement"
+    # Riesgo #2 del roadmap: el gate corre DESPUÉS de stable/pace -> también
+    # los anula (si no, un número inventado se filtraría por esa vía).
+    assert ba["body_age_stable"] is None
+    assert ba["body_age_stable_display"] is None
+    assert ba["pace"] is None
+    # Se conservan los campos de diagnóstico.
+    assert ba["vo2max_estimated"] is not None
+    assert ba["vo2max_source"] == "estimated"
+
+
+def test_run_sync_no_gate_when_vo2_measured(sync_env):
+    """Contraparte: con vo2 presente (measured), el gate es identidad —
+    body_age sigue siendo un número, sin unavailable_reason."""
+    tmp_path, sync_mod = sync_env
+    (tmp_path / "profile.json").write_text(_profile_json_with_bodyage_fields())
     fake_source = MagicMock()
     fake_source.fetch.return_value = _sample_source_data()
 
     with patch("app.sync.get_source", return_value=fake_source):
         dataset = sync_mod.run_sync(45)
 
-    assert dataset["summary"]["bodyage"]["vo2_last_measured_date"] is None
-
-
-def test_run_sync_vo2_last_measured_date_none_with_corrupt_json(sync_env):
-    """healthkit_ingest.json corrupto (no parsea) -> None, sync NUNCA falla por esto."""
-    tmp_path, sync_mod = sync_env
-    (tmp_path / "profile.json").write_text(_profile_json_with_bodyage_fields())
-    (tmp_path / "healthkit_ingest.json").write_text("{esto no es json valido")
-    fake_source = MagicMock()
-    fake_source.fetch.return_value = _sample_source_data()
-
-    with patch("app.sync.get_source", return_value=fake_source):
-        dataset = sync_mod.run_sync(45)  # NO debe lanzar
-
-    assert dataset["summary"]["bodyage"]["vo2_last_measured_date"] is None
-
-
-def test_vo2_last_measured_date_helper_never_raises_on_garbage(sync_env, monkeypatch):
-    """_vo2_last_measured_date() en aislamiento: entradas sin 'date', tipos
-    inesperados -> None, nunca lanza."""
-    tmp_path, sync_mod = sync_env
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({"vo2": "no es una lista"}))
-    assert sync_mod._vo2_last_measured_date() is None
-
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({"vo2": [{"value": 40.0}]}))
-    assert sync_mod._vo2_last_measured_date() is None
-
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({"vo2": []}))
-    assert sync_mod._vo2_last_measured_date() is None
-
-
-def test_vo2_last_measured_date_ignores_entries_without_value(sync_env):
-    """VALIDACIÓN (fix del validador): una entrada {"date": ..., "value": null}
-    NO es una lectura de VO2. HealthKit tolera valores None (ver
-    healthkit._array_to_dict, que los pasa tal cual), así que el ingest crudo
-    puede traerlos; contarlos haría pasar por FRESCA una medición que nunca
-    ocurrió y borraría el factor de calibración outdoor del insight
-    fitness_age_gap — justo el caso de uso que motivó el roadmap."""
-    tmp_path, sync_mod = sync_env
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [
-            {"date": "2026-05-01", "value": 29.1},
-            {"date": "2026-07-20", "value": None},   # sin valor -> no es lectura
-            {"date": "2026-07-21"},                  # sin clave value -> tampoco
-        ],
-    }))
-    assert sync_mod._vo2_last_measured_date() == "2026-05-01"
-
-    # Todas sin valor -> None (como si no hubiera lecturas).
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [{"date": "2026-07-20", "value": None}],
-    }))
-    assert sync_mod._vo2_last_measured_date() is None
-
-
-def test_vo2_last_measured_date_resolves_per_user_in_household(sync_env, monkeypatch):
-    """VALIDACIÓN (riesgo #4 del roadmap): con household activo
-    (users_root() existe + uid fijado en el contextvar), el helper debe leer
-    el healthkit_ingest.json del USUARIO ACTIVO, no el legacy de data/.
-    Sin esto, la fecha de VO2 de un usuario podría alimentar el insight de
-    otro."""
-    tmp_path, sync_mod = sync_env
-    from app import userctx as _userctx
-    monkeypatch.setattr(_userctx, "_DATA_DIR", tmp_path)
-
-    # Legacy (data/healthkit_ingest.json) con una fecha DISTINTA: si el helper
-    # se equivoca de ruta, el assert de abajo lo caza.
-    (tmp_path / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [{"date": "2020-01-01", "value": 40.0}],
-    }))
-    mariana_dir = tmp_path / "users" / "mariana"
-    mariana_dir.mkdir(parents=True)
-    (mariana_dir / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [{"date": "2026-06-24", "value": 29.1}],
-    }))
-    otro_dir = tmp_path / "users" / "doc"
-    otro_dir.mkdir(parents=True)
-    (otro_dir / "healthkit_ingest.json").write_text(json.dumps({
-        "vo2": [{"date": "2026-07-22", "value": 47.3}],
-    }))
-
-    token = _userctx.set_current_uid("mariana")
-    try:
-        assert _userctx.should_use_household_paths() is True
-        assert sync_mod._vo2_last_measured_date() == "2026-06-24"
-    finally:
-        _userctx.reset_current_uid(token)
-
-    token = _userctx.set_current_uid("doc")
-    try:
-        assert sync_mod._vo2_last_measured_date() == "2026-07-22"
-    finally:
-        _userctx.reset_current_uid(token)
+    ba = dataset["summary"]["bodyage"]
+    assert ba["vo2max_source"] == "measured"
+    assert ba["body_age"] is not None
+    assert "unavailable_reason" not in ba

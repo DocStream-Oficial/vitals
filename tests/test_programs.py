@@ -196,12 +196,12 @@ class TestVo2BoostProgram:
 
     def test_week_has_exactly_one_outdoor_calibration_task(self):
         """Criterio 4: la semana (7 días) contiene EXACTAMENTE 1 tarea
-        task_walk_outdoor_calibrate (día 2, 0-based)."""
+        task_run_outdoor_calibrate (día 2, 0-based)."""
         week_keys = [
             programs.task_for_day("vo2_boost", i, today_row={}, summary={})["task_key"]
             for i in range(7)
         ]
-        assert week_keys.count("task_walk_outdoor_calibrate") == 1
+        assert week_keys.count("task_run_outdoor_calibrate") == 1
 
     def test_28_days_has_exactly_4_outdoor_calibration_tasks(self):
         """4 semanas × 1 caminata de calibración por semana = 4 en total."""
@@ -209,7 +209,7 @@ class TestVo2BoostProgram:
             programs.task_for_day("vo2_boost", i, today_row={}, summary={})["task_key"]
             for i in range(28)
         ]
-        assert all_keys.count("task_walk_outdoor_calibrate") == 4
+        assert all_keys.count("task_run_outdoor_calibrate") == 4
 
     def test_play_sport_task_present_once_per_week(self):
         week_keys = [
@@ -221,7 +221,7 @@ class TestVo2BoostProgram:
     def test_outdoor_calibration_has_light_variant_with_reduced_params(self):
         normal = programs.task_for_day("vo2_boost", 2, today_row={}, summary={})
         light = programs.task_for_day("vo2_boost", 2, today_row={"recovery": 10}, summary={})
-        assert normal["task_key"] == "task_walk_outdoor_calibrate"
+        assert normal["task_key"] == "task_run_outdoor_calibrate"
         assert light["adapted"] is True
         assert normal["params"]["min"] != light["params"]["min"]
 

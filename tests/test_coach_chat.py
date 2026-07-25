@@ -430,3 +430,28 @@ class TestBodyAgeVo2Context:
         assert "VO2 medido" not in ctx
         assert "VO2 estimado" not in ctx
         assert "OBJETIVO" not in ctx
+
+
+# ── Roadmap vo2-sin-inventar, Paso 4: bloque EDAD CORPORAL gateado ──────────
+
+class TestBodyAgeGateContext:
+    def _dataset(self, bodyage):
+        days = [{"date": "2026-06-20", "recovery": 60, "asleep": 420}]
+        return {"days": days, "summary": {"bodyage": bodyage}, "exercises": []}
+
+    def test_unavailable_reason_emits_explicit_no_invention_line(self):
+        bodyage = {
+            "body_age": None, "fitness_age": None, "vo2max": None, "category": None,
+            "unavailable_reason": "no_vo2_measurement", "vo2max_source": "estimated",
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "EDAD CORPORAL: no disponible" in ctx
+        assert "carrera outdoor 10 min con GPS" in ctx
+        # Nunca debe colarse un número inventado en esta rama.
+        assert "VO₂máx None" not in ctx
+
+    def test_no_line_at_all_without_gate_or_body_age(self):
+        """bodyage vacío (sin body_age Y sin unavailable_reason) -> ninguna
+        línea de EDAD CORPORAL (ni la normal ni la de gate)."""
+        ctx = cc._build_context(self._dataset({}))
+        assert "EDAD CORPORAL" not in ctx

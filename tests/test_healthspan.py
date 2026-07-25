@@ -33,16 +33,33 @@ def _profile(birthdate="1985-01-01", waist=95, sex="M", sleep_target_min=480):
     }
 
 
-def _make_days(n_days, start="2025-01-01", rhr_fn=None, hrv_fn=None, sleep_min=420):
-    """Genera n_days días con rhr/hrv/asleep suficientes para que
+def _default_vo2_fn(i, n):
+    # Roadmap vo2-sin-inventar Paso 2: healthspan honesto solo agrega puntos
+    # con vo2max_source == "measured" -> los fixtures sintéticos necesitan
+    # una lectura "vo2" en CADA day (constante por default) para que las
+    # ventanas trailing de compute_healthspan sigan produciendo serie, igual
+    # que un usuario que sí corre outdoor con su reloj periódicamente.
+    return 45.0
+
+
+def _make_days(n_days, start="2025-01-01", rhr_fn=None, hrv_fn=None, sleep_min=420, vo2_fn=None):
+    """Genera n_days días con rhr/hrv/asleep/vo2 suficientes para que
     compute_body_age tenga datos (confidence != low irrelevante aquí, solo
-    necesitamos valores no-None)."""
+    necesitamos valores no-None). `vo2_fn(i, n_days)` inyecta una lectura de
+    VO2 MEDIDO por día (default: constante, ver _default_vo2_fn) — sin ella,
+    vo2max_source sería SIEMPRE "estimated" y el gate honesto (Paso 2) dejaría
+    la serie completa vacía."""
+    vo2_fn = vo2_fn or _default_vo2_fn
     dates = _date_seq(start, n_days)
     days = []
     for i, d in enumerate(dates):
         rhr = rhr_fn(i, n_days) if rhr_fn else 55.0
         hrv = hrv_fn(i, n_days) if hrv_fn else 50.0
-        days.append({"date": d, "rhr": rhr, "hrv": hrv, "asleep": sleep_min})
+        day = {"date": d, "rhr": rhr, "hrv": hrv, "asleep": sleep_min}
+        vo2 = vo2_fn(i, n_days)
+        if vo2 is not None:
+            day["vo2"] = vo2
+        days.append(day)
     return days
 
 
@@ -100,7 +117,15 @@ def test_improving_rhr_and_hrv_yields_pace_below_1():
     -> pace < 1. Rangos elegidos (con waist=95 del _profile default) para que
     fitness_age NUNCA toque el piso/techo de compute_body_age (18/90) — de lo
     contrario el clamp aplana la señal y el gap se mueve 1:1 con la edad
-    cronológica en vez de reflejar la mejora real (ver informe D2)."""
+    cronológica en vez de reflejar la mejora real (ver informe D2).
+
+    Roadmap vo2-sin-inventar Paso 2: con el gate honesto, solo cuentan
+    ventanas con vo2max_source == "measured" -> el vo2 ahora se inyecta
+    DIRECTO como lectura medida (vo2_fn) en vez de dejar que la regresión lo
+    infiera del rhr. Los valores de vo2_fn replican el MISMO rango que la
+    regresión producía antes con este rhr_fn (41.75->46.4, ver comentario
+    original) para que el test siga verificando exactamente la misma señal
+    direccional de antes, solo que por la vía medida."""
     n = 330  # ~11 meses, suficientes puntos de ventana mensual
     def rhr_fn(i, n):
         # de 75 (mal) a 45 (bien) progresivamente — fitness_age 24-37, no saturado
@@ -108,7 +133,9 @@ def test_improving_rhr_and_hrv_yields_pace_below_1():
     def hrv_fn(i, n):
         # de 30 (mal) a 65 (bien) progresivamente
         return 30.0 + (i / n) * 35.0
-    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480)
+    def vo2_fn(i, n):
+        return 41.75 + (i / n) * 4.65
+    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480, vo2_fn=vo2_fn)
     result = compute_healthspan(days, [], _profile())
     assert result is not None
     assert result["pace"] is not None
@@ -117,13 +144,16 @@ def test_improving_rhr_and_hrv_yields_pace_below_1():
 
 def test_worsening_rhr_and_hrv_yields_pace_above_1():
     """Lo inverso: RHR subiendo + HRV bajando -> el gap se agranda con el
-    tiempo -> pace > 1. Mismos rangos no saturados que el test de mejora."""
+    tiempo -> pace > 1. Mismos rangos no saturados que el test de mejora
+    (vo2_fn espejo del de arriba, ver su docstring)."""
     n = 330
     def rhr_fn(i, n):
         return 45.0 + (i / n) * 30.0
     def hrv_fn(i, n):
         return 65.0 - (i / n) * 35.0
-    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480)
+    def vo2_fn(i, n):
+        return 46.4 - (i / n) * 4.65
+    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480, vo2_fn=vo2_fn)
     result = compute_healthspan(days, [], _profile())
     assert result is not None
     assert result["pace"] is not None
@@ -136,7 +166,9 @@ def test_delta_quarter_sign_matches_trend_direction():
         return 75.0 - (i / n) * 30.0
     def hrv_fn(i, n):
         return 30.0 + (i / n) * 35.0
-    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480)
+    def vo2_fn(i, n):
+        return 41.75 + (i / n) * 4.65
+    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480, vo2_fn=vo2_fn)
     result = compute_healthspan(days, [], _profile())
     assert result is not None
     # Mejorando -> el gap final debería ser menor (más negativo o menos
@@ -180,17 +212,36 @@ def test_pace_none_with_less_than_4_series_points():
 def test_pace_is_always_clamped_to_0_5_1_5_range():
     """Deterioro EXTREMO y sostenido (RHR subiendo de 90 a 20, HRV bajando de
     20 a 80, sin clamp esto daría un pace disparatado tipo el -5.46/... del
-    diagnóstico original) -> pace nunca sale de [0.5, 1.5]."""
+    diagnóstico original) -> pace nunca sale de [0.5, 1.5]. vo2_fn con swing
+    grande (30 puntos) para forzar una señal de gap extrema por la vía
+    medida."""
     n = 330
     def rhr_fn(i, n):
         return 90.0 - (i / n) * 70.0
     def hrv_fn(i, n):
         return 20.0 + (i / n) * 60.0
-    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480)
+    def vo2_fn(i, n):
+        return 30.0 + (i / n) * 30.0
+    days = _make_days(n, rhr_fn=rhr_fn, hrv_fn=hrv_fn, sleep_min=480, vo2_fn=vo2_fn)
     result = compute_healthspan(days, [], _profile())
     assert result is not None
     assert result["pace"] is not None
     assert 0.5 <= result["pace"] <= 1.5
+
+
+# ── Roadmap vo2-sin-inventar Paso 2: healthspan honesto ─────────────────────
+# compute_healthspan solo agrega puntos con vo2max_source == "measured" — sin
+# ninguna lectura de vo2 en absoluto (o todas fuera de la ventana de validez
+# de bodyage.py), NINGUNA ventana produce un punto -> serie vacía -> None
+# (criterio de aceptación 5).
+
+def test_no_vo2_measurement_anywhere_yields_none():
+    """Sin clave "vo2" en NINGÚN day, todas las ventanas trailing calculan
+    vo2max_source == "estimated" -> 0 puntos válidos -> compute_healthspan
+    devuelve None (nunca inventa una serie con edades no respaldadas)."""
+    days = _make_days(200, vo2_fn=lambda i, n: None)
+    result = compute_healthspan(days, [], _profile())
+    assert result is None
 
 
 # ── endpoint ─────────────────────────────────────────────────────────────────
