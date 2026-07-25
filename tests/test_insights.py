@@ -559,6 +559,214 @@ def test_strength_gap_pure_vigorous_cardio_now_triggers():
     assert "strength_gap" in ids
 
 
+# ── Regla 7b: fitness_age_gap (Roadmap coach-objetivo-vo2, Paso 3) ─────────────
+# Convención de fixtures: summary["bodyage"] con los campos ya disponibles del
+# fix edad-corporal-credibilidad (vo2max_source, fitness_age, fitness_age_display,
+# age, vo2max_percentile, vo2_last_measured_date). Todas las que ejercitan el
+# camino "measured + gap>2" monkeypatchean app.profile.effective_sources para
+# que _profile_connects_healthkit() sea determinista (nunca toca el
+# profile.json real del repo).
+
+def _bodyage(**overrides):
+    base = {
+        "vo2max": 29.1, "vo2max_source": "measured", "vo2max_percentile": 35,
+        "fitness_age": 56, "fitness_age_display": 56, "age": 49,
+        "body_age": 56, "category": "Bajo",
+    }
+    base.update(overrides)
+    return base
+
+
+def _patch_sources(monkeypatch, sources):
+    from app import profile as _profile
+    monkeypatch.setattr(_profile, "effective_sources", lambda: sources)
+
+
+def test_fitness_age_gap_triggers_when_measured_and_gap_over_2(monkeypatch):
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage()}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" in ids
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert insight["severity"] == "info"
+    assert insight["category"] == "entrenamiento"
+
+
+def test_fitness_age_gap_no_trigger_when_estimated(monkeypatch):
+    """Con vo2max_source='estimated' el número no es confiable -> no dispara."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2max_source="estimated")}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" not in ids
+
+
+def test_fitness_age_gap_no_trigger_when_source_key_absent(monkeypatch):
+    """VALIDACIÓN (validador): dataset VIEJO (pre-edad-corporal-credibilidad)
+    con bodyage completo pero SIN la clave vo2max_source y con gap>2 real ->
+    NO dispara. Es el caso que motivó el gate de "measured" también en la
+    card/contexto del coach; sin este test la regresión pasaría inadvertida
+    si alguien relajara el gate a `!= "estimated"`."""
+    _patch_sources(monkeypatch, ["healthkit"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    bodyage = _bodyage()
+    del bodyage["vo2max_source"]
+    summary = {**make_summary(), "bodyage": bodyage}
+    results = evaluate(make_dataset(days, summary=summary))
+    assert "fitness_age_gap" not in [r["id"] for r in results]
+
+
+def test_fitness_age_gap_no_trigger_when_gap_at_threshold(monkeypatch):
+    """gap == 2 (no >2) -> no dispara (evita ruido de redondeo)."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(fitness_age=51, fitness_age_display=51, age=49)}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" not in ids
+
+
+def test_fitness_age_gap_triggers_when_gap_just_over_threshold(monkeypatch):
+    """gap == 3 (>2) -> sí dispara."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(fitness_age=52, fitness_age_display=52, age=49)}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" in ids
+
+
+def test_fitness_age_gap_no_trigger_without_bodyage(monkeypatch):
+    """Dataset viejo (pre-edad-corporal-credibilidad), sin summary['bodyage']
+    -> no dispara, no rompe."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    results = evaluate(make_dataset(days, summary=make_summary()))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" not in ids
+
+
+def test_fitness_age_gap_no_trigger_bodyage_missing_fitness_age_or_age(monkeypatch):
+    """bodyage presente pero incompleto (None-safe con datasets a medio
+    migrar) -> no dispara, no rompe."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": {"vo2max_source": "measured"}}
+    results = evaluate(make_dataset(days, summary=summary))
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" not in ids
+
+
+def test_fitness_age_gap_recommendation_mentions_program(monkeypatch):
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage()}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    # Debe mencionar el programa por nombre (VO2/Impulso, ver i18n).
+    assert "VO2" in insight["recommendation"]
+
+
+def test_fitness_age_gap_factor_vo2_percentile_present(monkeypatch):
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2max_percentile=35)}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert any("35" in f for f in insight["factors"])
+
+
+def test_fitness_age_gap_staleness_factor_with_healthkit_and_stale_reading(monkeypatch):
+    """Perfil con healthkit conectado + vo2_last_measured_date >45 días vieja
+    (vs el ÚLTIMO day del dataset) -> factor de staleness presente."""
+    _patch_sources(monkeypatch, ["healthkit"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]  # último día: 2024-01-07
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date="2023-10-01")}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert len(insight["factors"]) == 2  # vo2 + staleness
+
+
+def test_fitness_age_gap_staleness_factor_with_healthkit_and_missing_date(monkeypatch):
+    """vo2_last_measured_date ausente (None) + healthkit conectado -> factor
+    de staleness presente (None cuenta como 'vieja')."""
+    _patch_sources(monkeypatch, ["healthkit"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date=None)}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert len(insight["factors"]) == 2
+
+
+def test_fitness_age_gap_no_staleness_factor_without_healthkit(monkeypatch):
+    """Sin healthkit en sources (solo-Fitbit/Oura/etc.) -> factor ausente,
+    aunque la lectura esté vieja/ausente (a un usuario solo-Fitbit no se le
+    pide un Apple Watch)."""
+    _patch_sources(monkeypatch, ["google_health"])
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date=None)}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert len(insight["factors"]) == 1  # solo el factor de vo2/percentil
+
+
+def test_fitness_age_gap_no_staleness_factor_when_reading_is_fresh(monkeypatch):
+    """healthkit conectado pero la lectura es RECIENTE (<=45 días vs el
+    último day) -> factor de staleness ausente."""
+    _patch_sources(monkeypatch, ["healthkit"])
+    dates = date_seq(7)  # último día: 2024-01-07
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date="2024-01-01")}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert len(insight["factors"]) == 1
+
+
+def test_fitness_age_gap_profile_lookup_failure_does_not_crash(monkeypatch):
+    """Si app.profile lanza (perfil corrupto), la regla no debe romper
+    evaluate() -> se comporta como 'sin healthkit' (factor ausente)."""
+    from app import profile as _profile
+
+    def _boom():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(_profile, "effective_sources", _boom)
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date=None)}
+    results = evaluate(make_dataset(days, summary=summary))  # no debe lanzar
+    ids = [r["id"] for r in results]
+    assert "fitness_age_gap" in ids
+
+
+def test_fitness_age_gap_uses_last_day_date_not_today(monkeypatch):
+    """El staleness compara contra days[-1]['date'], NUNCA date.today() —
+    el motor debe ser determinista/puro (riesgo #3 del roadmap)."""
+    _patch_sources(monkeypatch, ["healthkit"])
+    # Dataset con fechas del pasado lejano; la lectura de vo2 es "reciente"
+    # relativa a ESE dataset (no a la fecha real del sistema al correr el test).
+    days = [make_day(f"2020-01-{i:02d}") for i in range(1, 8)]
+    summary = {**make_summary(), "bodyage": _bodyage(vo2_last_measured_date="2020-01-05")}
+    results = evaluate(make_dataset(days, summary=summary))
+    insight = next(r for r in results if r["id"] == "fitness_age_gap")
+    assert len(insight["factors"]) == 1  # fresca vs el día 2020-01-07, no vs hoy
+
+
 # ── Regla 8: positive_hrv ──────────────────────────────────────────────────────
 
 def test_positive_hrv():

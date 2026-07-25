@@ -322,6 +322,25 @@ def _build_context(dataset: dict) -> str:
              f"VO₂máx {bodyage.get('vo2max')} ({bodyage.get('category','')})")
         if bodyage.get("penalty", 0) and bodyage["penalty"] > 0:
             s += f" · +{bodyage['penalty']} año(s) por dormir <7h"
+        # Roadmap coach-objetivo-vo2 Paso 4: fuente del VO2 + objetivo si el
+        # gap fitness>real supera 2 años. None-safe: sin vo2max_source
+        # (datasets viejos, pre-edad-corporal-credibilidad) esta línea queda
+        # IDÉNTICA a la de antes (cero regresión).
+        vo2_source = bodyage.get("vo2max_source")
+        if vo2_source == "measured":
+            pct = bodyage.get("vo2max_percentile")
+            s += f" · VO2 medido (p{pct})" if pct is not None else " · VO2 medido"
+        elif vo2_source == "estimated":
+            s += " · VO2 estimado"
+        # El objetivo explícito solo con VO2 MEDIDO (mismo criterio que
+        # rule_fitness_age_gap en app/insights.py) — nunca aparece en un
+        # dataset viejo sin vo2max_source (age/fitness_age SÍ existían antes
+        # de este roadmap, así que el gate no puede ser solo sobre esos dos).
+        fitness_age = bodyage.get("fitness_age")
+        age = bodyage.get("age")
+        if vo2_source == "measured" and fitness_age is not None and age is not None and fitness_age > age + 2:
+            display = bodyage.get("fitness_age_display", fitness_age)
+            s += f" · OBJETIVO: bajar edad fitness de {display} a {age}"
         ba.append(s)
 
     # ── BANDERAS ──

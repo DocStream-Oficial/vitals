@@ -369,3 +369,64 @@ class TestPlanActiveContextBlock:
         monkeypatch.setattr(_pln, "plan_status", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
         ctx = cc._build_context(self._dataset())  # no debe lanzar
         assert "Fuerza estructurada: 0 min" in ctx
+
+
+# ── Roadmap coach-objetivo-vo2, Paso 4: bloque EDAD CORPORAL enriquecido ────
+
+class TestBodyAgeVo2Context:
+    def _dataset(self, bodyage):
+        days = [{"date": "2026-06-20", "recovery": 60, "asleep": 420}]
+        return {"days": days, "summary": {"bodyage": bodyage}, "exercises": []}
+
+    def test_measured_source_with_percentile_shown(self):
+        bodyage = {
+            "body_age": 56, "fitness_age": 56, "vo2max": 29.1, "category": "Bajo",
+            "vo2max_source": "measured", "vo2max_percentile": 35, "age": 49,
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "VO2 medido (p35)" in ctx
+
+    def test_measured_source_without_percentile_falls_back_generic(self):
+        bodyage = {
+            "body_age": 56, "fitness_age": 56, "vo2max": 29.1, "category": "Bajo",
+            "vo2max_source": "measured", "age": 49,
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "VO2 medido" in ctx
+        assert "VO2 medido (p" not in ctx
+
+    def test_estimated_source_shown(self):
+        bodyage = {
+            "body_age": 45, "fitness_age": 45, "vo2max": 44.0, "category": "Promedio",
+            "vo2max_source": "estimated", "age": 40,
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "VO2 estimado" in ctx
+
+    def test_goal_line_present_when_gap_over_2(self):
+        bodyage = {
+            "body_age": 56, "fitness_age": 56, "fitness_age_display": 56,
+            "vo2max": 29.1, "category": "Bajo",
+            "vo2max_source": "measured", "vo2max_percentile": 35, "age": 49,
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "OBJETIVO: bajar edad fitness de 56 a 49" in ctx
+
+    def test_no_goal_line_when_gap_at_or_below_2(self):
+        bodyage = {
+            "body_age": 51, "fitness_age": 51, "fitness_age_display": 51,
+            "vo2max": 40.0, "category": "Promedio",
+            "vo2max_source": "measured", "vo2max_percentile": 45, "age": 49,
+        }
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "OBJETIVO" not in ctx
+
+    def test_old_dataset_without_vo2max_source_identical_line(self):
+        """None-safe: sin vo2max_source (dataset pre-edad-corporal-credibilidad)
+        -> ni fuente ni objetivo se agregan, línea igual a la de siempre."""
+        bodyage = {"body_age": 45, "fitness_age": 45, "vo2max": 44.0, "category": "Promedio"}
+        ctx = cc._build_context(self._dataset(bodyage))
+        assert "EDAD CORPORAL: 45 años (fitness 45) · VO₂máx 44.0 (Promedio)" in ctx
+        assert "VO2 medido" not in ctx
+        assert "VO2 estimado" not in ctx
+        assert "OBJETIVO" not in ctx

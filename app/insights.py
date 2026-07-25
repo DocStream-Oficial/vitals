@@ -22,6 +22,7 @@ Ronda 3 (motor honesto):
 """
 from __future__ import annotations
 
+import datetime
 import logging
 import statistics
 from typing import Any
@@ -527,6 +528,95 @@ def rule_strength_gap(days: list[dict], summary: dict, locale: str = "es") -> di
     }
 
 
+# ── Regla 7b: fitness_age_gap (Roadmap coach-objetivo-vo2, Paso 3) ─────────────
+# El fix "edad-corporal-credibilidad" hizo que el VO2máx MEDIDO del reloj mande
+# sobre la regresión — un número honesto pero duro cuando la edad fitness cruda
+# queda muy por encima de la edad real. Esta regla lo convierte en un OBJETIVO
+# accionable (receta el programa vo2_boost) en vez de dejarlo como cachetada.
+
+def _profile_connects_healthkit() -> bool:
+    """True si el perfil del usuario activo tiene 'healthkit' entre sus fuentes
+    conectadas. Import perezoso (patrón del repo, ver sync.py/coach.py) — a un
+    usuario solo-Fitbit/Oura/WHOOP no se le pide una caminata con Apple Watch.
+    Nunca lanza (perfil ausente/corrupto -> False, sin fuente conectada)."""
+    try:
+        from app import profile as _profile
+        return "healthkit" in (_profile.effective_sources() or [])
+    except Exception:
+        return False
+
+
+def _vo2_reading_is_stale(bodyage: dict, days: list[dict]) -> bool:
+    """True si `vo2_last_measured_date` es None o tiene más de 45 días vs la
+    fecha del ÚLTIMO day del dataset (nunca date.today() — el motor debe ser
+    puro/determinista, ver riesgo #3 del roadmap). Fecha de referencia o
+    vo2_last_measured_date ilegibles -> se trata como "vieja" (más
+    conservador: mejor sugerir la caminata de calibración de más que de
+    menos)."""
+    last_measured = bodyage.get("vo2_last_measured_date")
+    if not last_measured:
+        return True
+    if not days:
+        return True
+    ref_str = days[-1].get("date")
+    try:
+        ref_date = datetime.date.fromisoformat(ref_str)
+        last_date = datetime.date.fromisoformat(last_measured)
+    except (TypeError, ValueError):
+        return True
+    return (ref_date - last_date).days > 45
+
+
+def rule_fitness_age_gap(days: list[dict], summary: dict, locale: str = "es") -> dict | None:
+    """VO2 MEDIDO (no estimado) + edad fitness cruda > edad real + 2 años →
+    info con recomendación accionable (programa vo2_boost, Roadmap
+    coach-objetivo-vo2). NO dispara con vo2max_source == "estimated" (el
+    número no es confiable), gap <=2 (ruido de redondeo), o sin bodyage
+    (dataset viejo, pre-edad-corporal-credibilidad).
+
+    Los TEXTOS usan fitness_age_display (lo que el usuario ve en la card,
+    con el piso relativo de credibilidad) aunque el TRIGGER use fitness_age
+    crudo (verdad interna) — decisión cerrada del roadmap.
+    """
+    bodyage = summary.get("bodyage")
+    if not bodyage:
+        return None
+    if bodyage.get("vo2max_source") != "measured":
+        return None
+
+    fitness_age = bodyage.get("fitness_age")
+    age = bodyage.get("age")
+    if fitness_age is None or age is None:
+        return None
+
+    gap = fitness_age - age
+    if gap <= 2:
+        return None
+
+    fitness_age_display = bodyage.get("fitness_age_display", fitness_age)
+    percentile = bodyage.get("vo2max_percentile")
+
+    factors = []
+    if percentile is not None:
+        factors.append(tr("fitness_age_gap_factor_vo2", locale, percentile=percentile))
+    if _profile_connects_healthkit() and _vo2_reading_is_stale(bodyage, days):
+        factors.append(tr("fitness_age_gap_factor_stale", locale))
+
+    return {
+        "id": "fitness_age_gap",
+        "severity": "info",
+        "category": "entrenamiento",
+        "icon": "🎯",
+        "title": tr("fitness_age_gap_title", locale),
+        "summary": tr(
+            "fitness_age_gap_summary", locale,
+            fitness_age_display=fitness_age_display, age=age, gap=round(gap),
+        ),
+        "factors": factors,
+        "recommendation": tr("fitness_age_gap_rec", locale),
+    }
+
+
 # ── Regla 8: positive_hrv ──────────────────────────────────────────────────────
 
 def rule_positive_hrv(days: list[dict], summary: dict, locale: str = "es") -> dict | None:
@@ -722,6 +812,7 @@ _RULES = [
     rule_recovery_declining,
     rule_bedtime_inconsistency,
     rule_strength_gap,
+    rule_fitness_age_gap,
     rule_positive_hrv,
     rule_positive_sleep,
     rule_cycle_phase,
@@ -821,8 +912,17 @@ def evaluate(dataset: dict, locale: str = "es", latch: bool = False) -> list[dic
     detectados, el comportamiento es EXACTAMENTE el de antes de este paso.
 
     `latch` (dev-harness/illness-latch, opt-in, default False): con
-    `latch=False` esta función es PURA y BYTE-IDÉNTICA al comportamiento de
-    siempre — ni lee ni escribe disco (ni siquiera importa app.illness_state).
+    `latch=False` esta función NUNCA ESCRIBE disco (ni siquiera importa
+    app.illness_state) y es byte-idéntica al comportamiento de siempre.
+    ⚠️ Ya NO es 100% pura en lectura: `rule_fitness_age_gap`
+    (roadmap coach-objetivo-vo2) LEE el perfil del usuario activo
+    (app.profile.effective_sources() -> profile.json) para decidir si añade
+    el factor de calibración outdoor — solo cuando la regla ya pasó todos
+    sus gates (VO2 medido + gap>2), nunca en el resto de las evaluaciones, y
+    siempre envuelto en try/except (un fallo de perfil no cambia el
+    resultado). Ver VALIDATION.md de esa corrida: la alternativa limpia es
+    inyectar las fuentes en el dataset desde los callers, como ya se hace
+    con `_exercises`/`_cycle`.
     Con `latch=True`, el insight `illness_early_warning` fresco se ENVUELVE
     con app.illness_state.apply_latch() ANTES del silenciado de
     `positive_hrv` de abajo: si ya disparó una alerta hoy (día calendario de

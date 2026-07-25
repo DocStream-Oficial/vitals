@@ -81,6 +81,40 @@ def _data_out_path() -> Path:
 _SOURCE_WINDOW_OVERRIDE = {"healthkit": 365}
 
 
+def _vo2_last_measured_date() -> Optional[str]:
+    """Roadmap coach-objetivo-vo2, Paso 2: fecha ISO (YYYY-MM-DD) de la
+    lectura de VO2 MEDIDO más reciente en el ingest crudo de HealthKit del
+    usuario activo, o None si no hay archivo / no hay clave "vo2" / el JSON
+    está corrupto. Reutiliza app.sources.healthkit._ingest_path() (import
+    local, patrón de imports perezosos del repo) — NO replica la resolución
+    de rutas a mano, así que respeta el mismo contextvar de usuario que ya
+    usa ese módulo. Alimenta el factor de staleness del insight
+    fitness_age_gap (app/insights.py). Nunca lanza."""
+    try:
+        from app.sources.healthkit import _ingest_path as _hk_ingest_path
+        path = _hk_ingest_path()
+        if not path.exists():
+            return None
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None
+        entries = raw.get("vo2") or []
+        if not isinstance(entries, list):
+            return None
+        # Solo entradas con VALOR: una entrada {"date": ..., "value": null}
+        # (HealthKit los tolera — ver healthkit._array_to_dict, que pasa los
+        # None tal cual) NO es una lectura de VO2, y contarla haría pasar por
+        # "fresca" una medición que nunca ocurrió — justo el caso que el
+        # factor de calibración del insight fitness_age_gap debe detectar.
+        dates = [
+            e.get("date") for e in entries
+            if isinstance(e, dict) and e.get("date") and e.get("value") is not None
+        ]
+        return max(dates) if dates else None
+    except Exception:
+        return None
+
+
 def run_sync(days: int = 45):
     """Sincroniza TODAS las fuentes conectadas del perfil y actualiza data/health_compact.json.
     Fusiona los fetches exitosos vía merge_sources(). Si TODAS las fuentes fallan, re-lanza
@@ -237,6 +271,16 @@ def run_sync(days: int = 45):
                     impact_path.unlink(missing_ok=True)
         except Exception as exc:
             logger.warning("profile_impact (nota de perfil) falló en este sync (best-effort, ignorado): %s", exc)
+
+        # ── Roadmap coach-objetivo-vo2 Paso 2: vo2_last_measured_date (aditivo,
+        # best-effort TOTAL) — alimenta el factor de staleness del insight
+        # fitness_age_gap. Sin archivo/sin clave "vo2"/JSON corrupto -> None,
+        # el sync NUNCA falla por esto (_vo2_last_measured_date() nunca lanza).
+        try:
+            if dataset["summary"].get("bodyage") is not None:
+                dataset["summary"]["bodyage"]["vo2_last_measured_date"] = _vo2_last_measured_date()
+        except Exception as exc:
+            logger.warning("vo2_last_measured_date falló en este sync (best-effort, ignorado): %s", exc)
 
         # ── Frescura de Alertas + Coach (Paso 4): vo2max ANTERIOR para el evento
         # de cambio de changes.py. Se lee del health_compact.json VIEJO (antes

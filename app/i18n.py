@@ -34,6 +34,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_title_single": "Tu cuerpo rinde como ~{body_age} años.",
         "bullet_body_age_body": "VO₂máx ~{vo2max} ({category}) · tu edad real {real_age} · FC reposo {rhr} · HRV {hrv}.",
         "bullet_body_age_penalty": " Solo te suma ~{penalty} año(s) dormir {sleep_h_avg}h — sube a 7h+ y tocas el piso.",
+        # Roadmap coach-objetivo-vo2 Paso 4: fuente/percentil/objetivo del VO2.
+        "bullet_body_age_vo2_measured": " VO₂ medido (percentil {percentile}).",
+        "bullet_body_age_vo2_measured_generic": " VO₂ medido.",
+        "bullet_body_age_vo2_estimated": " VO₂ estimado.",
+        "bullet_body_age_goal": " Objetivo: baja tu edad fitness de {display} a {age} años.",
         "bullet_strength_title": "Lo urgente:",
         "bullet_strength_body": "0 minutos de fuerza en {n_sessions} sesiones esta semana. Cardio élite, pero tu meta #2 es fuerza. Hoy mete 1 sesión de pesas.",
         "bullet_sleep_title": "Sueño:",
@@ -98,6 +103,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "strength_gap_summary": "0 minutos de ejercicio vigoroso registrados en los últimos 7 días.",
         "strength_gap_factor": "Sin actividad vigorosa en los últimos 7 días",
         "strength_gap_rec": "El entrenamiento de fuerza/alta intensidad es clave para VO₂máx, densidad ósea y longevidad. Considera añadir 1-2 sesiones esta semana.",
+        # insights.py — fitness_age_gap (Roadmap coach-objetivo-vo2 Paso 3)
+        "fitness_age_gap_title": "Tu edad fitness puede bajar",
+        "fitness_age_gap_summary": "Tu VO₂máx medido pone tu edad fitness en ~{fitness_age_display} años, {gap} años más que tu edad real ({age}). Es reversible con el programa correcto.",
+        "fitness_age_gap_factor_vo2": "VO₂máx medido: percentil {percentile} para tu edad y sexo",
+        "fitness_age_gap_factor_stale": "Tu última lectura de VO₂ con el reloj está vieja o no existe — una caminata outdoor con el reloj recalibra la medición",
+        "fitness_age_gap_rec": "Prueba el programa Impulso VO2 (28 días): zona 2 + 1 caminata outdoor semanal de calibración con tu reloj (tu deporte cuenta como tu día de intensidad).",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recuperación",
         "pos_hrv_title": "HRV en racha ascendente",
@@ -341,6 +352,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_recovery_declining": "¿Por qué baja mi recuperación?",
         "coach_q_bedtime_inconsistency": "¿Cómo mejoro mi consistencia de horario?",
         "coach_q_strength_gap": "¿Cómo agrego fuerza esta semana?",
+        # Roadmap coach-objetivo-vo2 Paso 3: chip del insight fitness_age_gap.
+        "coach_q_fitness_age_gap": "¿Cómo bajo mi edad fitness?",
         "coach_q_positive_hrv": "¿Qué está mejorando mi HRV?",
         "coach_q_positive_sleep": "¿Cómo mantengo esta racha de sueño?",
         "coach_q_cycle_phase": "¿Cómo ajusto mi entrenamiento a mi ciclo?",
@@ -358,6 +371,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "program_strength_3x_desc": "28 días de fuerza estructurada, 3 sesiones por semana.",
         "program_stress_reset_name": "Reset de estrés",
         "program_stress_reset_desc": "14 días de respiración, meditación y recuperación mental.",
+        # Roadmap coach-objetivo-vo2 Paso 1: programa vo2_boost.
+        "program_vo2_boost_name": "Impulso VO2",
+        "program_vo2_boost_desc": "28 días de zona 2 + 1 caminata outdoor de calibración por semana para bajar tu edad fitness.",
         "task_sleep_fixed_bedtime": "Acuéstate a tu hora fija hoy",
         "task_sleep_no_screens_1h": "Sin pantallas 1h antes de dormir",
         "task_sleep_no_caffeine_pm": "Sin cafeína después del mediodía",
@@ -368,6 +384,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_cardio_long": "45 min de cardio largo",
         "task_rest_active": "Descanso activo — estiramiento",
         "task_rest_full": "Descanso completo hoy",
+        # Roadmap coach-objetivo-vo2 Paso 1: tareas nuevas del programa vo2_boost.
+        "task_walk_outdoor_calibrate": "Camina 30 min al aire libre con tu reloj — recalibra tu VO2máx",
+        "task_play_sport": "Tu deporte (pádel, fútbol…): tu día de intensidad",
         "task_strength_full": "40 min de fuerza estructurada",
         "task_breathwork": "10 min de respiración",
         "task_meditation": "10 min de meditación",
@@ -409,6 +428,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_title_single": "Your body performs like ~{body_age} years old.",
         "bullet_body_age_body": "VO₂max ~{vo2max} ({category}) · real age {real_age} · resting HR {rhr} · HRV {hrv}.",
         "bullet_body_age_penalty": " Sleeping {sleep_h_avg}h adds ~{penalty} year(s) — get to 7h+ and you hit the floor.",
+        # Roadmap coach-objetivo-vo2 Step 4: VO2 source/percentile/goal.
+        "bullet_body_age_vo2_measured": " VO2 measured (percentile {percentile}).",
+        "bullet_body_age_vo2_measured_generic": " VO2 measured.",
+        "bullet_body_age_vo2_estimated": " VO2 estimated.",
+        "bullet_body_age_goal": " Goal: lower your fitness age from {display} to {age} years.",
         "bullet_strength_title": "The urgent item:",
         "bullet_strength_body": "0 strength minutes across {n_sessions} sessions this week. Elite cardio, but your goal #2 is strength. Add 1 weight session today.",
         "bullet_sleep_title": "Sleep:",
@@ -473,6 +497,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "strength_gap_summary": "0 minutes of vigorous exercise recorded in the last 7 days.",
         "strength_gap_factor": "No vigorous activity in the last 7 days",
         "strength_gap_rec": "Strength/high-intensity training is key for VO₂max, bone density, and longevity. Consider adding 1-2 sessions this week.",
+        # insights.py — fitness_age_gap (Roadmap coach-objetivo-vo2 Step 3)
+        "fitness_age_gap_title": "Your fitness age can come down",
+        "fitness_age_gap_summary": "Your measured VO2max puts your fitness age at ~{fitness_age_display} years, {gap} years above your real age ({age}). It's reversible with the right program.",
+        "fitness_age_gap_factor_vo2": "Measured VO2max: percentile {percentile} for your age and sex",
+        "fitness_age_gap_factor_stale": "Your last watch VO2 reading is old or missing — an outdoor walk with your watch recalibrates the measurement",
+        "fitness_age_gap_rec": "Try the VO2 boost program (28 days): zone 2 + 1 weekly outdoor calibration walk with your watch (your sport counts as your intensity day).",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recovery",
         "pos_hrv_title": "HRV on an upward streak",
@@ -716,6 +746,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_recovery_declining": "Why is my recovery declining?",
         "coach_q_bedtime_inconsistency": "How do I improve my bedtime consistency?",
         "coach_q_strength_gap": "How do I add strength training this week?",
+        # Roadmap coach-objetivo-vo2 Step 3: chip for the fitness_age_gap insight.
+        "coach_q_fitness_age_gap": "How do I lower my fitness age?",
         "coach_q_positive_hrv": "What's improving my HRV?",
         "coach_q_positive_sleep": "How do I keep this sleep streak going?",
         "coach_q_cycle_phase": "How should I adjust training to my cycle?",
@@ -733,6 +765,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "program_strength_3x_desc": "28 days of structured strength, 3 sessions per week.",
         "program_stress_reset_name": "Stress reset",
         "program_stress_reset_desc": "14 days of breathwork, meditation, and mental recovery.",
+        # Roadmap coach-objetivo-vo2 Step 1: vo2_boost program.
+        "program_vo2_boost_name": "VO2 boost",
+        "program_vo2_boost_desc": "28 days of zone 2 + 1 outdoor calibration walk per week to lower your fitness age.",
         "task_sleep_fixed_bedtime": "Go to bed at your fixed time today",
         "task_sleep_no_screens_1h": "No screens 1h before bed",
         "task_sleep_no_caffeine_pm": "No caffeine after noon",
@@ -743,6 +778,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_cardio_long": "45 min of long cardio",
         "task_rest_active": "Active rest — stretching",
         "task_rest_full": "Full rest today",
+        # Roadmap coach-objetivo-vo2 Step 1: new tasks for the vo2_boost program.
+        "task_walk_outdoor_calibrate": "Walk 30 min outdoors with your watch — recalibrate your VO2max",
+        "task_play_sport": "Your sport (padel, soccer…): your intensity day",
         "task_strength_full": "40 min of structured strength",
         "task_breathwork": "10 min of breathwork",
         "task_meditation": "10 min of meditation",
@@ -784,6 +822,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_title_single": "Votre corps performe comme ~{body_age} ans.",
         "bullet_body_age_body": "VO₂max ~{vo2max} ({category}) · âge réel {real_age} · FC repos {rhr} · VFC {hrv}.",
         "bullet_body_age_penalty": " Dormir {sleep_h_avg}h ajoute ~{penalty} an(s) — montez à 7h+ pour atteindre le plancher.",
+        # Roadmap coach-objetivo-vo2 Étape 4 : source/percentile/objectif du VO2.
+        "bullet_body_age_vo2_measured": " VO2 mesuré (percentile {percentile}).",
+        "bullet_body_age_vo2_measured_generic": " VO2 mesuré.",
+        "bullet_body_age_vo2_estimated": " VO2 estimé.",
+        "bullet_body_age_goal": " Objectif : faire baisser votre âge fitness de {display} à {age} ans.",
         "bullet_strength_title": "L'urgent :",
         "bullet_strength_body": "0 minutes de musculation sur {n_sessions} séances cette semaine. Cardio d'élite, mais votre objectif #2 c'est la force. Ajoutez 1 séance de poids aujourd'hui.",
         "bullet_sleep_title": "Sommeil :",
@@ -848,6 +891,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "strength_gap_summary": "0 minutes d'exercice vigoureux enregistrées ces 7 derniers jours.",
         "strength_gap_factor": "Aucune activité vigoureuse ces 7 derniers jours",
         "strength_gap_rec": "L'entraînement en force/haute intensité est clé pour le VO₂max, la densité osseuse et la longévité. Pensez à ajouter 1-2 séances cette semaine.",
+        # insights.py — fitness_age_gap (Roadmap coach-objetivo-vo2 Étape 3)
+        "fitness_age_gap_title": "Ton âge fitness peut baisser",
+        "fitness_age_gap_summary": "Ton VO2max mesuré place ton âge fitness à ~{fitness_age_display} ans, {gap} ans de plus que ton âge réel ({age}). C'est réversible avec le bon programme.",
+        "fitness_age_gap_factor_vo2": "VO2max mesuré : percentile {percentile} pour ton âge et sexe",
+        "fitness_age_gap_factor_stale": "Ta dernière lecture VO2 de la montre est ancienne ou absente — une marche en extérieur avec ta montre recalibre la mesure",
+        "fitness_age_gap_rec": "Essaie le programme Boost VO2 (28 jours) : zone 2 + 1 marche outdoor de calibration par semaine avec ta montre (ton sport compte comme ton jour d'intensité).",
         # insights.py — positive_hrv
         "pos_hrv_cat": "récupération",
         "pos_hrv_title": "VFC en série ascendante",
@@ -1091,6 +1140,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_recovery_declining": "Pourquoi ma récupération baisse-t-elle ?",
         "coach_q_bedtime_inconsistency": "Comment améliorer la régularité de mon coucher ?",
         "coach_q_strength_gap": "Comment ajouter de la force cette semaine ?",
+        # Roadmap coach-objetivo-vo2 Étape 3 : chip de l'insight fitness_age_gap.
+        "coach_q_fitness_age_gap": "Comment faire baisser mon âge fitness ?",
         "coach_q_positive_hrv": "Qu'est-ce qui améliore ma VFC ?",
         "coach_q_positive_sleep": "Comment maintenir cette bonne série de sommeil ?",
         "coach_q_cycle_phase": "Comment adapter mon entraînement à mon cycle ?",
@@ -1108,6 +1159,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "program_strength_3x_desc": "28 jours de force structurée, 3 séances par semaine.",
         "program_stress_reset_name": "Reset du stress",
         "program_stress_reset_desc": "14 jours de respiration, méditation et récupération mentale.",
+        # Roadmap coach-objetivo-vo2 Étape 1 : programme vo2_boost.
+        "program_vo2_boost_name": "Boost VO2",
+        "program_vo2_boost_desc": "28 jours de zone 2 + 1 marche outdoor de calibration par semaine pour faire baisser ton âge fitness.",
         "task_sleep_fixed_bedtime": "Couche-toi à ton heure fixe aujourd'hui",
         "task_sleep_no_screens_1h": "Pas d'écrans 1h avant de dormir",
         "task_sleep_no_caffeine_pm": "Pas de caféine après midi",
@@ -1118,6 +1172,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_cardio_long": "45 min de cardio long",
         "task_rest_active": "Repos actif — étirements",
         "task_rest_full": "Repos complet aujourd'hui",
+        # Roadmap coach-objetivo-vo2 Étape 1 : nouvelles tâches du programme vo2_boost.
+        "task_walk_outdoor_calibrate": "Marche 30 min en extérieur avec ta montre — recalibre ton VO2max",
+        "task_play_sport": "Ton sport (padel, foot…) : ton jour d'intensité",
         "task_strength_full": "40 min de force structurée",
         "task_breathwork": "10 min de respiration",
         "task_meditation": "10 min de méditation",
@@ -1159,6 +1216,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "bullet_body_age_title_single": "Seu corpo performa como ~{body_age} anos.",
         "bullet_body_age_body": "VO₂máx ~{vo2max} ({category}) · idade real {real_age} · FC repouso {rhr} · VFC {hrv}.",
         "bullet_body_age_penalty": " Dormir {sleep_h_avg}h adiciona ~{penalty} ano(s) — chegue a 7h+ e você toca o piso.",
+        # Roadmap coach-objetivo-vo2 Passo 4: fonte/percentil/objetivo do VO2.
+        "bullet_body_age_vo2_measured": " VO2 medido (percentil {percentile}).",
+        "bullet_body_age_vo2_measured_generic": " VO2 medido.",
+        "bullet_body_age_vo2_estimated": " VO2 estimado.",
+        "bullet_body_age_goal": " Objetivo: baixar sua idade fitness de {display} para {age} anos.",
         "bullet_strength_title": "O urgente:",
         "bullet_strength_body": "0 minutos de musculação em {n_sessions} sessões esta semana. Cardio de elite, mas sua meta #2 é força. Faça 1 sessão de pesos hoje.",
         "bullet_sleep_title": "Sono:",
@@ -1223,6 +1285,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "strength_gap_summary": "0 minutos de exercício vigoroso registrados nos últimos 7 dias.",
         "strength_gap_factor": "Sem atividade vigorosa nos últimos 7 dias",
         "strength_gap_rec": "O treino de força/alta intensidade é essencial para VO₂máx, densidade óssea e longevidade. Considere adicionar 1-2 sessões esta semana.",
+        # insights.py — fitness_age_gap (Roadmap coach-objetivo-vo2 Passo 3)
+        "fitness_age_gap_title": "Sua idade fitness pode baixar",
+        "fitness_age_gap_summary": "Seu VO₂máx medido coloca sua idade fitness em ~{fitness_age_display} anos, {gap} anos a mais que sua idade real ({age}). É reversível com o programa certo.",
+        "fitness_age_gap_factor_vo2": "VO₂máx medido: percentil {percentile} para sua idade e sexo",
+        "fitness_age_gap_factor_stale": "Sua última leitura de VO2 do relógio está velha ou ausente — uma caminhada outdoor com o relógio recalibra a medição",
+        "fitness_age_gap_rec": "Experimente o programa Impulso VO2 (28 dias): zona 2 + 1 caminhada outdoor de calibração por semana com seu relógio (seu esporte conta como seu dia de intensidade).",
         # insights.py — positive_hrv
         "pos_hrv_cat": "recuperação",
         "pos_hrv_title": "VFC em sequência ascendente",
@@ -1466,6 +1534,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "coach_q_recovery_declining": "Por que minha recuperação está caindo?",
         "coach_q_bedtime_inconsistency": "Como melhoro a consistência do meu horário de dormir?",
         "coach_q_strength_gap": "Como adiciono treino de força esta semana?",
+        # Roadmap coach-objetivo-vo2 Passo 3: chip do insight fitness_age_gap.
+        "coach_q_fitness_age_gap": "Como abaixo minha idade fitness?",
         "coach_q_positive_hrv": "O que está melhorando meu HRV?",
         "coach_q_positive_sleep": "Como mantenho essa sequência de bom sono?",
         "coach_q_cycle_phase": "Como ajusto meu treino ao meu ciclo?",
@@ -1483,6 +1553,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "program_strength_3x_desc": "28 dias de força estruturada, 3 sessões por semana.",
         "program_stress_reset_name": "Reset de estresse",
         "program_stress_reset_desc": "14 dias de respiração, meditação e recuperação mental.",
+        # Roadmap coach-objetivo-vo2 Passo 1: programa vo2_boost.
+        "program_vo2_boost_name": "Impulso VO2",
+        "program_vo2_boost_desc": "28 dias de zona 2 + 1 caminhada outdoor de calibração por semana para baixar sua idade fitness.",
         "task_sleep_fixed_bedtime": "Deite-se no seu horário fixo hoje",
         "task_sleep_no_screens_1h": "Sem telas 1h antes de dormir",
         "task_sleep_no_caffeine_pm": "Sem cafeína após o meio-dia",
@@ -1493,6 +1566,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "task_cardio_long": "45 min de cardio longo",
         "task_rest_active": "Descanso ativo — alongamento",
         "task_rest_full": "Descanso completo hoje",
+        # Roadmap coach-objetivo-vo2 Passo 1: novas tarefas do programa vo2_boost.
+        "task_walk_outdoor_calibrate": "Caminhe 30 min ao ar livre com seu relógio — recalibre seu VO2máx",
+        "task_play_sport": "Seu esporte (padel, futebol…): seu dia de intensidade",
         "task_strength_full": "40 min de força estruturada",
         "task_breathwork": "10 min de respiração",
         "task_meditation": "10 min de meditação",
