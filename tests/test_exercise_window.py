@@ -27,6 +27,7 @@ from __future__ import annotations
 import datetime
 
 from app.scoring import build_dataset, EXERCISE_WINDOW_DAYS, EXERCISE_MAX_ENTRIES
+from app.merge import merge_sources
 
 
 def _mk(date, dur_min=30, type_="running", name="Run", **extra):
@@ -257,3 +258,48 @@ def test_window_covers_deepest_consumer():
         f"{BODYAGE_EXERCISE_CUTOFF}d de compute_body_age necesitan {needed} días. "
         f"Si subiste alguno de los dos, sube también EXERCISE_WINDOW_DAYS."
     )
+
+
+# ── Roadmap fusion-workouts Paso 4 / criterio 7 — TRIMP tras la fusión ─────────
+# Test de integración elegido en este archivo (en vez de test_load.py) porque ya
+# importa build_dataset() y usa el idioma `steps={ref: 1000}` para forzar que la
+# fecha entre en `dates` sin depender de otras series -- exactamente lo que
+# necesita este test, que solo le interesa `exercises` + `rhr` del día.
+
+def _empty_source_for_merge() -> dict:
+    return {
+        "sleep": {}, "rhr": {}, "hrv": {}, "resp": {}, "vo2": {}, "steps": {},
+        "azm": {}, "spo2": {}, "skin": {}, "exercises": [], "distance_km": {},
+        "energy_kcal": {}, "active_hours": {},
+    }
+
+
+def test_trimp_computed_for_fused_29jul_session_criterio7():
+    """Caso real de prod (roadmap, criterio 7): HK aporta dur_min SIN avg_hr y
+    GG aporta avg_hr SIN dur_min para la MISMA sesión de fuerza del 29-jul ->
+    trimp_session() (app/load.py) exige AMBOS y hoy (sin fusionar) ninguna de
+    las dos entradas puede producir TRIMP. Tras fundir campo a campo
+    (merge.py Paso 2), la entrada resultante trae dur_min Y avg_hr juntos ->
+    build_dataset() debe producir day["trimp"] no-None para 2026-07-29."""
+    ref = "2026-07-29"
+    hk = {**_empty_source_for_merge(), "exercises": [
+        {"date": ref, "name": "Strength", "dur_min": 75, "kcal": 282},
+    ]}
+    gg = {**_empty_source_for_merge(), "exercises": [
+        {"date": ref, "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": None, "kcal": 282, "avg_hr": 79, "start": "15:57"},
+    ]}
+    merged = merge_sources({"healthkit": hk, "google_health": gg})
+    assert len(merged["exercises"]) == 1  # se fundió en 1, no 2
+
+    # Sanity previo (documenta el bug de fondo): CUALQUIERA de las dos entradas
+    # crudas por separado, sin fundir, no puede producir TRIMP (falta un campo).
+    assert hk["exercises"][0].get("avg_hr") is None
+    assert gg["exercises"][0].get("dur_min") is None
+
+    ds = build_dataset(
+        {}, {ref: 55.0}, {}, {}, {}, {ref: 1000}, {},
+        exercises=merged["exercises"], age=40, sex="M",
+    )
+    day = next(d for d in ds["days"] if d["date"] == ref)
+    assert day.get("trimp") is not None

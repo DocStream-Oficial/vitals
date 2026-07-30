@@ -37,12 +37,27 @@ Reglas (ver roadmap `_dev/ROADMAP-vitals-fase6a-multisource-merge.md` para 6A y
   empate exacto -> desempata por SOURCE_PRIORITY. Mismo patrón `rank=(asleep, pref)`
   de app/parsers.py::parse_sleep, generalizado a N fuentes en vez de "preferida vs
   resto". No se promedian campos de sueño entre sí (no tiene sentido físico).
-- exercises (workouts): concatenación + dedup simple por (date, name, |dur_min
-  diff|<=5); al deduplicar gana la entrada con más campos no-None (más completa).
+- exercises (workouts): concatenación + dedup por `_same_workout` = regla_kcal OR
+  regla_dur_vieja (Roadmap fusion-workouts, 2026-07-29):
+    regla_kcal (nueva): mismo `date`, `kcal` no-None e igual en ambas (tolerancia
+      ±1) Y nombres/tipos "de la misma familia" (`_names_equivalent`: normalizado
+      de uno CONTIENE al del otro, ej. "strengthtraining" contiene "strength").
+    regla_dur_vieja (preservada tal cual, como OR): `date` + `name` EXACTO +
+      `dur_min` presente en ambos + |diff| <= 5 -- el contrato/tests viejos de
+      dedup siguen pasando sin tocarse.
+  Al detectar match, se FUNDE campo a campo (`_fuse_workouts`) en vez de
+  descartar el registro "menos completo": cada campo toma el valor no-None; si
+  ambas fuentes traen el mismo campo con valores DISTINTOS, gana la de mayor
+  SOURCE_PRIORITY. Motivo: cada reloj suele traer la MITAD del dato de una
+  misma sesión (ej. HealthKit trae dur_min sin avg_hr, Google Health trae
+  avg_hr sin dur_min) -- el criterio viejo de "más completo" descartaba la
+  mitad que traía el perdedor; fundir produce un registro completo (y permite
+  computar TRIMP, que exige dur_min Y avg_hr juntos). Ver
+  `_dev-harness/fusion-workouts/ROADMAP.md`.
 - azm / active_hours: siempre {} en las 4 fuentes hoy (diferido) -> fusión trivial {}.
 
-SOURCE_PRIORITY se usa SOLO para desempates (HRV canónico, sueño, dedup de workouts
-empatado en completitud) — nunca para ponderar promedios.
+SOURCE_PRIORITY se usa SOLO para desempates (HRV canónico, sueño, conflictos de
+campo al fundir workouts) — nunca para ponderar promedios.
 
 Proveniencia (aditivo, Ronda 3): merge_sources() sigue devolviendo exactamente las 13
 claves (el contrato de build_dataset(**data) no cambia). Por separado, expone
@@ -232,45 +247,181 @@ def _merge_sleep(fetched: dict[str, dict]) -> dict[str, dict]:
     return {date: rec for date, (rank, rec) in best.items()}
 
 
-def _completeness(rec: dict) -> int:
-    """Número de campos no-None en un registro de workout — usado para elegir
-    la entrada 'más completa' al deduplicar."""
-    return sum(1 for v in rec.values() if v is not None)
+_KCAL_TOLERANCE = 1  # absorbe redondeos entre fuentes (roadmap fusion-workouts)
+
+
+def _norm_activity(w: dict) -> str:
+    """Normaliza el 'nombre de actividad' de un workout para comparar equivalencia
+    por familia: minúsculas, sin espacios/guiones/underscores. Se compara sobre
+    `name`; si falta (o es vacío), cae a `type` (mismo campo de fallback que usa
+    `strength_minutes` en app/load.py: f"{type} {name}") -- roadmap fusion-workouts
+    Paso 1."""
+    raw = w.get("name") or w.get("type") or ""
+    return "".join(ch for ch in str(raw).lower() if ch.isalnum())
+
+
+def _names_equivalent(a: dict, b: dict) -> bool:
+    """Dos nombres/tipos de actividad son 'de la misma familia' si el normalizado
+    de uno CONTIENE al del otro ("strengthtraining" contiene "strength" ->
+    equivalentes; "tennis" vs "yoga" -> no). Vacío en cualquiera de los dos ->
+    nunca equivalente (evita que dos workouts sin name/type colapsen por default)."""
+    na, nb = _norm_activity(a), _norm_activity(b)
+    if not na or not nb:
+        return False
+    return na in nb or nb in na
 
 
 def _same_workout(a: dict, b: dict) -> bool:
-    """Dos workouts son 'el mismo' si comparten date Y name Y |dur_min diff| <= 5."""
+    """Dos workouts son 'el mismo' si comparten `date` Y (regla_kcal OR
+    regla_dur_vieja) -- roadmap fusion-workouts Paso 1.
+
+    regla_kcal (nueva): `kcal` no-None e igual en ambos (tolerancia ±1, absorbe
+        redondeos) Y nombres/tipos equivalentes por familia (_names_equivalent).
+        Justificación: kcal EXACTAS iguales el mismo día con actividad
+        equivalente es identidad, no coincidencia (verificado en prod).
+    regla_dur_vieja (preservada tal cual, sin tocar): `name` EXACTO igual Y
+        `dur_min` presente en AMBOS Y |diff| <= 5. Se mantiene como OR
+        precisamente para que el contrato/tests viejos de dedup sigan pasando
+        sin modificarse (roadmap, criterio 4)."""
     if a.get("date") != b.get("date"):
         return False
-    if a.get("name") != b.get("name"):
-        return False
-    dur_a, dur_b = a.get("dur_min"), b.get("dur_min")
-    if dur_a is None or dur_b is None:
-        return False
-    return abs(dur_a - dur_b) <= 5
+
+    kcal_a, kcal_b = a.get("kcal"), b.get("kcal")
+    if kcal_a is not None and kcal_b is not None and abs(kcal_a - kcal_b) <= _KCAL_TOLERANCE:
+        if _names_equivalent(a, b):
+            # Guardia añadida tras la validación: si AMBAS traen duración y NO
+            # son compatibles (mismo criterio de ±5 min de la regla vieja), NO
+            # es la misma sesión — kcal iguales con duraciones muy distintas
+            # (p.ej. 30 vs 120 min) son dos entrenamientos reales que casualmente
+            # quemaron lo mismo, y fundirlos PERDERÍA uno en silencio (peor que
+            # el duplicado visible que este roadmap vino a quitar).
+            # No afecta al caso real que motivó la regla: ahí la entrada de
+            # Google SIEMPRE trae dur_min None, así que esta guardia no aplica.
+            dur_a, dur_b = a.get("dur_min"), b.get("dur_min")
+            if dur_a is not None and dur_b is not None and abs(dur_a - dur_b) > 5:
+                return False
+            return True
+
+    if a.get("name") == b.get("name"):
+        dur_a, dur_b = a.get("dur_min"), b.get("dur_min")
+        if dur_a is not None and dur_b is not None and abs(dur_a - dur_b) <= 5:
+            return True
+
+    return False
 
 
-def _merge_workouts(fetched: dict[str, dict]) -> list[dict]:
-    """Concatena workouts de todas las fuentes y deduplica por (date, name,
-    |dur_min diff|<=5), quedándose con la entrada más completa (más campos no-None)."""
-    all_workouts: list[dict] = []
+def _fuse_workouts(a: dict, b: dict, a_is_priority: bool) -> dict:
+    """Funde dos registros de workout reconocidos como 'el mismo' (_same_workout)
+    campo a campo -- roadmap fusion-workouts Paso 2. Reemplaza el criterio viejo
+    "gana el más completo" (que DESCARTABA el registro perdedor entero, perdiendo
+    los campos que solo él traía) por una fusión real:
+
+    - Para cada clave de la UNIÓN de llaves de `a` y `b`: si solo uno de los dos
+      tiene valor no-None, ese valor gana (rellena el hueco).
+    - Si ambos traen valor no-None e IGUAL, se conserva ese valor.
+    - Si ambos traen valor no-None y DISTINTO (conflicto real, ej. dur_min 114
+      vs 118), gana la fuente de mayor prioridad: `a` si `a_is_priority=True`,
+      si no `b`.
+
+    `a_is_priority`: `_merge_workouts` itera las fuentes en orden de
+    SOURCE_PRIORITY (_ordered_sources) y `a` es siempre el registro YA
+    ACUMULADO en `deduped` (visto primero, por tanto de mayor o igual
+    prioridad que cualquier `b` que llegue después a hacer match) -> el
+    llamador SIEMPRE debe pasar `a_is_priority=True`. Documentado explícito
+    para que nadie invierta el orden en un cambio futuro."""
+    out: dict = {}
+    for key in set(a.keys()) | set(b.keys()):
+        va, vb = a.get(key), b.get(key)
+        if va is None:
+            out[key] = vb
+        elif vb is None:
+            out[key] = va
+        elif va == vb:
+            out[key] = va
+        else:
+            out[key] = va if a_is_priority else vb
+    return out
+
+
+def _conflicts_with_members(candidate: dict, members: list[dict]) -> bool:
+    """True si `candidate` CONTRADICE a algún miembro original del acumulado, en
+    cuyo caso no puede ser la misma sesión y NO debe fundirse.
+
+    Añadido tras la validación (hallazgo de fusión EN CADENA). El dedup es
+    greedy: compara el candidato solo contra el ACUMULADO fundido, no contra los
+    registros que lo formaron. Eso permitía este encadenamiento, que BORRABA una
+    sesión real en silencio:
+        A: Tennis kcal 400, dur None      (sesión 1, del reloj sin duración)
+        B: Tennis kcal 400, dur 60        (sesión 1, del otro reloj -> funde con A
+                                           por kcal; el acumulado queda dur 60)
+        C: Tennis kcal 250, dur 62        (sesión 2, REAL Y DISTINTA -> engancha
+                                           con el acumulado por la regla vieja
+                                           |60-62|<=5 y su kcal 250 se pierde)
+    Criterio de contradicción: ambos traen `kcal` y difieren más de la tolerancia.
+    Las kcal son la huella más fiable de identidad de una sesión (misma sesión
+    vista por dos relojes da kcal casi idénticas); dos kcal distintas dentro de un
+    mismo grupo significan que ahí hay dos sesiones, no una.
+
+    Nota: esto también cierra un agujero PRE-EXISTENTE (ya estaba en producción
+    antes de la regla de kcal): dos sesiones reales del mismo deporte y el mismo
+    día con duraciones a menos de 5 minutos se fundían por la regla vieja aunque
+    sus kcal fueran claramente distintas.
+    """
+    c_kcal = candidate.get("kcal")
+    if c_kcal is None:
+        return False
+    for m in members:
+        m_kcal = m.get("kcal")
+        if m_kcal is not None and abs(c_kcal - m_kcal) > _KCAL_TOLERANCE:
+            return True
+    return False
+
+
+def _merge_workouts(fetched: dict[str, dict]) -> tuple[list[dict], list[frozenset[str]]]:
+    """Concatena workouts de todas las fuentes y deduplica por `_same_workout`
+    (regla_kcal OR regla_dur_vieja -- roadmap fusion-workouts Paso 1), fundiendo
+    campo a campo (`_fuse_workouts`, Paso 2) en vez de descartar el 'menos
+    completo'.
+
+    Devuelve (deduped, provenance): `provenance[i]` es el set de nombres de
+    fuente que contribuyeron al workout `deduped[i]` (una fuente si no hubo
+    match, varias si se fundió). Roadmap Paso 3 / criterio 9: la fusión crea
+    dicts NUEVOS, así que `_contributing_sources_workouts` ya no puede
+    identificar contribución por `id(w)` contra las listas originales de
+    `fetched` -- por eso este mapa de procedencia se calcula AQUÍ, en el único
+    lugar que sabe de verdad qué fuente aportó qué, y se pasa explícito en vez
+    de reconstruirlo por identidad de objeto."""
+    all_workouts: list[tuple[str, dict]] = []
     for source_name in _ordered_sources(fetched):
         data = fetched[source_name].get("exercises") or []
-        all_workouts.extend(data)
+        for w in data:
+            all_workouts.append((source_name, w))
 
     deduped: list[dict] = []
-    for w in all_workouts:
+    provenance: list[set[str]] = []
+    # Miembros ORIGINALES de cada acumulado (añadido tras la validación, ver
+    # _conflicts_with_members): el dedup es greedy y compara el candidato solo
+    # contra el ACUMULADO, no contra los registros que lo formaron -> una entrada
+    # "puente" podía encadenar dos sesiones REALES distintas y borrar una en
+    # silencio. Guardar los miembros permite rechazar esos encadenamientos.
+    members: list[list[dict]] = []
+    for source_name, w in all_workouts:
         match_idx = None
         for i, existing in enumerate(deduped):
-            if _same_workout(w, existing):
+            if _same_workout(w, existing) and not _conflicts_with_members(w, members[i]):
                 match_idx = i
                 break
         if match_idx is None:
             deduped.append(w)
+            provenance.append({source_name})
+            members.append([w])
         else:
-            if _completeness(w) > _completeness(deduped[match_idx]):
-                deduped[match_idx] = w
-    return deduped
+            members[match_idx].append(w)
+            # `deduped[match_idx]` es siempre el acumulado de mayor prioridad
+            # vista hasta ahora (se itera en orden SOURCE_PRIORITY) -> a_is_priority=True.
+            deduped[match_idx] = _fuse_workouts(deduped[match_idx], w, a_is_priority=True)
+            provenance[match_idx].add(source_name)
+    return deduped, [frozenset(p) for p in provenance]
 
 
 def _contributing_sources_average_or_max(fetched: dict[str, dict], key: str) -> list[str]:
@@ -311,22 +462,23 @@ def _contributing_sources_sleep(fetched: dict[str, dict]) -> list[str]:
     return out
 
 
-def _contributing_sources_workouts(fetched: dict[str, dict]) -> list[str]:
-    """Fuentes que aportaron al menos un workout que SOBREVIVIÓ al dedup de
-    _merge_workouts (si una fuente solo aportó duplicados perdedores, no
-    'contribuyó' en el sentido de proveniencia — mismo criterio que sleep)."""
-    deduped = _merge_workouts(fetched)
-    contributing_ids = {id(w) for w in deduped}
-    # _merge_workouts no preserva de qué fuente vino cada entrada tras el
-    # dedup (los dicts son los objetos originales de `fetched`, reusados tal
-    # cual -- ver _completeness/_same_workout), así que basta con verificar
-    # membership por identidad de objeto contra la lista original por fuente.
-    out = []
-    for source_name in _ordered_sources(fetched):
-        data = fetched[source_name].get("exercises") or []
-        if any(id(w) in contributing_ids for w in data):
-            out.append(source_name)
-    return out
+def _contributing_sources_workouts(provenance: list[frozenset[str]]) -> list[str]:
+    """Fuentes que aportaron al menos un workout que SOBREVIVIÓ al dedup/fusión
+    de _merge_workouts.
+
+    Roadmap fusion-workouts Paso 3 / criterio 9: ANTES de este roadmap se
+    identificaba contribución por `id(w)` de los dicts deduplicados contra las
+    listas originales de `fetched` -- funcionaba porque `_merge_workouts`
+    reusaba tal cual el objeto ganador. Desde la fusión campo a campo
+    (`_fuse_workouts`), el registro resultante puede ser un dict NUEVO que no
+    es idéntico (por identidad) a NINGUNO de los dos originales -- esa
+    comparación por `id()` dejaría `sources` vacío para cualquier workout
+    fundido. Por eso `_merge_workouts` ahora devuelve el mapa de procedencia
+    explícito (`provenance`, una fuente por match) y esta función solo
+    aplana ese mapa a una lista ordenada por SOURCE_PRIORITY -- ya no
+    recibe `fetched` ni vuelve a ejecutar el dedup."""
+    all_sources = {source_name for sources in provenance for source_name in sources}
+    return sorted(all_sources, key=_priority_rank)
 
 
 def _canonical_source_for(fetched: dict[str, dict], key: str) -> str | None:
@@ -368,7 +520,7 @@ def merge_sources(fetched: dict[str, dict]) -> dict:
     for key in _MAX_KEYS:
         result[key] = _merge_max(fetched, key)
     result["sleep"] = _merge_sleep(fetched)
-    result["exercises"] = _merge_workouts(fetched)
+    result["exercises"], workout_provenance = _merge_workouts(fetched)
     # Diferido en las 4 fuentes hoy -> fusión trivial.
     result["azm"] = {}
     result["active_hours"] = {}
@@ -394,7 +546,7 @@ def merge_sources(fetched: dict[str, dict]) -> dict:
     sleep_srcs = _contributing_sources_sleep(fetched)
     if sleep_srcs:
         by_metric["sleep"] = {"mode": "per-night", "sources": sleep_srcs}
-    workout_srcs = _contributing_sources_workouts(fetched)
+    workout_srcs = _contributing_sources_workouts(workout_provenance)
     if workout_srcs:
         by_metric["exercises"] = {"mode": "dedup", "sources": workout_srcs}
 

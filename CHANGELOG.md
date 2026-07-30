@@ -3,6 +3,47 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Fusión de entrenamientos duplicados entre relojes + TRIMP recuperado (unreleased)
+
+Bug visible en producción (usuario `default`, 2026-07-29; ver
+`_dev-harness/fusion-workouts/ROADMAP.md`): cada sesión de entrenamiento
+aparecía DOS veces en "Entrenamientos recientes" (una por reloj: HealthKit y
+Google Health), varias con "—m" (sin duración) porque cada fuente traía solo
+la MITAD del dato de la misma sesión.
+
+1. **`_same_workout` (`app/merge.py`) reconoce más parejas como el mismo
+   workout**: nueva regla_kcal (mismo `date`, `kcal` no-None e igual con
+   tolerancia ±1, nombres/tipos "de la misma familia" vía `_names_equivalent`
+   — normalizado de uno contiene al del otro, ej. "strengthtraining" contiene
+   "strength") como OR de la regla vieja (`date` + `name` EXACTO + `dur_min`
+   en ambos + |diff| <= 5, preservada sin tocar — los 4 tests que la pinnean
+   siguen pasando sin modificarse).
+2. **Fusión campo a campo en vez de descarte** (`_fuse_workouts`): al
+   detectar match, ya NO se queda con la entrada "más completa" descartando
+   la otra entera — funde cada campo (gana el valor no-None; en conflicto
+   real, gana `SOURCE_PRIORITY`). Efecto de fondo: `trimp_session`
+   (`app/load.py`) exige `dur_min` Y `avg_hr` juntos — hoy ninguna entrada por
+   separado los trae ambos, así que el TRIMP de sesiones de fuerza NUNCA se
+   computaba y el `strain` de esos días se subestimaba. Con la fusión, esas
+   sesiones ahora sí producen TRIMP.
+3. **`merge_info.by_metric.exercises.sources` adaptado** (criterio 9): antes
+   identificaba contribución por `id(w)` de los dicts deduplicados contra las
+   listas originales — dejaba de funcionar en cuanto la fusión empezó a crear
+   dicts NUEVOS. `_merge_workouts` ahora devuelve también un mapa de
+   procedencia explícito (qué fuentes aportaron a cada workout fundido) y
+   `_contributing_sources_workouts` lo consume directo, sin re-ejecutar el
+   dedup ni depender de identidad de objeto.
+4. **Blindaje anti-falso-positivo**: dos sesiones REALES distintas del mismo
+   tipo el mismo día (ej. las dos sesiones de fuerza del Doc del 29-jul:
+   25min/83kcal y 75min/282kcal) NO se funden — el `kcal` distinto rompe la
+   regla nueva. Nombres sin relación de familia (ej. "Tennis" vs "Yoga") con
+   `kcal` casualmente igual tampoco se funden.
+5. Fuera de alcance (sin tocar): `SOURCE_PRIORITY`, el merge de
+   sleep/hrv/rhr/vo2/steps, `_finalize_exercises`/ventana de ejercicios,
+   `compute_body_age`, `STRENGTH_RE`, el golden sintético
+   (`tests/test_regression.py` — sus ejercicios no traen `kcal` ni `name`,
+   ninguna regla nueva los toca).
+
 ## Ejercicios ya no se pierden: truncado por fecha + fuerza por presencia (unreleased)
 
 Dos bugs verificados en producción (usuario `default`, 2026-07-29; ver

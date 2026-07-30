@@ -286,7 +286,16 @@ def test_sleep_different_nights_both_kept():
 # ── Dedup de workouts ─────────────────────────────────────────────────────────
 
 def test_workouts_dedup_same_workout_close_duration():
-    """Mismo date+name, dur_min 108 vs 110 (diff=2 <=5) -> se juntan en 1."""
+    """Mismo date+name, dur_min 108 vs 110 (diff=2 <=5) -> se juntan en 1.
+
+    Post roadmap fusion-workouts (validación 2026-07-30): el resultado ya NO
+    viene de "gana el más completo" (esa lógica se retiró) sino de fusión
+    campo a campo (`_fuse_workouts`, criterio 6). `kcal` no tiene conflicto
+    (a=None, b=450 -> se rellena el hueco con 450). `dur_min` SÍ es un
+    conflicto real (108 vs 110, ambos no-None) -> gana la fuente de mayor
+    SOURCE_PRIORITY, healthkit ('a', dur_min=108) sobre google_health ('b',
+    dur_min=110). Ambas aserciones (kcal Y dur_min) quedan explícitas para que
+    un futuro cambio en la resolución de conflictos no pase inadvertido aquí."""
     a = {**_empty_source(), "exercises": [
         {"date": "2026-06-28", "name": "Tennis", "dur_min": 108, "kcal": None}
     ]}
@@ -295,8 +304,10 @@ def test_workouts_dedup_same_workout_close_duration():
     ]}
     out = merge_sources({"healthkit": a, "google_health": b})
     assert len(out["exercises"]) == 1
-    # Gana el más completo (más campos no-None): el de 'b' trae kcal.
+    # kcal: sin conflicto (solo 'b' lo trae) -> se rellena el hueco.
     assert out["exercises"][0]["kcal"] == 450
+    # dur_min: conflicto real (108 vs 110) -> gana healthkit por SOURCE_PRIORITY.
+    assert out["exercises"][0]["dur_min"] == 108
 
 
 def test_workouts_dedup_boundary_exactly_5_min_diff():
@@ -344,6 +355,139 @@ def test_workouts_concatenates_multiple_sources_no_overlap():
     c = {**_empty_source(), "exercises": [{"date": "2026-06-30", "name": "Bike", "dur_min": 60}]}
     out = merge_sources({"healthkit": a, "whoop": b, "oura": c})
     assert len(out["exercises"]) == 3
+
+
+# ── Roadmap fusion-workouts — identidad por kcal + fusión campo a campo ────────
+# Datos reales de prod (usuario `default`, ver ROADMAP.md _dev-harness/fusion-workouts):
+#   HK  2026-07-28 | Strength          | dur 42   | kcal 165 | hr None | start None
+#   GG  2026-07-28 | Strength training | dur None | kcal 165 | hr 92   | start 13:49
+#   HK  2026-07-28 | Tennis            | dur 114  | kcal 550 | hr None | start None
+#   GG  2026-07-28 | Tennis            | dur None | kcal 550 | hr 107  | start 21:09
+#   HK  2026-07-29 | Strength          | dur 75   | kcal 282 | hr None | start None
+#   GG  2026-07-29 | Strength training | dur None | kcal 282 | hr 79   | start 15:57
+
+def test_workouts_fused_by_kcal_equivalent_names_criterio1():
+    """Criterio 1 (caso real del Doc, 29-jul): 'Strength' (HK, dur 75) y 'Strength
+    training' (GG, avg_hr 79) mismo kcal 282 -> se reconocen como el MISMO
+    workout Y se funden campo a campo: la salida trae dur_min 75 Y avg_hr 79
+    (ninguno de los dos solo tenía las dos cosas)."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 75, "kcal": 282},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": None, "kcal": 282, "avg_hr": 79, "start": "15:57"},
+    ]}
+    out = merge_sources({"healthkit": hk, "google_health": gg})
+    assert len(out["exercises"]) == 1
+    fused = out["exercises"][0]
+    assert fused["dur_min"] == 75
+    assert fused["avg_hr"] == 79
+    assert fused["kcal"] == 282
+
+
+def test_workouts_fused_same_name_missing_dur_criterio2():
+    """Criterio 2 (28-jul real): 'Tennis' con dur_min 114 (HK) y 'Tennis' con
+    dur_min None (GG) pero mismo kcal 550 -> se reconocen como el MISMO
+    workout (la regla vieja los rechaza, dur_min ausente en un lado) Y se
+    funden: dur_min 114 Y avg_hr 107 en la misma salida."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-28", "name": "Tennis", "dur_min": 114, "kcal": 550},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-28", "name": "Tennis", "type": "TENNIS",
+         "dur_min": None, "kcal": 550, "avg_hr": 107, "start": "21:09"},
+    ]}
+    out = merge_sources({"healthkit": hk, "google_health": gg})
+    assert len(out["exercises"]) == 1
+    fused = out["exercises"][0]
+    assert fused["dur_min"] == 114
+    assert fused["avg_hr"] == 107
+
+
+def test_workouts_fuse_conflict_resolved_by_source_priority_criterio6():
+    """Criterio 6: si AMBAS fuentes traen el MISMO campo con valores DISTINTOS
+    (conflicto real, no hueco), gana la de mayor SOURCE_PRIORITY (healthkit
+    sobre google_health) -- incluido el campo `name`."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 114, "kcal": 282},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": 118, "kcal": 282, "avg_hr": 79},
+    ]}
+    out = merge_sources({"healthkit": hk, "google_health": gg})
+    assert len(out["exercises"]) == 1
+    fused = out["exercises"][0]
+    # dur_min difiere (114 vs 118) -> gana healthkit (114), no google_health.
+    assert fused["dur_min"] == 114
+    # name también viene de la fuente prioritaria (healthkit).
+    assert fused["name"] == "Strength"
+    # avg_hr solo lo trae google_health -> sin conflicto, se conserva.
+    assert fused["avg_hr"] == 79
+
+
+def test_workouts_fuse_conflict_google_priority_over_unknown_source():
+    """Complemento del criterio 6: si la fuente 'ganadora' (mayor prioridad)
+    NO es healthkit sino google_health (p.ej. frente a una fuente desconocida
+    peor rankeada), el conflicto lo sigue resolviendo SOURCE_PRIORITY, no el
+    orden de inserción arbitrario."""
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "dur_min": 100, "kcal": 282},
+    ]}
+    mystery = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 105, "kcal": 282},
+    ]}
+    out = merge_sources({"mystery_device": mystery, "google_health": gg})
+    assert len(out["exercises"]) == 1
+    # google_health tiene mejor rank que una fuente desconocida -> gana su dur_min.
+    assert out["exercises"][0]["dur_min"] == 100
+
+
+def test_workouts_kcal_match_but_names_not_equivalent_criterio3():
+    """Criterio 3: kcal igual (300) el mismo día pero nombres NO equivalentes
+    ('Tennis' vs 'Yoga') -> coincidencia de kcal, NO identidad -> 2 entradas."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-28", "name": "Tennis", "dur_min": 60, "kcal": 300},
+    ]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-28", "name": "Yoga", "dur_min": 55, "kcal": 300},
+    ]}
+    out = merge_sources({"healthkit": a, "google_health": b})
+    assert len(out["exercises"]) == 2
+
+
+def test_workouts_two_real_distinct_strength_sessions_not_fused_criterio5():
+    """Criterio 5 (29-jul real): DOS sesiones de fuerza LEGÍTIMAS y distintas el
+    mismo día (25min/83kcal a las 15:09 y 75min/282kcal a las 15:57, esta
+    última duplicada entre HK y GG) deben seguir siendo DOS entradas, no
+    fundirse entre sí -- el kcal distinto (83 vs 282) blinda el falso positivo."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 75, "kcal": 282},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": None, "kcal": 282, "avg_hr": 79, "start": "15:57"},
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": 25, "kcal": 83, "avg_hr": 130, "start": "15:09"},
+    ]}
+    out = merge_sources({"healthkit": hk, "google_health": gg})
+    assert len(out["exercises"]) == 2
+    kcals = sorted(w["kcal"] for w in out["exercises"])
+    assert kcals == [83, 282]
+
+
+def test_workouts_names_not_equivalent_bike_vs_yoga_no_false_positive():
+    """Guarda anti-falso-positivo (riesgo #2 del roadmap): actividades sin
+    relación de substring nunca se funden aunque kcal coincida."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-20", "name": "Bike", "dur_min": 40, "kcal": 200},
+    ]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-20", "name": "Body weight", "dur_min": 40, "kcal": 200},
+    ]}
+    out = merge_sources({"healthkit": a, "google_health": b})
+    assert len(out["exercises"]) == 2
 
 
 # ── azm / active_hours triviales ─────────────────────────────────────────────
@@ -527,6 +671,48 @@ def test_by_metric_exercises_dedup_mode():
     assert set(info["by_metric"]["exercises"]["sources"]) == {"healthkit", "oura"}
 
 
+# ── Roadmap fusion-workouts Paso 3 — merge_info coherente tras la FUSIÓN ───────
+# (criterio 9 / riesgo #3 del roadmap: _contributing_sources_workouts identificaba
+# contribución por id(w) contra las listas originales -- si la fusión crea dicts
+# NUEVOS, esa lógica deja de reconocer a nadie y `sources` sale vacío.)
+
+def test_by_metric_exercises_sources_survive_field_fusion_criterio9():
+    """El caso real del Doc (29-jul, criterio 1): tras fundir 'Strength' (HK)
+    con 'Strength training' (GG) en UN dict nuevo, by_metric.exercises.sources
+    debe seguir listando AMBAS fuentes -- no vacío, que es el bug más fácil de
+    introducir (roadmap, riesgo #3)."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 75, "kcal": 282},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": None, "kcal": 282, "avg_hr": 79, "start": "15:57"},
+    ]}
+    merge_sources({"healthkit": hk, "google_health": gg})
+    info = last_merge_info()
+    assert info["by_metric"]["exercises"]["mode"] == "dedup"
+    assert set(info["by_metric"]["exercises"]["sources"]) == {"healthkit", "google_health"}
+
+
+def test_fused_workout_keys_do_not_leak_internal_provenance_marker():
+    """Blindaje explícito: el registro fusionado que sale en `exercises` no debe
+    traer NINGUNA clave que no viniera de alguna de las dos fuentes originales
+    -- en particular, ninguna clave interna de procedencia (el diseño elegido
+    aquí NO marca los dicts, calcula la procedencia aparte en _merge_workouts,
+    pero este test la blinda por si un cambio futuro reintroduce el marcado)."""
+    hk = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 75, "kcal": 282},
+    ]}
+    gg = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "type": "STRENGTH_TRAINING",
+         "dur_min": None, "kcal": 282, "avg_hr": 79, "start": "15:57"},
+    ]}
+    out = merge_sources({"healthkit": hk, "google_health": gg})
+    fused = out["exercises"][0]
+    expected_keys = {"date", "name", "type", "dur_min", "kcal", "avg_hr", "start"}
+    assert set(fused.keys()) == expected_keys
+
+
 def test_by_metric_absent_for_metric_with_no_data_anywhere():
     """Una clave sin dato en NINGUNA fuente no aparece en by_metric — nunca se
     inventa proveniencia vacía."""
@@ -552,3 +738,72 @@ def test_by_metric_never_breaks_13_key_contract_multi_source():
     b = {**_empty_source(), "rhr": {"2026-06-28": 54.0}, "steps": {"2026-06-28": 8000}}
     out = merge_sources({"healthkit": a, "oura": b})
     assert set(out.keys()) == set(ALL_KEYS)
+
+
+def test_workouts_kcal_rule_requires_compatible_duration_when_both_present():
+    """Guardia añadida tras la validación: kcal IGUALES pero duraciones muy
+    distintas (30 vs 120 min) son dos entrenamientos REALES que casualmente
+    quemaron lo mismo, NO la misma sesión. Fundirlos perdería uno en silencio,
+    que es peor que el duplicado visible. El baseline (antes de la regla de
+    kcal) daba 2 entradas aquí; la regla nueva sin esta guardia daba 1."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 30, "kcal": 400}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 120, "kcal": 400,
+         "avg_hr": 110, "start": "19:00"}]}
+    out = merge_sources({"healthkit": a, "google_health": b})
+    assert len(out["exercises"]) == 2, (
+        f"kcal iguales con duraciones incompatibles NO deben fundirse: {out['exercises']}"
+    )
+
+
+def test_workouts_kcal_rule_still_fuses_when_one_duration_missing():
+    """El caso REAL de prod que motivó la regla de kcal sigue funcionando: la
+    entrada de Google llega SIN dur_min, así que la guardia de compatibilidad
+    de duración no aplica y la fusión ocurre (duración de Apple + pulso de
+    Google en un solo registro, que es lo que habilita el cálculo de TRIMP)."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength", "dur_min": 75, "kcal": 282}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-29", "name": "Strength training", "dur_min": None,
+         "kcal": 282, "avg_hr": 79, "start": "15:57"}]}
+    out = merge_sources({"healthkit": a, "google_health": b})
+    assert len(out["exercises"]) == 1, out["exercises"]
+    w = out["exercises"][0]
+    assert w["dur_min"] == 75 and w["avg_hr"] == 79, w
+
+
+def test_workouts_chain_fusion_does_not_swallow_a_real_session():
+    """Hallazgo del validador (fusión EN CADENA): el dedup greedy compara el
+    candidato solo contra el ACUMULADO, no contra los registros que lo formaron.
+    Una entrada 'puente' encadenaba dos sesiones REALES distintas y borraba una:
+        A: Tennis kcal 400 dur None  (sesión 1, reloj sin duración)
+        B: Tennis kcal 400 dur 60    (sesión 1, otro reloj -> funde por kcal)
+        C: Tennis kcal 250 dur 62    (sesión 2 REAL -> enganchaba con el
+                                      acumulado por |60-62|<=5 y su kcal se perdía)
+    _conflicts_with_members lo impide: C contradice al miembro con kcal 400."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": None, "kcal": 400}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 60, "kcal": 400,
+         "start": "09:00", "avg_hr": 100},
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 62, "kcal": 250,
+         "start": "19:00", "avg_hr": 95}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 2, f"la cadena se tragó una sesión real: {out}"
+    kcals = sorted(w["kcal"] for w in out)
+    assert kcals == [250, 400], f"kcal perdidas en la cadena: {out}"
+
+
+def test_workouts_same_sport_similar_duration_but_different_kcal_not_fused():
+    """Agujero PRE-EXISTENTE cerrado de paso (ya estaba en producción antes de la
+    regla de kcal): dos sesiones reales del mismo deporte y día cuyas duraciones
+    caen a menos de 5 min se fundían por la regla vieja aunque sus kcal fueran
+    claramente distintas (400 vs 250) -> una desaparecía. Ahora kcal distintas
+    dentro del grupo bloquean la fusión."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 60, "kcal": 400, "start": "09:00"},
+        {"date": "2026-07-30", "name": "Tennis", "dur_min": 62, "kcal": 250, "start": "19:00"}]}
+    out = merge_sources({"google_health": a})["exercises"]
+    assert len(out) == 2, f"dos sesiones reales fundidas en una: {out}"
+    assert sorted(w["kcal"] for w in out) == [250, 400]
