@@ -25,6 +25,14 @@ Ronda 5 (ENGINE v2 — ÚNICA ronda que toca fórmulas núcleo, versionada expl�
 - Sueño: NEED se parametriza vía `sleep_target_min` (default 480 = comportamiento
   idéntico a antes).
 - summary["engine"] = {"version": 2, ...} — tag de versión del motor.
+
+Roadmap ejercicios-truncados: `dataset["exercises"]` ya no se recorta por
+POSICIÓN (`exercises[-40:]`, que truncaba una lista concatenada por FUENTE
+en merge.py y podía descartar una fuente entera). Se ordena por fecha
+ascendente y se recorta por VENTANA TEMPORAL de `EXERCISE_WINDOW_DAYS` (60)
+días relativos a la fecha del último `day` del dataset, con un tope de
+seguridad `EXERCISE_MAX_ENTRIES` (200) aplicado DESPUÉS de ordenar. Ver
+`_finalize_exercises` y las constantes junto a `build_dataset`.
 """
 from __future__ import annotations
 
@@ -307,6 +315,58 @@ def _rolling_baseline_ranges(dates_sorted: list, hrv_by_date: dict, rhr_by_date:
 _SLEEP_FIELDS = ("asleep", "inbed", "awake", "deep", "rem", "light", "eff",
                  "bedtime", "waketime", "bed_min", "sleep_perf")
 
+# ── Roadmap ejercicios-truncados Paso 1: ventana de ejercicios ──────────────
+# `exercises[-40:]` truncaba por POSICIÓN una lista que merge.py concatena por
+# FUENTE (SOURCE_PRIORITY), nunca por fecha -- con >=40 ejercicios recientes de
+# una sola fuente (p.ej. Google/Fitbit), el bloque entero de otra fuente
+# (p.ej. HealthKit) quedaba fuera. Ahora se ordena por fecha y se recorta por
+# ventana temporal: 60 días cubre con margen a los consumidores más exigentes
+# (compute_body_age mira 28d, plan_store/coach miran 7d) y es >= lo que hoy
+# alcanzan 40 entradas para un usuario multi-fuente activo. EXERCISE_MAX_ENTRIES
+# es un tope de seguridad (evita inflar el JSON con un usuario de 10 workouts/
+# día) que se aplica DESPUÉS de ordenar -- aplicarlo antes reintroduciría el
+# bug exacto que este roadmap arregla.
+EXERCISE_WINDOW_DAYS = 60
+EXERCISE_MAX_ENTRIES = 200
+
+
+def _finalize_exercises(exercises: list, sorted_dates: list) -> list:
+    """Roadmap ejercicios-truncados Paso 1: normaliza `exercises` para el
+    dataset final.
+
+    Reemplaza el truncado por posición por: (1) descartar entradas sin `date`
+    ISO parseable (hoy pasaban y contaminaban; sin fecha no se pueden atribuir
+    a ningún día ni ventana); (2) recortar a los últimos EXERCISE_WINDOW_DAYS
+    días relativos a la fecha del ÚLTIMO day del dataset (`sorted_dates[-1]`;
+    sin days, la fecha máxima de los propios ejercicios; sin ninguna de las
+    dos, lista vacía) -- NUNCA `date.today()`, para mantener el motor puro y
+    los tests deterministas; (3) ordenar por fecha ascendente; (4) aplicar
+    EXERCISE_MAX_ENTRIES como tope de seguridad, DESPUÉS de ordenar.
+    """
+    valid = []
+    for e in exercises or []:
+        d = e.get("date") if isinstance(e, dict) else None
+        if not d:
+            continue
+        try:
+            datetime.date.fromisoformat(d)
+        except (TypeError, ValueError):
+            continue
+        valid.append(e)
+
+    if not valid:
+        return []
+
+    ref = sorted_dates[-1] if sorted_dates else max(e["date"] for e in valid)
+    try:
+        cutoff = (datetime.date.fromisoformat(ref) - datetime.timedelta(days=EXERCISE_WINDOW_DAYS)).isoformat()
+    except (TypeError, ValueError):
+        cutoff = ""
+
+    windowed = [e for e in valid if e["date"] > cutoff]
+    windowed = sorted(windowed, key=lambda e: e["date"])
+    return windowed[-EXERCISE_MAX_ENTRIES:]
+
 
 def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, exercises=None,
                   age: float = 40, sex: str = "M", rhr_fallback: float = 55.0,
@@ -545,7 +605,9 @@ def build_dataset(sleep, rhr, hrv, resp, vo2, steps, azm, spo2=None, skin=None, 
         day["wellbeing"] = compute_wellbeing(day, days, summary,
                                              resp_base=resp_base_val)
 
-    return {"summary": summary, "days": days, "exercises": exercises[-40:]}
+    # Roadmap ejercicios-truncados Paso 1: ya no se trunca por posición
+    # (exercises[-40:]) -- ver _finalize_exercises y EXERCISE_WINDOW_DAYS arriba.
+    return {"summary": summary, "days": days, "exercises": _finalize_exercises(exercises, sorted_dates)}
 
 
 # ── Fase 3.5 PARTE 2: Score de Wellbeing 0-100 (ADITIVO) ────────────────────

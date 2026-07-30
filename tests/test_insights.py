@@ -559,6 +559,35 @@ def test_strength_gap_pure_vigorous_cardio_now_triggers():
     assert "strength_gap" in ids
 
 
+def test_strength_gap_no_trigger_with_strength_sessions_missing_dur_min():
+    """Roadmap ejercicios-truncados, criterio 8: 3 sesiones de fuerza SIN
+    dur_min (forma Google/Fitbit) en la ventana de 7 días -> NO dispara.
+    Con strength_minutes() (antes del fix) esas 3 sesiones sumaban 0 minutos
+    y la regla disparaba "sin fuerza" pese a haber 3 sesiones reales -- el
+    síntoma de prod que motiva este roadmap."""
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    exercises = [
+        {"date": dates[4], "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": dates[5], "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": dates[6], "type": "Strength", "name": "Strength", "dur_min": None},
+    ]
+    results = evaluate(make_dataset(days, exercises=exercises))
+    ids = [r["id"] for r in results]
+    assert "strength_gap" not in ids
+
+
+def test_strength_gap_triggers_with_zero_strength_sessions_and_other_exercise():
+    """Guard preservado (criterio 8, segunda mitad): 0 sesiones de fuerza y
+    ejercicio de otro tipo presente en la ventana -> SÍ dispara."""
+    dates = date_seq(7)
+    days = [make_day(d) for d in dates]
+    exercises = [{"date": dates[6], "type": "running", "name": "Run", "dur_min": 40}]
+    results = evaluate(make_dataset(days, exercises=exercises))
+    ids = [r["id"] for r in results]
+    assert "strength_gap" in ids
+
+
 # ── Regla 7b: fitness_age_gap (Roadmap coach-objetivo-vo2, Paso 3) ─────────────
 # Convención de fixtures: summary["bodyage"] con los campos ya disponibles del
 # fix edad-corporal-credibilidad (vo2max_source, fitness_age, fitness_age_display,

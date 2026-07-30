@@ -11,10 +11,15 @@ STRENGTH_RE (app/load.py) — antes cada una tenía su propio regex duplicado
 El nuevo regex es un SUPERSET, así que el chip/bullet de fuerza puede disparar
 en más casos (p.ej. "gym" ahora cuenta) — cambio intencional, las 4 detecciones
 de fuerza de la app (coach.py x2, coach_chat.py, insights.py) quedan idénticas.
+
+Roadmap ejercicios-truncados Paso 4: las 2 detecciones de fuerza de este módulo
+(recordatorio de build_coach y el chip/bullet de coach_card) preguntan PRESENCIA
+("¿hubo fuerza esta semana?"), no volumen -- migran de strength_minutes() a
+strength_sessions() (cuenta sesiones aunque no traigan dur_min, ver app/load.py).
 """
 from __future__ import annotations
 from app.scoring import recent_base
-from app.load import strength_minutes
+from app.load import strength_sessions
 from app.i18n import tr
 
 
@@ -91,7 +96,10 @@ def build_coach(dataset: dict, locale: str = "es") -> str:
     # 4. Fuerza estructurada — recordatorio (perfil del usuario: 0 sesiones de fuerza típicamente)
     # Ronda 3: strength_minutes() (superset del regex viejo "strength" in type) sobre
     # TODOS los ejercicios del dataset (mismo alcance que antes: sin filtro de fecha).
-    if strength_minutes(exercises) == 0:
+    # Roadmap ejercicios-truncados Paso 4: este check pregunta PRESENCIA ("¿hubo
+    # fuerza?"), no volumen -- strength_sessions() cuenta sesiones aunque no
+    # traigan dur_min (Google/Fitbit las mandan sin duración).
+    if strength_sessions(exercises) == 0:
         msgs.append(tr("strength_gap_coach", locale))
 
     # 5. Tendencia HRV (comparar promedio 7d vs semana anterior)
@@ -201,9 +209,12 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
     # ahora incluye pesas/gym/resistance/musculac) sobre las fechas >= cutoff. El
     # filtro por fecha se resuelve aquí (comparación de string ">="), no dentro del
     # helper (que filtra por pertenencia exacta a un set) — mismo alcance que antes.
+    # Roadmap ejercicios-truncados Paso 4: este chip es un gate de PRESENCIA
+    # (rojo si CERO sesiones esta semana), no muestra minutos -- strength_sessions()
+    # cuenta sesiones aunque no traigan dur_min.
     dates_in_window = {e.get("date", "") for e in exercises if e.get("date", "") >= cutoff}
-    strength_min = strength_minutes(exercises, dates=dates_in_window)
-    if strength_min == 0:
+    strength_sess = strength_sessions(exercises, dates=dates_in_window)
+    if strength_sess == 0:
         col = A["red"]
         chips.append({"t": tr("chip_strength_zero", locale), "c": col, "bg": _hex_alpha(col, 0.15), "bd": _hex_alpha(col, 0.32)})
 
@@ -273,7 +284,11 @@ def coach_card(dataset: dict, locale: str = "es") -> dict:
     # Cuenta ejercicios de cardio en últimos 7d para el mensaje
     recent_ex = [e for e in exercises if e.get("date", "") >= cutoff] if cutoff else exercises[-14:]
     n_sessions = len(recent_ex)
-    if strength_min == 0:
+    # Roadmap ejercicios-truncados Paso 4: mismo gate de PRESENCIA que el chip de
+    # arriba (reusa `strength_sess`) — el texto ("0 minutos... {n_sessions}
+    # sesiones") es literal fijo, no interpola strength_sess, así que no se
+    # inventa volumen al cambiar la condición a presencia.
+    if strength_sess == 0:
         bullets.append({
             "title": tr("bullet_strength_title", locale),
             "body": tr("bullet_strength_body", locale, n_sessions=n_sessions),

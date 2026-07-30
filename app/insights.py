@@ -19,6 +19,13 @@ Ronda 3 (motor honesto):
   en vez de `vigorous` (que era proxy de cardio/AZM, no de fuerza real — falso
   negativo para el insight más importante del usuario). evaluate() loguea (no silencia)
   las excepciones de reglas individuales.
+
+Roadmap ejercicios-truncados Paso 3:
+  rule_strength_gap ahora usa strength_sessions() (app/load.py) en vez de
+  strength_minutes() — la regla pregunta "¿hubo fuerza?" (presencia), no
+  "¿cuántos minutos?" (volumen). Google/Fitbit mandan sesiones de fuerza con
+  dur_min None; con strength_minutes() esas sesiones sumaban 0 y la regla
+  disparaba "sin entrenamiento de fuerza" pese a haber 3 sesiones registradas.
 """
 from __future__ import annotations
 
@@ -28,7 +35,7 @@ import statistics
 from typing import Any
 
 from app.scoring import recent_base
-from app.load import strength_minutes
+from app.load import strength_sessions
 from app.i18n import tr
 from app.changes import detect_changes
 
@@ -484,15 +491,23 @@ def rule_bedtime_inconsistency(days: list[dict], summary: dict, locale: str = "e
 # ── Regla 7: strength_gap ──────────────────────────────────────────────────────
 
 def rule_strength_gap(days: list[dict], summary: dict, locale: str = "es") -> dict | None:
-    """0 min de fuerza REAL (strength_minutes sobre exercises) en 7d → info.
+    """0 sesiones de fuerza REAL (strength_sessions sobre exercises) en 7d → info.
 
     Ronda 3: antes usaba 'vigorous' (proxy de cardio/AZM) como señal — un falso
     negativo para el insight más importante del usuario (podía tener semanas 100% cardio
-    vigoroso, cero pesas, y la regla no disparaba). Ahora usa strength_minutes()
+    vigoroso, cero pesas, y la regla no disparaba). Pasó a usar strength_minutes()
     (app/load.py, mismo helper que coach.py/coach_chat.py) sobre los ejercicios REALES
-    de la ventana de 7 días. `exercises` viaja en summary["_exercises"] (evaluate()
-    lo inyecta desde dataset["exercises"] antes de correr las reglas) para no romper
-    el signature uniforme rule(days, summary, locale) que usan las demás 8 reglas.
+    de la ventana de 7 días.
+
+    Roadmap ejercicios-truncados Paso 3: strength_minutes() mide VOLUMEN, y esta
+    regla pregunta PRESENCIA ("¿hubo fuerza?"). Google/Fitbit mandan sesiones de
+    fuerza con dur_min None -- strength_minutes() las suma como 0 y la regla
+    disparaba "sin fuerza" con 3 sesiones reales registradas (el síntoma de
+    prod que motiva este roadmap). Ahora usa strength_sessions(), que cuenta
+    sesiones sin importar si traen duración. `exercises` viaja en
+    summary["_exercises"] (evaluate() lo inyecta desde dataset["exercises"]
+    antes de correr las reglas) para no romper el signature uniforme
+    rule(days, summary, locale) que usan las demás 8 reglas.
 
     Guard preservado de la versión anterior: 'sin datos de entrenamiento en absoluto
     → no disparar' (ausencia de dato ≠ malo). Antes ese guard miraba si había ALGÚN
@@ -512,8 +527,8 @@ def rule_strength_gap(days: list[dict], summary: dict, locale: str = "es") -> di
         # Sin datos de entrenamiento en absoluto en la ventana — no disparar.
         return None
 
-    total_strength = strength_minutes(exercises, dates=dates_window)
-    if total_strength > 0:
+    strength_sessions_count = strength_sessions(exercises, dates=dates_window)
+    if strength_sessions_count > 0:
         return None
 
     return {

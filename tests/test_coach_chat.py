@@ -94,6 +94,15 @@ class TestGoalsTracking:
         result = cc._goals_tracking(["ganar fuerza"], {"days": days, "exercises": []})
         assert "fuerza estructurada: 0 min" in result
 
+    def test_strength_keyword_stays_volume_with_sessions_missing_dur_min(self):
+        """Roadmap ejercicios-truncados Paso 4: este texto es VOLUMEN ('X min'),
+        NO se convierte a presencia -- con sesiones sin dur_min sigue mostrando
+        0 min (verídico), no inventa un conteo de sesiones disfrazado de minutos."""
+        days = [{"date": f"2026-06-{d:02d}"} for d in range(20, 27)]
+        exercises = [{"date": "2026-06-24", "type": "Strength", "name": "Strength", "dur_min": None}]
+        result = cc._goals_tracking(["ganar fuerza"], {"days": days, "exercises": exercises})
+        assert "fuerza estructurada: 0 min" in result
+
     def test_steps_keyword_with_data(self):
         days = [{"date": f"2026-06-{d:02d}", "steps": 8000} for d in range(20, 27)]
         result = cc._goals_tracking(["caminar más"], {"days": days})
@@ -205,6 +214,38 @@ class TestStrengthZeroFlagFix:
         monkeypatch.setattr(builtins, "__import__", _boom)
         ctx = cc._build_context(self._dataset())
         assert "Fuerza estructurada: 0 min" in ctx
+
+
+class TestStrengthZeroFlagUsesPresenceNotVolume:
+    """Roadmap ejercicios-truncados Paso 4: el flag '← CERO'/'(sin sesiones
+    esta semana)' pregunta PRESENCIA (strength_sessions), no volumen
+    (strength_minutes) -- 3 sesiones de fuerza SIN dur_min (forma Google/
+    Fitbit) no deben leerse como 'cero fuerza', aunque el volumen medido
+    siga siendo 0 min (ningún dato inventado)."""
+
+    def _dataset_no_dur_sessions(self, n_days=7):
+        days = [{"date": f"2026-06-{d:02d}", "recovery": 50} for d in range(20, 20 + n_days)]
+        exercises = [
+            {"date": "2026-06-24", "type": "Strength", "name": "Strength", "dur_min": None},
+            {"date": "2026-06-25", "type": "Strength", "name": "Strength", "dur_min": None},
+            {"date": "2026-06-26", "type": "Strength", "name": "Strength", "dur_min": None},
+        ]
+        return {"days": days, "exercises": exercises, "summary": {}}
+
+    def test_no_zero_flag_with_sessions_missing_dur_min(self, monkeypatch):
+        from app import profile as _pm
+        monkeypatch.setattr(_pm, "effective", lambda field: {"goals": []}.get(field))
+        ctx = cc._build_context(self._dataset_no_dur_sessions())
+        assert "CERO, meta declarada" not in ctx
+        assert "(sin sesiones esta semana)" not in ctx
+        # El volumen (minutos) sigue siendo verídico -- 0 min, sin inventar duración.
+        assert "Fuerza estructurada: 0 min" in ctx
+
+    def test_no_cero_flag_even_with_strength_goal_declared(self, monkeypatch):
+        from app import profile as _pm
+        monkeypatch.setattr(_pm, "effective", lambda field: {"goals": ["ganar fuerza"]}.get(field))
+        ctx = cc._build_context(self._dataset_no_dur_sessions())
+        assert "CERO, meta declarada" not in ctx
 
 
 # ── Backward-compat del prompt completo ──────────────────────────────────────

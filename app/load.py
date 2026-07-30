@@ -14,6 +14,15 @@ Ronda 3 (motor honesto):
   strength_minutes(...)  → minutos de fuerza estructurada en una lista de ejercicios,
                             opcionalmente filtrados a un set de fechas.
 
+Roadmap ejercicios-truncados Paso 2:
+  strength_sessions(...)  → PRESENCIA (¿hubo sesión de fuerza?), no volumen. Google/
+                            Fitbit mandan sesiones de "Strength training" con
+                            `dur_min: None` -- strength_minutes() las suma como 0
+                            (correcto para volumen), pero eso hacía que la regla de
+                            "cero fuerza" disparara con 3 sesiones reales registradas.
+                            strength_sessions() cuenta sesiones SIN importar si traen
+                            duración.
+
 Notas de diseño:
 - TRIMP usa dur_min·HRr·factor, con HRr clampeado a [0,1].
 - ACWR se computa sobre serie de strain (no TRIMP) porque strain es diario y denso;
@@ -159,3 +168,36 @@ def strength_minutes(exercises: list, dates: Optional[set] = None) -> int:
         if STRENGTH_RE.search(haystack):
             total += e.get("dur_min", 0) or 0
     return total
+
+
+def strength_sessions(exercises: list, dates: Optional[set] = None) -> int:
+    """
+    Cuenta las SESIONES de `exercises` que matchean STRENGTH_RE en
+    `str(type) + " " + str(name)`, SIN IMPORTAR si traen `dur_min` (a
+    diferencia de strength_minutes, que suma volumen y por tanto ignora
+    sesiones sin duración).
+
+    Roadmap ejercicios-truncados (Paso 2): existe porque Google/Fitbit mandan
+    workouts de "Strength training" con `dur_min: None` — strength_minutes()
+    los cuenta correctamente como 0 minutos de VOLUMEN, pero un consumidor que
+    pregunta "¿hubo fuerza esta semana?" (PRESENCIA) no debe leer eso como
+    "no hubo fuerza" cuando sí hubo 3 sesiones registradas, solo sin duración
+    medida. strength_minutes() NO cambia de semántica (sigue siendo volumen);
+    esta función es aditiva para los consumidores que preguntan presencia.
+
+    Args:
+        exercises: lista de dicts de workout (contrato de Source.fetch()/merge).
+        dates: si se da, solo se cuentan ejercicios cuyo `date` esté en este set
+               (mismo filtro de ventana que strength_minutes).
+
+    Devuelve 0 si no hay sesiones de fuerza (nunca None: "0 sesiones" es un
+    resultado válido y distinto de "sin datos").
+    """
+    count = 0
+    for e in exercises or []:
+        if dates is not None and e.get("date") not in dates:
+            continue
+        haystack = f"{e.get('type', '')} {e.get('name', '')}"
+        if STRENGTH_RE.search(haystack):
+            count += 1
+    return count

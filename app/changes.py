@@ -25,7 +25,7 @@ import statistics
 from typing import Any, Optional
 
 from app.i18n import tr
-from app.load import strength_minutes
+from app.load import strength_sessions
 
 # ── Umbrales (constantes de módulo, auditables) ─────────────────────────────
 RECOVERY_DELTA = 8          # pts de recovery día vs día para disparar improvement/decline
@@ -416,14 +416,19 @@ def _check_strength(days: list[dict], exercises: list[dict], locale: str) -> lis
     if not today_date:
         return events
 
-    # Fechas (ordenadas) con al menos 1 minuto de fuerza real.
+    # Fechas (ordenadas) con al menos 1 SESIÓN de fuerza.
+    # Roadmap ejercicios-truncados (hueco cerrado tras la validación): antes esto
+    # sumaba MINUTOS y exigía >0, así que las sesiones que llegan sin `dur_min`
+    # —Google/Fitbit las manda así— contaban como cero y este evento NUNCA
+    # disparaba. Es la misma clase de bug que rule_strength_gap: la pregunta aquí
+    # es "¿hubo sesión ese día?" (presencia), no "¿cuántos minutos?" (volumen).
     by_date: dict[str, int] = {}
     for e in exercises:
         d = e.get("date")
         if not d:
             continue
-        by_date[d] = by_date.get(d, 0) + (strength_minutes([e]) or 0)
-    strength_dates = sorted(d for d, mins in by_date.items() if mins > 0)
+        by_date[d] = by_date.get(d, 0) + strength_sessions([e])
+    strength_dates = sorted(d for d, n in by_date.items() if n > 0)
     if not strength_dates or strength_dates[-1] != today_date:
         return events  # hoy no hubo sesión de fuerza -> nada que celebrar
 

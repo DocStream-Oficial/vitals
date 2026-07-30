@@ -3,6 +3,44 @@
 All notable changes to Vitals are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Ejercicios ya no se pierden: truncado por fecha + fuerza por presencia (unreleased)
+
+Dos bugs verificados en producción (usuario `default`, 2026-07-29; ver
+`_dev-harness/ejercicios-truncados/ROADMAP.md`): "la app dice que no tengo
+ninguna sesión de fuerza esta semana, cuando hice pesas lunes, martes y
+miércoles" — con 3 sesiones de fuerza REALES registradas en HealthKit.
+
+1. **`build_dataset` ya no trunca ejercicios por posición** (`app/scoring.py`):
+   `exercises[-40:]` cortaba por POSICIÓN una lista que `merge.py` concatena
+   por FUENTE (`SOURCE_PRIORITY`), nunca por fecha — con ≥40 ejercicios
+   recientes de una sola fuente (p.ej. Google/Fitbit), el bloque entero de
+   otra fuente (HealthKit) quedaba fuera. Nuevo helper `_finalize_exercises`:
+   filtra fecha ISO válida → recorta a `EXERCISE_WINDOW_DAYS = 60` días
+   relativos a la fecha del ÚLTIMO `day` del dataset (nunca `date.today()`,
+   motor puro) → ordena ascendente por fecha → aplica `EXERCISE_MAX_ENTRIES =
+   200` como tope de seguridad DESPUÉS de ordenar (recorta lo más viejo, no
+   reintroduce el bug). Afecta a todo lo que consume `dataset["exercises"]`:
+   `compute_body_age`, `compute_healthspan`, `plan_store`, `changes.py`, coach
+   card/chat e insights. El golden sintético (`tests/test_regression.py`) no
+   se toca — sus 10 ejercicios ya están ordenados y dentro de la ventana.
+2. **`strength_sessions(exercises, dates=None)`** (`app/load.py`, función
+   nueva, aditiva): cuenta sesiones de fuerza (mismo `STRENGTH_RE`) SIN
+   IMPORTAR si traen `dur_min` — separa PRESENCIA ("¿hubo fuerza?") de
+   VOLUMEN ("¿cuántos minutos?", `strength_minutes`, sin cambio de contrato).
+   Google/Fitbit mandan "Strength training" con `dur_min: None`;
+   `strength_minutes` las sumaba como 0 y disparaba "cero fuerza" con
+   sesiones reales registradas.
+3. **Consumidores migrados a presencia** (revisados uno a uno, criterio 9):
+   `rule_strength_gap` (`app/insights.py`), el recordatorio y el chip/bullet
+   de fuerza de `coach.py` (build_coach + coach_card), y el gate del "← CERO"
+   de `coach_chat.py` migran a `strength_sessions`. Los textos que citan
+   minutos (`_goals_tracking` en `coach_chat.py`, la línea "Fuerza
+   estructurada: X min" de la CARGA 7d) siguen citando minutos — no se
+   inventa volumen no medido. `plan_store._auto_adherence_for_task` (kind
+   `strength`) usa regla mixta: cumple si `strength_minutes >= params.min` O
+   (`strength_sessions >= 1` Y `strength_minutes == 0`) — una sesión sin
+   duración cuenta como cumplida, una CON duración insuficiente no se regala.
+
 ## Sin VO2máx medido NO hay edad corporal (unreleased)
 
 Decisión explícita del dueño del producto (ver

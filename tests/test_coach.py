@@ -10,7 +10,7 @@ objetivo explícito cuando el gap fitness>real supera 2 años.
 """
 from __future__ import annotations
 
-from app.coach import coach_card
+from app.coach import coach_card, build_coach
 
 
 def _dataset(bodyage):
@@ -152,3 +152,59 @@ class TestBodyAgeGateUnavailable:
         titles = [b["title"] for b in card["bullets"]]
         assert "Edad corporal: no disponible" not in titles
         assert not any(t.startswith("Tu cuerpo rinde") for t in titles)
+
+
+# ── Roadmap ejercicios-truncados Paso 4: chip/bullet/recordatorio de fuerza ──
+# pasan a preguntar PRESENCIA (strength_sessions), no volumen (strength_minutes)
+# -- 3 sesiones de fuerza SIN dur_min (forma Google/Fitbit) ya NO deben leerse
+# como "cero fuerza".
+
+def _dataset_with_exercises(exercises, last_date="2026-07-29"):
+    days = [{"date": last_date, "recovery": 60, "asleep": 420, "hrv": 55}]
+    return {"days": days, "summary": {}, "exercises": exercises}
+
+
+class TestStrengthPresenceNotVolume:
+    _NO_DUR_SESSIONS = [
+        {"date": "2026-07-27", "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": "2026-07-28", "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": "2026-07-29", "type": "Strength", "name": "Strength", "dur_min": 75},
+    ]
+
+    def test_chip_strength_zero_absent_with_sessions_missing_dur_min(self):
+        """CHIP 3 (coach.py ~205): 3 sesiones de fuerza en la ventana de 7d,
+        2 de ellas sin dur_min -- el chip rojo 'Fuerza 0 min/sem' NO debe
+        aparecer (sí hubo fuerza, aunque el volumen medido sea parcial)."""
+        card = coach_card(_dataset_with_exercises(self._NO_DUR_SESSIONS))
+        chip_texts = [c["t"] for c in card["chips"]]
+        assert not any("Fuerza 0 min" in t for t in chip_texts)
+
+    def test_chip_strength_zero_present_with_no_sessions(self):
+        """Guard preservado: 0 sesiones de fuerza -> el chip SÍ dispara."""
+        card = coach_card(_dataset_with_exercises([
+            {"date": "2026-07-29", "type": "running", "name": "Run", "dur_min": 40},
+        ]))
+        chip_texts = [c["t"] for c in card["chips"]]
+        assert any("Fuerza 0 min" in t for t in chip_texts)
+
+    def test_bullet_strength_absent_with_sessions_missing_dur_min(self):
+        """BULLET 2 (coach.py ~278): mismo gate de presencia -- no debe
+        aparecer el bullet de 'Lo urgente' de fuerza con 3 sesiones reales
+        registradas, aunque 2 no traigan duración."""
+        card = coach_card(_dataset_with_exercises(self._NO_DUR_SESSIONS))
+        titles = [b["title"] for b in card["bullets"]]
+        assert "Lo urgente:" not in titles
+
+    def test_build_coach_reminder_absent_with_sessions_missing_dur_min(self):
+        """build_coach() (coach.py ~92): el recordatorio 'No hay sesiones de
+        fuerza estructurada registradas' no debe aparecer con 3 sesiones
+        reales registradas (2 sin duración)."""
+        html = build_coach(_dataset_with_exercises(self._NO_DUR_SESSIONS))
+        assert "fuerza estructurada</b> registradas" not in html
+
+    def test_build_coach_reminder_present_with_no_strength_sessions(self):
+        """Guard preservado: sin ninguna sesión de fuerza, el recordatorio SÍ aparece."""
+        html = build_coach(_dataset_with_exercises([
+            {"date": "2026-07-29", "type": "running", "name": "Run", "dur_min": 40},
+        ]))
+        assert "fuerza estructurada</b> registradas" in html
