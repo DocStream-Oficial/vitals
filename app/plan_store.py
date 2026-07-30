@@ -16,7 +16,11 @@ F4"). Por día transcurrido: check manual explícito SIEMPRE gana; si no hay
 manual, se evalúa auto por tipo de tarea (criterio 5 del roadmap):
     sleep    -> asleep >= need - 30min esa noche
     cardio   -> >= params.min minutos de exercises NO-fuerza ese día
-    strength -> >= params.min minutos de fuerza (strength_minutes())
+    strength -> >= params.min minutos de fuerza (strength_minutes()) O, si hubo
+                sesión de fuerza pero NINGUNA trae duración (Google/Fitbit sin
+                dur_min), cumple con >=1 sesión (strength_sessions()) -- ver
+                Roadmap ejercicios-truncados Paso 4 ("Decisiones cerradas").
+                Una sesión CON duración insuficiente NO se regala.
     habit    -> el hábito correspondiente del journal marcado "sí" ese día
 
 None-safe en todo: dataset vacío, journal vacío, día sin dato -> el día
@@ -33,6 +37,7 @@ from typing import Any, Optional
 from app.fsutil import atomic_write_text
 from app import programs as _programs
 from app.load import strength_minutes as _strength_minutes
+from app.load import strength_sessions as _strength_sessions
 from app.sleep_scores import sleep_need_min as _sleep_need_min
 
 logger = logging.getLogger("vitals.plan_store")
@@ -247,7 +252,18 @@ def _auto_adherence_for_task(task: dict, date_str: str, days: list,
             if min_required is None:
                 return False
             strength_min = _strength_minutes(exercises or [], dates={date_str})
-            return strength_min >= float(min_required)
+            if strength_min >= float(min_required):
+                return True
+            # Roadmap ejercicios-truncados Paso 4 ("Decisiones cerradas"): si hay
+            # sesión de fuerza pero NINGUNA trae duración, strength_min da 0 y la
+            # tarea quedaría incumplida injustamente (Google/Fitbit mandan
+            # "Strength training" con dur_min None). Una sesión sin duración
+            # cuenta como cumplida -- pero una CON duración insuficiente NO (no
+            # se regala volumen medido: strength_min > 0 y < min_required cae
+            # al return False de abajo).
+            if strength_min == 0 and _strength_sessions(exercises or [], dates={date_str}) >= 1:
+                return True
+            return False
 
         if kind == "habit":
             habit_key = params.get("habit")

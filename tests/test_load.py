@@ -10,7 +10,7 @@ Cubre:
 """
 from __future__ import annotations
 
-from app.load import STRENGTH_RE, strength_minutes
+from app.load import STRENGTH_RE, strength_minutes, strength_sessions
 
 
 # ── STRENGTH_RE ────────────────────────────────────────────────────────────────
@@ -102,3 +102,62 @@ def test_strength_minutes_dates_none_means_no_filter():
 def test_strength_minutes_dates_empty_set_excludes_all():
     exercises = [{"date": "2026-06-28", "type": "gym", "name": "", "dur_min": 40}]
     assert strength_minutes(exercises, dates=set()) == 0
+
+
+# ── strength_sessions (Roadmap ejercicios-truncados Paso 2) ────────────────────
+# Presencia (¿hubo sesión?), no volumen: cuenta sesiones matcheadas por
+# STRENGTH_RE sin importar dur_min.
+
+def test_strength_sessions_counts_matching_regardless_of_dur_min():
+    exercises = [
+        {"date": "2026-07-27", "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": "2026-07-28", "type": "Strength", "name": "Strength", "dur_min": None},
+        {"date": "2026-07-29", "type": "Strength", "name": "Strength", "dur_min": 75},
+    ]
+    assert strength_sessions(exercises) == 3
+    # strength_minutes solo suma la única con duración -- el bug que motiva la nueva función.
+    assert strength_minutes(exercises) == 75
+
+
+def test_strength_sessions_ignores_non_matching():
+    exercises = [
+        {"date": "2026-06-28", "type": "running", "name": "Run", "dur_min": 30},
+        {"date": "2026-06-28", "type": "swim", "name": "Swim", "dur_min": 20},
+    ]
+    assert strength_sessions(exercises) == 0
+
+
+def test_strength_sessions_matches_by_name_too():
+    exercises = [{"date": "2026-06-28", "type": "other", "name": "Musculación", "dur_min": None}]
+    assert strength_sessions(exercises) == 1
+
+
+def test_strength_sessions_zero_when_empty_list():
+    assert strength_sessions([]) == 0
+
+
+def test_strength_sessions_none_exercises():
+    assert strength_sessions(None) == 0
+
+
+def test_strength_sessions_filters_by_dates():
+    exercises = [
+        {"date": "2026-06-20", "type": "gym", "name": "", "dur_min": None},  # fuera de ventana
+        {"date": "2026-06-28", "type": "gym", "name": "", "dur_min": None},  # dentro
+    ]
+    assert strength_sessions(exercises, dates={"2026-06-28"}) == 1
+
+
+def test_strength_sessions_dates_none_means_no_filter():
+    exercises = [{"date": "2026-06-20", "type": "gym", "name": "", "dur_min": None}]
+    assert strength_sessions(exercises, dates=None) == 1
+
+
+def test_strength_sessions_dates_empty_set_excludes_all():
+    exercises = [{"date": "2026-06-28", "type": "gym", "name": "", "dur_min": None}]
+    assert strength_sessions(exercises, dates=set()) == 0
+
+
+def test_strength_sessions_missing_fields_no_crash():
+    exercises = [{"dur_min": None}, {}]
+    assert strength_sessions(exercises) == 0

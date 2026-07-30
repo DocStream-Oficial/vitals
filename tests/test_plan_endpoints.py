@@ -191,3 +191,44 @@ def test_api_plan_get_never_500_without_dataset(plan_client_no_data):
 def test_api_programs_never_500_without_dataset(plan_client_no_data):
     resp = plan_client_no_data.get("/api/programs")
     assert resp.status_code == 200
+
+
+# ── Roadmap ejercicios-truncados Paso 4: adherencia AUTO 'strength' mixta ──────
+# Criterio 9 / "Decisiones cerradas": cumple si strength_minutes >= params.min
+# O (strength_sessions >= 1 Y strength_minutes == 0). Una sesión CON duración
+# insuficiente NO se regala (no confundir con "sin duración medida").
+
+class TestStrengthAdherenceMixedRule:
+    _TASK = {"task_key": "task_strength_full", "kind": "strength", "params": {"min": 40}}
+    _DATE = "2026-07-29"
+
+    def _check(self, exercises):
+        from app.plan_store import _auto_adherence_for_task
+        return _auto_adherence_for_task(self._TASK, self._DATE, days=[], exercises=exercises, journal=None)
+
+    def test_sufficient_duration_fulfills(self):
+        """Sesión con dur_min >= params.min -> cumplida (caso de volumen normal)."""
+        exercises = [{"date": self._DATE, "type": "Strength", "name": "Strength", "dur_min": 45}]
+        assert self._check(exercises) is True
+
+    def test_insufficient_duration_does_not_fulfill(self):
+        """Sesión con dur_min < params.min -> NO cumplida -- no se regala volumen
+        medido solo porque hubo sesión (guard explícito del roadmap)."""
+        exercises = [{"date": self._DATE, "type": "Strength", "name": "Strength", "dur_min": 20}]
+        assert self._check(exercises) is False
+
+    def test_no_duration_but_session_present_fulfills(self):
+        """Sesión SIN dur_min (forma Google/Fitbit, dur_min None) -> strength_minutes
+        da 0, pero strength_sessions >= 1 -> cumplida (no injustamente incumplida)."""
+        exercises = [{"date": self._DATE, "type": "Strength", "name": "Strength", "dur_min": None}]
+        assert self._check(exercises) is True
+
+    def test_no_session_at_all_does_not_fulfill(self):
+        exercises = [{"date": self._DATE, "type": "running", "name": "Run", "dur_min": 40}]
+        assert self._check(exercises) is False
+
+    def test_no_min_required_does_not_fulfill(self):
+        from app.plan_store import _auto_adherence_for_task
+        task = {"task_key": "x", "kind": "strength", "params": {}}
+        exercises = [{"date": self._DATE, "type": "Strength", "name": "Strength", "dur_min": None}]
+        assert _auto_adherence_for_task(task, self._DATE, days=[], exercises=exercises, journal=None) is False

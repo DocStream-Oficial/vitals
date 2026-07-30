@@ -21,7 +21,7 @@ from typing import Optional
 
 from app import llm as _llm
 from app.scoring import recent_base
-from app.load import strength_minutes
+from app.load import strength_minutes, strength_sessions
 
 logger = logging.getLogger("vitals.coach_chat")
 
@@ -299,8 +299,12 @@ def _build_context(dataset: dict) -> str:
     # solo se marca si el usuario tiene una meta que mapea a "strength" por keyword
     # (mismo mapeo de _goals_tracking); sin metas declaradas, texto neutro sin
     # suponer prioridad.
+    # Roadmap ejercicios-truncados Paso 4: el gate "¿hubo fuerza?" es PRESENCIA,
+    # no volumen -- usa strength_sessions() (variable separada de strength_min,
+    # que sigue siendo el volumen mostrado en el texto "Fuerza estructurada: X min").
+    strength_sessions_count = strength_sessions(exercises, dates=dates_in_window)
     strength_zero_flag = ""
-    if strength_min == 0:
+    if strength_sessions_count == 0:
         try:
             from app.profile import effective as _peff
             declared_goals = _peff("goals") or []
