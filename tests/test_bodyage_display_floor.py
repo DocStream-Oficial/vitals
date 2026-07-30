@@ -24,9 +24,18 @@ def _date_seq(start, n):
     return [(d0 + _dt.timedelta(days=i)).isoformat() for i in range(n)]
 
 
-def _make_days(n, start="2025-01-01"):
+def _make_days(n, start="2025-01-01", vo2=None):
+    """Roadmap stable-solo-medido: `vo2` siembra la medición del reloj en TODOS
+    los días. Los tests del piso de display sobre compute_body_age NO la
+    necesitan (el piso no depende de la fuente del VO2), pero el del camino
+    normal de compute_body_age_stable SÍ: esa función ya solo promedia días
+    con medición real, así que sin `vo2` caería al fallback."""
     dates = _date_seq(start, n)
-    return [{"date": d, "rhr": 55.0} for d in dates]
+    days = [{"date": d, "rhr": 55.0} for d in dates]
+    if vo2 is not None:
+        for d in days:
+            d["vo2"] = vo2
+    return days
 
 
 # ── compute_body_age: piso SUBE cuando la cruda queda muy por debajo ───────
@@ -83,7 +92,13 @@ def test_stable_display_present_in_normal_path():
     """Camino normal (>=MIN_STABLE_DAYS días cerrados) -> body_age_stable_display
     presente, con piso relativo evaluado a la edad cronológica del último día
     cerrado (age_now), consistente con el resto de compute_body_age_stable."""
-    days = _make_days(50)
+    # vo2 sembrado: el camino normal del estable exige días MEDIDOS (roadmap
+    # stable-solo-medido); sin medición esta función cae al fallback y este
+    # test no probaría la ventana rodante.
+    # vo2=45.0: mantiene conf=="ok" Y deja el piso ENGANCHADO (fitness cruda
+    # clampea a 20 -> display 34). Con 30.0 salía stable=52/display=52 y el
+    # assert display>=stable se cumplía por igualdad: el piso quedaba inerte.
+    days = _make_days(50, vo2=45.0)
     result = compute_body_age_stable(days, [], "1976-01-01", 55.0, "F")
     assert result["stable_confidence"] == "ok"
     assert "body_age_stable_display" in result

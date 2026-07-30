@@ -30,20 +30,50 @@ def _date_seq(start, n):
     return [(d0 + _dt.timedelta(days=i)).isoformat() for i in range(n)]
 
 
+def _DEFAULT_VO2_FN(i):
+    """Medición del reloj cada 7 días, valor CONSTANTE — ver _make_days.
+
+    43.7 NO es arbitrario: con este VO2 el body_age_raw resultante cae cruzando
+    un límite de redondeo (fitness ~31.4 + penalty 0..0.66 -> cruza 31.5), así
+    que el INSTANTÁNEO sigue saltando (8 cambios en los 90 días simulados de
+    test_stable_reduces_jitter, vs 10 del escenario sin vo2) y ese test
+    conserva su poder de detección. Con 44.0 el rango quedaba a mitad de
+    bucket (31.0-31.2): el instantáneo no saltaba NUNCA, el test pasaba con
+    cualquier implementación —incluida una sin promedio— y dejaba de proteger
+    el suavizado, que es la razón de existir de compute_body_age_stable.
+    Verificado con mutation testing: sustituir mean(raws) por raws[-1] mata
+    test_stable_reduces_jitter con 43.7 y NO lo mata con 44.0."""
+    return 43.7 if i % 7 == 0 else None
+
+
 def _chrono_age(date_str, birthdate=BIRTHDATE):
     bd = _dt.date.fromisoformat(birthdate)
     d = _dt.date.fromisoformat(date_str)
     return (d - bd).days / 365.25
 
 
-def _make_days(n, start="2025-01-01", rhr_fn=None, hrv_fn=None, sleep_fn=None):
+def _make_days(n, start="2025-01-01", rhr_fn=None, hrv_fn=None, sleep_fn=None,
+               vo2_fn=_DEFAULT_VO2_FN):
+    """Roadmap stable-solo-medido: `vo2_fn` inyecta la MEDICIÓN de VO2máx del
+    reloj. Es necesaria porque compute_body_age_stable ya solo promedia días
+    respaldados por medición real — sin ella todos los días caerían al
+    fallback y estos tests no ejercitarían la ventana rodante en absoluto.
+    El default siembra una medición cada 7 días con valor CONSTANTE (44.0):
+    así el VO2 no aporta movimiento propio y el jitter medido sigue viniendo
+    de rhr/hrv/asleep, que es lo que estos tests siempre midieron.
+    `vo2_fn=None` deja los días sin medición (para probar el fallback)."""
     dates = _date_seq(start, n)
     days = []
     for i, d in enumerate(dates):
         rhr = rhr_fn(i) if rhr_fn else 55.0
         hrv = hrv_fn(i) if hrv_fn else 45.0
         sleep = sleep_fn(i) if sleep_fn else 420
-        days.append({"date": d, "rhr": rhr, "hrv": hrv, "asleep": sleep})
+        day = {"date": d, "rhr": rhr, "hrv": hrv, "asleep": sleep}
+        if vo2_fn is not None:
+            v = vo2_fn(i)
+            if v is not None:
+                day["vo2"] = v
+        days.append(day)
     return days
 
 
@@ -145,3 +175,58 @@ def test_stable_equivalence_single_day():
     assert result["body_age_stable"] == instant["body_age"]
     assert result["stable_confidence"] == "low"
     assert result["n_days_stable"] == 0
+
+
+# ── Roadmap stable-solo-medido: el estable NUNCA promedia días inventados ───
+
+def test_stable_skips_unmeasured_days():
+    """Bug real de prod (2026-07-29): con mediciones SOLO en los últimos días,
+    el promedio de 30d metía los ~26 días sin medición (que caen a la regresión
+    NTNU inflada) y el número GRANDE de la card mostraba 25 mientras el
+    instantáneo medido decía 37. Ahora esos días se descartan: al quedar <14
+    días medidos cae al instantáneo (stable_confidence 'low'), que es la verdad
+    disponible."""
+    n = 40
+    # Sin mediciones salvo los últimos 5 días (replica el caso del Doc).
+    days = _make_days(n, vo2_fn=lambda i: 41.8 if i >= n - 5 else None)
+    res = compute_body_age_stable(days, [], BIRTHDATE, WAIST, SEX)
+
+    instant = compute_body_age(days, [], _chrono_age(days[-1]["date"]), WAIST, SEX)
+    assert instant["vo2max_source"] == "measured"
+    assert res["stable_confidence"] == "low", res
+    assert res["n_days_stable"] == 0, res
+    assert res["body_age_stable"] == instant["body_age"], (
+        f"con <14 días medidos el estable debe ser el instantáneo medido "
+        f"({instant['body_age']}), no un promedio de días estimados: {res}"
+    )
+
+
+def test_stable_uses_window_when_enough_measured_days():
+    """Con medición en TODOS los días cerrados de la ventana, el estable sí
+    promedia (no cae al fallback) — el filtro nuevo no rompe el camino bueno."""
+    n = 40
+    days = _make_days(n, vo2_fn=lambda i: 44.0)
+    res = compute_body_age_stable(days, [], BIRTHDATE, WAIST, SEX)
+    assert res["stable_confidence"] == "ok", res
+    assert res["n_days_stable"] >= MIN_STABLE_DAYS, res
+
+
+def test_stable_measured_average_ignores_estimated_inflation():
+    """Dos datasets idénticos salvo que uno tiene días SIN medición DENTRO de
+    la ventana evaluada: el estable debe salir IGUAL (esos días no cuentan), no
+    arrastrado hacia la edad baja que produce la regresión.
+
+    n=40 con vo2 desde i>=15 NO es arbitrario: la ventana de 30 días cerrados
+    cubre los índices 9-38, así que 6 días sin medición caen DENTRO de ella
+    (n_days_stable 24 vs 30). Con n=60/i>=20 —como estaba— los días sin
+    medición quedaban FUERA de la ventana (índices 29-58): ambos datasets eran
+    idénticos donde importa y el assert no podía fallar. Verificado con
+    mutation testing: quitar el filtro hace divergir estos dos valores."""
+    n = 40
+    all_measured = _make_days(n, vo2_fn=lambda i: 43.7)
+    half_measured = _make_days(n, vo2_fn=lambda i: 43.7 if i >= 15 else None)
+    r_all = compute_body_age_stable(all_measured, [], BIRTHDATE, WAIST, SEX)
+    r_half = compute_body_age_stable(half_measured, [], BIRTHDATE, WAIST, SEX)
+    assert r_all["body_age_stable"] == r_half["body_age_stable"], (
+        f"los días sin medición no deben mover el estable: {r_all} vs {r_half}"
+    )

@@ -421,6 +421,16 @@ def compute_body_age_stable(days, exercises, age_at, waist, sex,
                                    sleep_penalty_h=sleep_penalty_h)
         except Exception:
             continue
+        # Roadmap stable-solo-medido: SOLO promediar días respaldados por una
+        # medición real de VO2máx. Sin este filtro el promedio de 30 días metía
+        # los días sin medición —que caen a la regresión NTNU inflada— y el
+        # número GRANDE de la card (que usa el estable) mostraba dato inventado
+        # aunque el gate de sync.py estuviera activo: bug real en prod
+        # 2026-07-29 (instantáneo medido 37 vs estable fabricado 25).
+        # Con <MIN_STABLE_DAYS días medidos cae al instantáneo, que es el
+        # comportamiento que esta función ya tiene para datos insuficientes.
+        if ba.get("vo2max_source") != "measured":
+            continue
         raw = ba.get("body_age_raw")
         if raw is not None:
             raws.append(raw)
