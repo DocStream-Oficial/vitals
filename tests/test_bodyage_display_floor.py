@@ -6,7 +6,7 @@ body_age/body_age_stable siguen intactos, ver test_bodyage_stable.py y
 test_regression.py, que no se tocan).
 
 Cubre el criterio de aceptación 3 del roadmap:
-- Caso Mariana (F/49, cintura delgada): fitness cruda clampeada a 20 ->
+- Caso real (mujer de 49, cintura delgada): fitness cruda clampeada a 20 ->
   display 34, age_floored True.
 - Edad 30 con body_age ~45 (por encima del piso) -> display == crudo, sin
   piso (el piso solo SUBE, nunca baja).
@@ -41,7 +41,7 @@ def _make_days(n, start="2025-01-01", vo2=None):
 # ── compute_body_age: piso SUBE cuando la cruda queda muy por debajo ───────
 
 def test_floor_applies_when_fitness_age_clamped_low():
-    """Caso Mariana (F/49, cintura delgada): fitness_age cruda clampea a 20
+    """Caso real (mujer de 49, cintura delgada): fitness_age cruda clampea a 20
     (piso duro de compute_body_age) -> display se topa en 49-15=34, con
     age_floored=True. body_age crudo SIGUE siendo 20 (no se toca)."""
     days = _make_days(14)

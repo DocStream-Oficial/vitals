@@ -161,7 +161,7 @@ def compute_body_age(days, exercises, age, waist, sex="M", sleep_penalty_h: floa
     # la fecha del ÚLTIMO day (nunca date.today()). Reemplaza el umbral
     # anterior del roadmap edad-corporal-credibilidad (>=3 ENTRADAS de las
     # últimas 60) — ese umbral premiaba al aparato que re-emite el MISMO valor
-    # a diario (ver ROADMAP, contexto: Mariana 29.57 repetido 75 veces). Días
+    # a diario (caso real observado: el mismo valor repetido 75 veces). Días
     # sin clave "vo2" (golden, datasets viejos) → camino idéntico al de
     # siempre (0 lecturas → estimated). La regresión NTNU queda intacta como
     # fallback.
