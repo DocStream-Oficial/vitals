@@ -523,3 +523,52 @@ class TestCycleSummary:
                              lambda: (_ for _ in ()).throw(RuntimeError("boom")))
         result = m.cycle_summary({"days": []})
         assert result == {"enabled": False}
+
+
+class TestDatasetPathPerUser:
+    """VITALS_USER_ID: un servidor MCP dedicado a un miembro del hogar debe
+    servir SUS datos. Sin esto el MCP —que corre fuera de un request, sin
+    contexto de usuario— siempre acababa en el dataset de `default`.
+    Caso real: el agente de OpenClaw de otra persona llevaba 24 días sirviendo
+    un dataset ajeno Y congelado."""
+
+    def _mk(self, tmp_path, uid, updated):
+        import json as _json
+        d = tmp_path / "users" / uid
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "health_compact.json"
+        f.write_text(_json.dumps({"summary": {"updated": updated}, "days": [], "exercises": []}))
+        return f
+
+    def test_env_var_selects_that_users_dataset(self, tmp_path, monkeypatch):
+        import app.mcp_tools as m
+        from app import userctx as uc
+        self._mk(tmp_path, "default", "2026-07-06")
+        target = self._mk(tmp_path, "mariana", "2026-07-30")
+        monkeypatch.setattr(uc, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(m, "_DATASET_FILE", tmp_path / "health_compact.json")
+        monkeypatch.setenv("VITALS_USER_ID", "mariana")
+        assert m._dataset_path() == target
+
+    def test_env_var_unset_keeps_previous_behaviour(self, tmp_path, monkeypatch):
+        import app.mcp_tools as m
+        from app import userctx as uc
+        legacy = tmp_path / "health_compact.json"
+        legacy.write_text('{"summary": {}, "days": [], "exercises": []}')
+        self._mk(tmp_path, "mariana", "2026-07-30")
+        monkeypatch.setattr(uc, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(m, "_DATASET_FILE", legacy)
+        monkeypatch.delenv("VITALS_USER_ID", raising=False)
+        assert m._dataset_path() == legacy
+
+    def test_env_var_pointing_to_missing_user_falls_back(self, tmp_path, monkeypatch):
+        """Un uid mal escrito NO debe dejar al MCP sin datos: cae al
+        comportamiento anterior (y deja aviso en el log)."""
+        import app.mcp_tools as m
+        from app import userctx as uc
+        legacy = tmp_path / "health_compact.json"
+        legacy.write_text('{"summary": {}, "days": [], "exercises": []}')
+        monkeypatch.setattr(uc, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(m, "_DATASET_FILE", legacy)
+        monkeypatch.setenv("VITALS_USER_ID", "no-existe")
+        assert m._dataset_path() == legacy

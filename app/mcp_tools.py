@@ -15,6 +15,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import os
 import re
 import statistics
 from datetime import date
@@ -35,6 +36,14 @@ from app.scoring import recent_base
 
 
 _DATASET_FILE = _DATA_DIR / "health_compact.json"  # legacy — ver _dataset_path()
+
+# Variable de entorno para fijar a QUÉ usuario del hogar sirve este MCP.
+# El nombre NO es nuevo: ya estaba puesto en el config del agente PURPLE
+# (codex-home/config.toml -> [mcp_servers.vitals.env] VITALS_USER_ID="mariana")
+# expresando la intención correcta; lo que faltaba era que el código la leyera.
+# Se lee en cada llamada (no se cachea) para que cambiarla no exija reconstruir
+# el módulo. Ver _dataset_path().
+_USER_ENV_VAR = "VITALS_USER_ID"
 
 
 def _dataset_path() -> Path:
@@ -60,6 +69,20 @@ def _dataset_path() -> Path:
         from app import userctx as _userctx
         if _userctx.should_use_household_paths():
             return _userctx.current_data_dir() / "health_compact.json"
+        # Usuario FIJADO por entorno (VITALS_USER_ID): un servidor MCP dedicado a
+        # un miembro del hogar (p.ej. el agente de OpenClaw de otra persona) debe
+        # servir SUS datos, no los del usuario default. Sin esto, el MCP —que corre
+        # fuera de un request y por tanto sin contexto de usuario— siempre acababa
+        # en el dataset de `default`, dándole a esa persona datos de otra.
+        uid = (os.environ.get(_USER_ENV_VAR) or "").strip()
+        if uid:
+            user_path = _userctx.user_dir(uid) / "health_compact.json"
+            if user_path.exists():
+                return user_path
+            logger.warning(
+                "%s=%r pero no existe %s — cayendo al comportamiento por defecto",
+                _USER_ENV_VAR, uid, user_path,
+            )
         if not _DATASET_FILE.exists():
             default_path = _userctx.user_dir(_userctx.DEFAULT_UID) / "health_compact.json"
             if default_path.exists():
