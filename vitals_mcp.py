@@ -19,9 +19,47 @@ AISLAMIENTO: este es el ÚNICO archivo que importa `mcp`.
 app/mcp_tools.py (las funciones puras) NO importa mcp y corre en 3.9.
 """
 
+import logging
+import os
+
 from mcp.server.fastmcp import FastMCP
 
 from app import mcp_tools as _tools
+
+_logger = logging.getLogger("vitals.mcp")
+
+# ── Usuario del hogar al que sirve ESTE servidor MCP ──────────────────────────
+# El MCP es un proceso standalone: nunca pasa por el middleware FastAPI que fija
+# el usuario activo, así que TODAS las rutas por-usuario (dataset, perfil, ciclo,
+# diario...) caían en `default`. Un agente dedicado a otra persona del hogar
+# terminaba leyendo datos ajenos.
+#
+# Fijar el contextvar UNA vez aquí, al arrancar el proceso, hace que TODOS los
+# módulos de persistencia resuelvan solos — en vez de parchear ruta por ruta,
+# que es perseguir síntomas (el dataset se arregló primero y el perfil seguía
+# devolviendo la edad del usuario default).
+#
+# Se configura en el agente: [mcp_servers.vitals.env] VITALS_USER_ID = "<uid>".
+# Sin la variable, comportamiento idéntico al de siempre (usuario default).
+def _bind_user_from_env() -> None:
+    uid = (os.environ.get("VITALS_USER_ID") or "").strip()
+    if not uid:
+        return
+    try:
+        from app import userctx as _userctx
+        if not (_userctx.user_dir(uid) / "health_compact.json").exists():
+            _logger.warning(
+                "VITALS_USER_ID=%r no tiene datos en %s — se sirve al usuario default",
+                uid, _userctx.user_dir(uid),
+            )
+            return
+        _userctx.set_current_uid(uid)
+        _logger.info("MCP de Vitals fijado al usuario %r", uid)
+    except Exception as exc:  # nunca impedir que el server arranque
+        _logger.warning("No pude fijar VITALS_USER_ID=%r: %s", uid, exc)
+
+
+_bind_user_from_env()
 
 mcp = FastMCP(
     name="vitals",
