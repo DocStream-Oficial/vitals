@@ -4915,6 +4915,15 @@ function renderMasLocaleControls() {
 
 function openProfileForm(isOnboarding) {
   var p = PROFILE || {};
+  // Sincroniza el valor QUE SE ENVIA con el que se PINTA. Sin esto, _pfSexVal
+  // conservaba su default de modulo ('M') salvo que el usuario tocara el
+  // selector: el formulario mostraba "F" activo (lo lee de p.sex mas abajo)
+  // pero al guardar mandaba sex:"M" y CLOBBEREABA el sexo real. Caso real:
+  // una usuaria edito solo su cintura y su perfil paso a M -> la edad de
+  // fitness uso el intercepto masculino y salto de 55 a 72 anios.
+  // Los otros selectores del formulario (locale/units/source) ya usan el
+  // patron seguro "null = usar el valor del perfil"; sexo era la excepcion.
+  _pfSexVal = p.sex || 'M';
   var imperial = p.units === 'imperial';
   // Display values in current units
   var waistDisp = p.waist_cm ? (imperial ? Math.round(p.waist_cm/2.54) : Math.round(p.waist_cm)) : '';
@@ -5073,7 +5082,7 @@ function _esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 }
 
-var _pfSexVal = 'M';
+var _pfSexVal = 'M';  // se re-sincroniza con el perfil en openProfileForm()
 function pfSexSel(val) {
   _pfSexVal = val;
   ['M','F'].forEach(function(v){
