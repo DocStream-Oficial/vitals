@@ -37,6 +37,10 @@ Reglas (ver roadmap `_dev/ROADMAP-vitals-fase6a-multisource-merge.md` para 6A y
   empate exacto -> desempata por SOURCE_PRIORITY. Mismo patrón `rank=(asleep, pref)`
   de app/parsers.py::parse_sleep, generalizado a N fuentes en vez de "preferida vs
   resto". No se promedian campos de sueño entre sí (no tiene sentido físico).
+  Excepción puntual (roadmap sueno-y-duraciones, B-b): `bed_min`/`bedtime`/`waketime`
+  SÍ se rellenan desde las fuentes perdedoras cuando el ganador trae `None` —son
+  marcas de reloj, no dependen del algoritmo de sueño del fabricante— pero NUNCA
+  pisan un valor no-None del ganador. Ver `_SLEEP_FILL_KEYS`.
 - exercises (workouts): concatenación + dedup por `_same_workout` = regla_kcal OR
   regla_dur_vieja (Roadmap fusion-workouts, 2026-07-29):
     regla_kcal (nueva): mismo `date`, `kcal` no-None e igual en ambas (tolerancia
@@ -228,10 +232,31 @@ def _merge_max(fetched: dict[str, dict], key: str) -> dict:
     return out
 
 
+# Roadmap sueno-y-duraciones (B-b): campos de HORARIO que se rellenan entre
+# fuentes cuando el ganador los trae en None. Lista blanca DELIBERADA: fundir
+# deep/rem/light/eff/inbed/segments entre dispositivos mezclaría la
+# arquitectura de medición de un reloj con el `asleep` de otro (justo lo que
+# _CANONICAL_KEYS evita en el resto del módulo). bed_min/bedtime/waketime son
+# marcas de reloj -- no dependen del algoritmo de sueño del fabricante, así
+# que rellenar un hueco ahí no mezcla nada. Motivador real: HealthKit gana la
+# noche por `asleep` (hoy inflado por el bug A de este roadmap) pero SOLO
+# Google trae `bed_min` -- sin esta lista blanca, `bed_min` se va con el
+# registro perdedor y el brief del MCP dice "sin datos de hora de dormir".
+_SLEEP_FILL_KEYS = ("bed_min", "bedtime", "waketime")
+
+
 def _merge_sleep(fetched: dict[str, dict]) -> dict[str, dict]:
     """Por noche (día), gana el registro con mayor `asleep` (sesión más completa);
     empate exacto en `asleep` desempata por SOURCE_PRIORITY.
-    Generalización a N fuentes de app/parsers.py::parse_sleep (rank=(asleep, pref))."""
+    Generalización a N fuentes de app/parsers.py::parse_sleep (rank=(asleep, pref)).
+
+    Además (roadmap sueno-y-duraciones, B-b): rellena los huecos de
+    `_SLEEP_FILL_KEYS` en el registro ganador con el primer valor no-None que
+    aporte alguna fuente perdedora, recorridas en orden de SOURCE_PRIORITY.
+    Solo rellena huecos, NUNCA pisa un valor no-None del ganador. Nunca muta
+    los dicts de `fetched` -- construye una copia (`dict(rec)`) SOLO cuando
+    de verdad hay algo que rellenar; los dicts vienen de `fetched`, que otros
+    llamadores de merge_sources() siguen usando después."""
     best: dict[str, tuple[tuple[int, int], dict]] = {}
     for source_name in _ordered_sources(fetched):
         data = fetched[source_name].get("sleep") or {}
@@ -244,7 +269,23 @@ def _merge_sleep(fetched: dict[str, dict]) -> dict[str, dict]:
             cur = best.get(date)
             if cur is None or rank > cur[0]:
                 best[date] = (rank, rec)
-    return {date: rec for date, (rank, rec) in best.items()}
+
+    out: dict[str, dict] = {}
+    for date, (rank, winner) in best.items():
+        filled = winner
+        copied = False
+        for source_name in _ordered_sources(fetched):
+            candidate = (fetched[source_name].get("sleep") or {}).get(date)
+            if not candidate:
+                continue
+            for key in _SLEEP_FILL_KEYS:
+                if filled.get(key) is None and candidate.get(key) is not None:
+                    if not copied:
+                        filled = dict(filled)
+                        copied = True
+                    filled[key] = candidate[key]
+        out[date] = filled
+    return out
 
 
 _KCAL_TOLERANCE = 1  # absorbe redondeos entre fuentes (roadmap fusion-workouts)

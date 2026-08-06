@@ -270,9 +270,34 @@ class HealthKitSource(Source):
             out[day] = entry.get(key)
         return out
 
+    @staticmethod
+    def _bed_min_from_bedtime(bedtime) -> int | None:
+        """'HH:MM' -> minutos con la MISMA convención que app/parsers.py:198-200
+        (parse_sleep de Google): m = hora*60+minuto; si m < 720 (mediodía) se
+        queda tal cual, si no se resta 1440 para que las horas de la noche
+        anterior (23:30 -> -30) queden negativas y comparables con las de la
+        madrugada (01:30 -> 90). bed_min lleva perdido desde el 5-jul-2026
+        porque este origen solo emitía `bedtime`; se deriva aquí para no
+        depender de una release de la app iOS — en cuanto el servidor se
+        despliega, TODAS las noches de HealthKit ya almacenadas recuperan
+        bed_min. Cualquier cosa que no sea 'HH:MM' -> None, nunca lanza."""
+        if not isinstance(bedtime, str):
+            return None
+        try:
+            hh, mm = bedtime.split(":")
+            hora, minuto = int(hh), int(mm)
+        except (ValueError, AttributeError):
+            return None
+        if not (0 <= hora <= 23 and 0 <= minuto <= 59):
+            return None
+        m = hora * 60 + minuto
+        return m if m < 720 else m - 1440
+
     def _parse_sleep(self, arr) -> dict:
         """sleep[] → {date: {asleep, deep, rem, light, eff, bedtime, waketime,
-        inbed}}. Pasa campos tal cual (default None si falta).
+        inbed, bed_min}}. Pasa campos tal cual (default None si falta).
+        bed_min se DERIVA aquí de bedtime (ver _bed_min_from_bedtime); el
+        payload de la app iOS no lo manda.
 
         F2 roadmap P0 (hipnograma): acepta ADEMÁS un campo opcional `segments`
         por entrada ([{s, e, st}], minutos desde bedtime) — la app iOS aún no
@@ -298,6 +323,11 @@ class HealthKitSource(Source):
                 "bedtime":  entry.get("bedtime"),
                 "waketime": entry.get("waketime"),
                 "inbed":    entry.get("inbed"),
+                # B-a del roadmap sueno-y-duraciones: bed_min derivado de
+                # bedtime en el SERVIDOR (no en la app iOS) — ver
+                # _bed_min_from_bedtime. Siempre presente (None si no se
+                # pudo derivar), igual que el resto de campos "pasan tal cual".
+                "bed_min":  self._bed_min_from_bedtime(entry.get("bedtime")),
             }
             raw_segments = entry.get("segments")
             if raw_segments is not None:

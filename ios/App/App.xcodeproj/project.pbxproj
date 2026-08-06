@@ -19,6 +19,7 @@
 		DE5A100100000000000000A1 /* HealthSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A1 /* HealthSyncManager.swift */; };
 		DE5A100100000000000000A2 /* VitalsHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A2 /* VitalsHealth.swift */; };
 		DE5A100100000000000000A3 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A3 /* KeychainStore.swift */; };
+		DE5A100100000000000000A4 /* SleepAggregator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5A100000000000000000A4 /* SleepAggregator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		DE5A100000000000000000A1 /* HealthSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncManager.swift; sourceTree = "<group>"; };
 		DE5A100000000000000000A2 /* VitalsHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitalsHealth.swift; sourceTree = "<group>"; };
 		DE5A100000000000000000A3 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		DE5A100000000000000000A4 /* SleepAggregator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepAggregator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +80,7 @@
 				DE5A100000000000000000A1 /* HealthSyncManager.swift */,
 				DE5A100000000000000000A2 /* VitalsHealth.swift */,
 				DE5A100000000000000000A3 /* KeychainStore.swift */,
+				DE5A100000000000000000A4 /* SleepAggregator.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -174,6 +177,7 @@
 				DE5A100100000000000000A1 /* HealthSyncManager.swift in Sources */,
 				DE5A100100000000000000A2 /* VitalsHealth.swift in Sources */,
 				DE5A100100000000000000A3 /* KeychainStore.swift in Sources */,
+				DE5A100100000000000000A4 /* SleepAggregator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

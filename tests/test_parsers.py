@@ -12,7 +12,7 @@ real (sintéticos, sin datos personales).
 """
 from __future__ import annotations
 
-from app.parsers import parse_sleep, _segments_from_google_stages, _to_local
+from app.parsers import parse_sleep, parse_exercises, _segments_from_google_stages, _to_local
 
 
 def _dp_stages(start_time, end_time, stages, platform="FITBIT"):
@@ -175,3 +175,86 @@ def test_parse_sleep_scores_identical_with_or_without_segments():
     for key in ("asleep", "inbed", "awake", "deep", "rem", "light", "eff",
                 "bedtime", "waketime", "bed_min"):
         assert rec_with[key] == rec_without[key], f"campo {key} difiere"
+
+
+# ── C roadmap sueno-y-duraciones: activeDuration fraccional de Google ───────
+# Google manda decimales ("2874.512345s") en TODO datapoint espejeado de
+# platform: HEALTH_KIT — evidencia: 9/25 sesiones fraccionales, las 9 de
+# HEALTH_KIT; Fitbit sigue mandando enteros. int(...) lanzaba ValueError y
+# perdía dur_min en el 100% de esos STRENGTH_TRAINING.
+
+def _dp_exercise(active_duration=None, has_key=True, platform="HEALTH_KIT"):
+    exercise = {
+        "interval": {"startTime": "2024-05-01T14:00:00Z", "startUtcOffset": "-21600s"},
+        "exerciseType": "STRENGTH_TRAINING",
+    }
+    if has_key:
+        exercise["activeDuration"] = active_duration
+    return {"dataSource": {"platform": platform}, "exercise": exercise}
+
+
+def test_parse_exercises_fractional_active_duration():
+    dp = _dp_exercise("2874.512345s")
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] == 48  # round(2874.512345 / 60) = round(47.908..) = 48
+
+
+def test_parse_exercises_integer_active_duration_no_regression():
+    dp = _dp_exercise("972s", platform="FITBIT")
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] == 16  # round(972 / 60) = round(16.2) = 16, idéntico a antes
+
+
+def test_parse_exercises_zero_active_duration():
+    dp = _dp_exercise("0s")
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] == 0
+
+
+def test_parse_exercises_garbage_active_duration_is_none():
+    dp = _dp_exercise("abc")
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] is None
+
+
+def test_parse_exercises_missing_active_duration_defaults_zero():
+    """Sin la clave activeDuration, el default es '0s' (comportamiento
+    actual, no tocado por este fix)."""
+    dp = _dp_exercise(has_key=False)
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] == 0
+
+
+def test_parse_exercises_none_active_duration_is_none():
+    dp = _dp_exercise(None)
+    out = parse_exercises([dp])
+    assert out[0]["dur_min"] is None
+
+
+def test_parse_exercises_infinite_active_duration_is_none_not_crash():
+    """Riesgo #8 del roadmap: al pasar de int() a float() se abrió la puerta a
+    'inf'/'1e400', que int() rechazaba con ValueError. round(inf) lanza
+    OverflowError — que NO estaba en el except — y tumbaba el sync entero, no
+    solo ese datapoint. round(nan) sí lanza ValueError y ya estaba cubierto."""
+    for junk in ("inf s", "-infs", "1e400s", "nans"):
+        out = parse_exercises([_dp_exercise(junk)])
+        assert out[0]["dur_min"] is None, f"activeDuration {junk!r} no dio None"
+
+
+def test_to_local_infinite_offset_falls_back_to_utc_without_crashing():
+    """Mismo modo de falla en _to_local: int(float('inf')) lanza OverflowError.
+    Esta función corre en CADA datapoint de sueño y ejercicio de Google, así que
+    una excepción aquí rompe el parseo completo, no un solo registro."""
+    assert _to_local("2024-05-01T14:00:00Z", "inf s") == _to_local("2024-05-01T14:00:00Z", "0s")
+    assert _to_local("2024-05-01T14:00:00Z", "1e400s") == _to_local("2024-05-01T14:00:00Z", "0s")
+
+
+def test_to_local_fractional_offset_shifts_same_as_integer_offset():
+    """Un offset UTC fraccional ('-21600.0s', el mismo tipo de decimal que
+    Google manda en activeDuration para datapoints espejeados de HealthKit)
+    debe desplazar la hora local IGUAL que su forma entera -- antes caía al
+    except y trataba la hora local como UTC en silencio (secs=0)."""
+    fractional = _to_local("2024-05-01T14:00:00Z", "-21600.0s")
+    integer = _to_local("2024-05-01T14:00:00Z", "-21600s")
+    assert fractional == integer
+    assert fractional is not None

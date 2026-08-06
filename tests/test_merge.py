@@ -283,6 +283,81 @@ def test_sleep_different_nights_both_kept():
     assert set(out["sleep"].keys()) == {"2026-06-27", "2026-06-28"}
 
 
+# ── B-b roadmap sueno-y-duraciones: _merge_sleep rellena huecos de horario ──
+
+def test_sleep_fill_bed_min_from_loser_real_case():
+    """Caso real del 5-ago: HealthKit gana la noche por `asleep` (inflado por
+    el bug A) pero solo Google trae `bed_min` -- el resultado debe conservar
+    AMBOS: el asleep del ganador Y el bed_min del perdedor."""
+    healthkit = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 620, "inbed": 496, "bed_min": None, "bedtime": None},
+    }}
+    google = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 480, "inbed": 500, "bed_min": 43, "bedtime": "00:43"},
+    }}
+    out = merge_sources({"healthkit": healthkit, "google_health": google})
+    rec = out["sleep"]["2024-05-02"]
+    assert rec["asleep"] == 620  # ganador intacto
+    assert rec["bed_min"] == 43  # hueco relleno desde el perdedor
+    assert rec["bedtime"] == "00:43"
+
+
+def test_sleep_fill_never_overwrites_winner_value():
+    """Si el ganador YA trae bed_min no-None, el perdedor NUNCA lo pisa."""
+    healthkit = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 620, "bed_min": 10},
+    }}
+    google = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 480, "bed_min": 99},
+    }}
+    out = merge_sources({"healthkit": healthkit, "google_health": google})
+    assert out["sleep"]["2024-05-02"]["bed_min"] == 10
+
+
+def test_sleep_fill_whitelist_does_not_leak_phase_fields():
+    """La lista blanca es la garantía de contención: deep/rem/light/eff/inbed/
+    segments NUNCA se rellenan entre fuentes, aunque el ganador los traiga en
+    None y el perdedor sí tenga dato."""
+    healthkit = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 620, "deep": None, "rem": None, "light": None,
+                        "eff": None, "inbed": None, "segments": None},
+    }}
+    google = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 480, "deep": 88, "rem": 77, "light": 66,
+                        "eff": 90, "inbed": 500, "segments": [{"s": 0, "e": 10, "st": "deep"}]},
+    }}
+    out = merge_sources({"healthkit": healthkit, "google_health": google})
+    rec = out["sleep"]["2024-05-02"]
+    assert rec["deep"] is None
+    assert rec["rem"] is None
+    assert rec["light"] is None
+    assert rec["eff"] is None
+    assert rec["inbed"] is None
+    assert rec["segments"] is None
+
+
+def test_sleep_fill_single_source_unchanged():
+    """Fuente única -> resultado idéntico al de hoy (sin relleno posible, no
+    hay perdedor de quien tomar nada)."""
+    a = {**_empty_source(), "sleep": {
+        "2024-05-02": {"asleep": 400, "bed_min": None, "bedtime": None, "waketime": "07:00"},
+    }}
+    out = merge_sources({"healthkit": a})
+    assert out["sleep"]["2024-05-02"] == {"asleep": 400, "bed_min": None, "bedtime": None, "waketime": "07:00"}
+
+
+def test_sleep_fill_does_not_mutate_fetched_dicts():
+    """`_merge_sleep` recibe estructuras que merge_sources sigue usando
+    después -- rellenar huecos NUNCA debe mutar en sitio los dicts de entrada."""
+    healthkit_rec = {"asleep": 620, "bed_min": None}
+    google_rec = {"asleep": 480, "bed_min": 43}
+    healthkit = {**_empty_source(), "sleep": {"2024-05-02": healthkit_rec}}
+    google = {**_empty_source(), "sleep": {"2024-05-02": google_rec}}
+    merge_sources({"healthkit": healthkit, "google_health": google})
+    assert healthkit_rec == {"asleep": 620, "bed_min": None}
+    assert google_rec == {"asleep": 480, "bed_min": 43}
+
+
 # ── Dedup de workouts ─────────────────────────────────────────────────────────
 
 def test_workouts_dedup_same_workout_close_duration():

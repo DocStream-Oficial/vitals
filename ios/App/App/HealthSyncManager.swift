@@ -342,27 +342,15 @@ final class HealthSyncManager {
         return WindowBounds(start: start, end: end)
     }
 
+    // Delegado a SleepAggregator (solo-Foundation, testeable con swiftc — ver
+    // _dev-harness/sueno-y-duraciones/verify_sleep_union.swift). Firma intacta
+    // para no tocar a sus otros llamadores.
     private func dayString(_ date: Date) -> String {
-        let cal = Calendar.current
-        let formatter = DateFormatter()
-        // Fixed-format dates DEBEN usar Gregorian + en_US_POSIX para no depender del
-        // calendario/locale de pantalla del dispositivo (p.ej. calendario Budista/Japones
-        // a nivel sistema cambiaria el "yyyy" y romperia las claves de fecha del backend).
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = cal.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        SleepAggregator.dayString(date)
     }
 
     private func hmString(_ date: Date) -> String {
-        let cal = Calendar.current
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = cal.timeZone
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        SleepAggregator.hmString(date)
     }
 
     /// Orquesta todas las lecturas async y arma el payload final.
@@ -691,114 +679,20 @@ final class HealthSyncManager {
                 return
             }
 
-            // Agrupar en noches: nueva noche si el gap desde el fin del segmento anterior es > 3h.
-            var nights: [[HKCategorySample]] = []
-            var current: [HKCategorySample] = []
-            var lastEnd: Date?
-
-            for sample in categorySamples {
-                if let le = lastEnd, sample.startDate.timeIntervalSince(le) > 3 * 3600 {
-                    if !current.isEmpty { nights.append(current) }
-                    current = []
-                }
-                current.append(sample)
-                if lastEnd == nil || sample.endDate > lastEnd! {
-                    lastEnd = sample.endDate
-                }
+            // La reconstrucción de noches (agrupar por fuente, unir intervalos
+            // traslapados, elegir la mejor fuente por noche) vive en
+            // SleepAggregator (solo-Foundation, testeable con swiftc — ver
+            // _dev-harness/sueno-y-duraciones/verify_sleep_union.swift). Antes
+            // de este cambio se sumaban TODAS las muestras de la noche sin
+            // mirar la fuente, doblando el conteo cuando Apple Watch y Fitbit
+            // escriben la misma hora en HealthKit (asleep > inbed medido en prod).
+            let spans = categorySamples.map {
+                SleepSpan(start: $0.startDate, end: $0.endDate, value: $0.value,
+                          sourceID: $0.sourceRevision.source.bundleIdentifier)
             }
-            if !current.isEmpty { nights.append(current) }
-
-            let asleepValues: Set<Int> = {
-                var s: Set<Int> = [
-                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
-                ]
-                if #available(iOS 16.0, *) {
-                    s.insert(HKCategoryValueSleepAnalysis.asleepCore.rawValue)
-                    s.insert(HKCategoryValueSleepAnalysis.asleepDeep.rawValue)
-                    s.insert(HKCategoryValueSleepAnalysis.asleepREM.rawValue)
-                }
-                return s
-            }()
-
-            var out: [[String: Any]] = []
-
-            for night in nights {
-                var asleepMin: Double = 0
-                var deepMin: Double = 0
-                var remMin: Double = 0
-                var coreMin: Double = 0
-                var inBedMin: Double = 0
-                var hasInBed = false
-                var earliestStart: Date?
-                var latestAsleepEnd: Date?
-                var latestSegmentEnd: Date?
-
-                for sample in night {
-                    let durMin = sample.endDate.timeIntervalSince(sample.startDate) / 60.0
-                    let value = sample.value
-
-                    if earliestStart == nil || sample.startDate < earliestStart! {
-                        earliestStart = sample.startDate
-                    }
-                    if latestSegmentEnd == nil || sample.endDate > latestSegmentEnd! {
-                        latestSegmentEnd = sample.endDate
-                    }
-
-                    if value == HKCategoryValueSleepAnalysis.inBed.rawValue {
-                        inBedMin += durMin
-                        hasInBed = true
-                        continue
-                    }
-
-                    if asleepValues.contains(value) {
-                        asleepMin += durMin
-                        if latestAsleepEnd == nil || sample.endDate > latestAsleepEnd! {
-                            latestAsleepEnd = sample.endDate
-                        }
-                        if #available(iOS 16.0, *) {
-                            if value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue {
-                                deepMin += durMin
-                            } else if value == HKCategoryValueSleepAnalysis.asleepREM.rawValue {
-                                remMin += durMin
-                            } else if value == HKCategoryValueSleepAnalysis.asleepCore.rawValue {
-                                coreMin += durMin
-                            }
-                        }
-                    }
-                }
-
-                guard let waketime = latestAsleepEnd, let bedtime = earliestStart, asleepMin > 0 else {
-                    continue
-                }
-
-                // inbed = suma de segmentos inBed si existen; si no, span TOTAL de la
-                // noche (desde el primer segmento hasta el ultimo, sea asleep o inBed)
-                // — no "asleepMin" (eso forzaria eff=100 siempre que falte inBed,
-                // que es el caso tipico de Apple Watch, que normalmente NO emite
-                // segmentos inBed explicitos).
-                let spanEnd = latestSegmentEnd ?? waketime
-                let totalInbed = hasInBed ? inBedMin : max(asleepMin, spanEnd.timeIntervalSince(bedtime) / 60.0)
-                let eff: Double? = totalInbed > 0 ? (asleepMin / totalInbed) * 100.0 : nil
-
-                // Dia LOCAL de despertar
-                let dateKey = self.dayString(waketime)
-
-                var entry: [String: Any] = [
-                    "date": dateKey,
-                    "asleep": Int(asleepMin.rounded()),
-                    "deep": Int(deepMin.rounded()),
-                    "rem": Int(remMin.rounded()),
-                    "light": Int(coreMin.rounded()),
-                    "bedtime": self.hmString(bedtime),
-                    "waketime": self.hmString(waketime),
-                    "inbed": Int(totalInbed.rounded()),
-                ]
-                if let eff = eff {
-                    entry["eff"] = Int(eff.rounded())
-                }
-                out.append(entry)
-            }
-
+            var iOS16 = false
+            if #available(iOS 16.0, *) { iOS16 = true }
+            let out = SleepAggregator.buildNights(from: spans, iOS16OrLater: iOS16)
             DispatchQueue.main.async { completion(out) }
         }
         store.execute(query)
