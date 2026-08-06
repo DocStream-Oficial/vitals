@@ -251,6 +251,42 @@ def test_ingest_sleep_without_segments_field_has_no_segments_key(hk_datadir):
     assert "segments" not in data["sleep"]["2026-06-28"]
 
 
+# ── B1 roadmap sueno-y-duraciones: bed_min derivado de bedtime ──────────────
+
+@pytest.mark.parametrize("bedtime,expected", [
+    ("23:30", -30),
+    ("01:30", 90),
+    ("00:00", 0),
+    ("12:00", -720),  # convención del repo (m if m<720 else m-1440); mismo
+                       # comportamiento que ya tiene Google, no se "arregla".
+])
+def test_bed_min_from_bedtime_matches_parsers_convention(bedtime, expected):
+    assert HealthKitSource._bed_min_from_bedtime(bedtime) == expected
+
+
+@pytest.mark.parametrize("bedtime", [None, "", "25:99", "notatime", 123, {}, []])
+def test_bed_min_from_bedtime_garbage_is_none(bedtime):
+    assert HealthKitSource._bed_min_from_bedtime(bedtime) is None
+
+
+def test_ingest_sleep_derives_bed_min_from_bedtime(hk_datadir):
+    src = HealthKitSource()
+    payload = {"sleep": [{"date": "2026-06-28", "asleep": 372, "bedtime": "23:30", "waketime": "07:03"}]}
+    data = src.ingest(payload)
+    assert data["sleep"]["2026-06-28"]["bed_min"] == -30
+
+
+def test_ingest_sleep_without_bedtime_has_bed_min_none(hk_datadir):
+    """bed_min SIEMPRE va en el dict (None si no se pudo derivar), igual que
+    el resto de campos que 'pasan tal cual'."""
+    src = HealthKitSource()
+    payload = {"sleep": [{"date": "2026-06-28", "asleep": 372}]}
+    data = src.ingest(payload)
+    night = data["sleep"]["2026-06-28"]
+    assert "bed_min" in night
+    assert night["bed_min"] is None
+
+
 # ── fetch ──
 
 def test_fetch_raises_no_token_when_never_ingested(hk_datadir):

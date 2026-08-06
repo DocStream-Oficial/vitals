@@ -69,8 +69,18 @@ def _to_local(iso_z, offset_str):
     secs = 0
     if offset_str:
         try:
-            secs = int(str(offset_str).rstrip("s"))
-        except ValueError:
+            # Google manda offsets fraccionales en los mismos datapoints
+            # espejeados de HealthKit que traen activeDuration decimal (ver
+            # más abajo). Con int() puro, un offset como "-21600.0s" caía al
+            # except y dejaba secs=0 -- es decir, trataba la hora local como
+            # UTC EN SILENCIO, corriendo las fechas 6 horas sin avisar.
+            secs = int(float(str(offset_str).rstrip("s")))
+        except (ValueError, OverflowError):
+            # OverflowError: float() acepta lo que int() rechazaba ("inf",
+            # "1e400"). int(float("inf")) lanza OverflowError, NO ValueError —
+            # sin atraparlo, un offset degenerado tumbaba el parseo ENTERO de
+            # Google (esta función corre en cada datapoint de sueño y ejercicio),
+            # no solo ese dato. Riesgo #8 del roadmap sueno-y-duraciones.
             secs = 0
     return dt + datetime.timedelta(seconds=secs)
 
@@ -233,8 +243,18 @@ def parse_exercises(dps):
         ms = e.get("metricsSummary", {})
         dur = e.get("activeDuration", "0s")
         try:
-            dur_min = round(int(str(dur).rstrip("s")) / 60)
-        except (ValueError, TypeError):
+            # Google manda decimales en TODO datapoint espejeado de
+            # platform: HEALTH_KIT (ej. "1234.567890s") -- int() lanzaba
+            # ValueError y perdía dur_min en el 100% de los STRENGTH_TRAINING
+            # de esa plataforma. float() los tolera; el try/except de abajo
+            # ya cubría basura ("abc", None, {}).
+            dur_min = round(float(str(dur).rstrip("s")) / 60)
+        except (ValueError, TypeError, OverflowError):
+            # OverflowError: al pasar de int() a float() se abrió la puerta a
+            # "inf"/"1e400", que int() rechazaba con ValueError. round(inf)
+            # lanza OverflowError y NO estaba en el except -> tumbaba el sync
+            # entero. round(nan) sí lanza ValueError y ya estaba cubierto.
+            # Riesgo #8 del roadmap sueno-y-duraciones.
             dur_min = None
 
         def gi(k):
