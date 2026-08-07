@@ -195,8 +195,72 @@ enum SleepAggregator {
         if let eff = eff {
             entry["eff"] = Int(eff.rounded())
         }
+        if let segments = buildSegments(night, bedtime: bedtime, iOS16OrLater: iOS16OrLater) {
+            entry["segments"] = segments
+        }
 
         return (dateKey, asleepMin, totalInbed, sourceID, entry)
+    }
+
+    /// Etapas de HealthKit -> las 4 etiquetas que acepta el backend
+    /// (`app/sleep_segments.py::validate_segments`). `asleepUnspecified` NO
+    /// está aquí a propósito: significa "dormido, etapa desconocida" y no hay
+    /// bucket para eso — meterlo como "light" sería inventar. Queda fuera del
+    /// hipnograma igual que ya queda fuera de los totales deep/rem/light.
+    private static let stageLabels: [Int: String] = [
+        SleepStage.awake.rawValue: "awake",
+        SleepStage.asleepCore.rawValue: "light",
+        SleepStage.asleepREM.rawValue: "rem",
+        SleepStage.asleepDeep.rawValue: "deep",
+    ]
+
+    /// Hipnograma de UNA noche de UNA fuente: [{s, e, st}] en minutos relativos
+    /// a `bedtime`. `nil` si la fuente no etiquetó fases (el backend deja la
+    /// noche entrar igual, solo sin desglose por bloques).
+    ///
+    /// 🔑 El backend DESCARTA el campo `segments` COMPLETO ante un solo
+    /// traslape (validate_segments devuelve None, nunca una lista parcial), así
+    /// que aquí se recortan los traslapes antes de emitir: un mismo dispositivo
+    /// puede repetir muestras al re-sincronizar. Se recorta en minutos ENTEROS,
+    /// después de redondear, porque dos segmentos que no se traslapan en
+    /// segundos sí pueden hacerlo al redondear a minuto.
+    ///
+    /// Los bloques salen de la MISMA fuente que ganó la noche, así que cuadran
+    /// con los totales deep/rem/light que se muestran al lado.
+    private static func buildSegments(
+        _ night: [SleepSpan], bedtime: Date, iOS16OrLater: Bool
+    ) -> [[String: Any]]? {
+        guard iOS16OrLater else { return nil }
+
+        var raw: [(s: Int, e: Int, st: String)] = []
+        for span in night {
+            guard let label = stageLabels[span.value] else { continue }
+            let s = Int((span.start.timeIntervalSince(bedtime) / 60.0).rounded())
+            let e = Int((span.end.timeIntervalSince(bedtime) / 60.0).rounded())
+            // s < 0 no debería pasar (bedtime es el inicio más temprano de la
+            // noche), pero si pasara el backend descartaría todo el campo.
+            if s < 0 || e <= s { continue }
+            raw.append((s, e, label))
+        }
+        guard !raw.isEmpty else { return nil }
+
+        raw.sort { $0.s != $1.s ? $0.s < $1.s : $0.e < $1.e }
+
+        var out: [(s: Int, e: Int, st: String)] = []
+        for var seg in raw {
+            if let last = out.last {
+                if seg.s < last.e { seg.s = last.e }   // recorte del traslape
+                if seg.e <= seg.s { continue }         // quedó vacío -> se cae
+                if seg.st == last.st && seg.s == last.e {
+                    out[out.count - 1].e = seg.e       // funde contiguos iguales
+                    continue
+                }
+            }
+            out.append(seg)
+        }
+        guard !out.isEmpty else { return nil }
+
+        return out.map { ["s": $0.s, "e": $0.e, "st": $0.st] }
     }
 
     /// `true` si `a` le gana a `b`: mayor `asleep`; empate -> mayor `inbed`;
@@ -223,7 +287,15 @@ enum SleepAggregator {
 
         var candidates: [(date: String, asleep: Double, inbed: Double, sourceID: String, dict: [String: Any])] = []
         for (sourceID, sourceSpans) in bySource {
-            let sorted = sourceSpans.sorted { $0.start < $1.start }
+            // Desempate por `end`: el sort de Swift NO es estable, así que con
+            // dos muestras que arrancan en el MISMO instante (p.ej. un bloque
+            // deep corto y uno light largo desde las 23:00) el orden quedaba
+            // indefinido — y de ese orden depende cómo se recortan los
+            // traslapes del hipnograma. Sin este desempate, la misma entrada
+            // podía producir bloques distintos entre corridas.
+            let sorted = sourceSpans.sorted {
+                $0.start != $1.start ? $0.start < $1.start : $0.end < $1.end
+            }
             for night in splitNights(sorted) {
                 if let entry = buildNightEntry(night, iOS16OrLater: iOS16OrLater, sourceID: sourceID) {
                     candidates.append(entry)
