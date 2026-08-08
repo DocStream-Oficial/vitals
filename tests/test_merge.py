@@ -882,3 +882,154 @@ def test_workouts_same_sport_similar_duration_but_different_kcal_not_fused():
     out = merge_sources({"google_health": a})["exercises"]
     assert len(out) == 2, f"dos sesiones reales fundidas en una: {out}"
     assert sorted(w["kcal"] for w in out) == [250, 400]
+
+
+# ── Roadmap familias-actividad — _activity_family en _names_equivalent ─────────
+# Los 4 pares reales que NO se fundían antes de este roadmap (mismo día, mismas
+# kcal, nombre distinto, sin relación de substring):
+#   2024-04-02  Strength(22min, 94kcal)   vs  Fuerza Postural en el Gimnasio(22min, 94kcal)
+#   2024-04-14  Strength(30min, 128kcal)  vs  Body weight(30min, 128kcal)
+#   2024-04-15  Cycling(29min, 221kcal)   vs  Bike(29min, 221kcal)
+#   2024-05-01  Strength(30min, 152kcal)  vs  Workout(30min, 152kcal)   <- NO se funde,
+#               ver test_workout_generic_name_is_not_strength_family abajo.
+
+def test_workouts_fused_by_activity_family_real_pairs():
+    """A1: los duplicados reales de producción se funden en 1 registro cada uno
+    -- _names_equivalent ahora reconoce familia de actividad (_activity_family)
+    además de la contención de substring de siempre.
+
+    Son 3 de los 4 pares del roadmap: el par del 4-ago (Strength vs Workout)
+    quedó FUERA a propósito tras la validación, porque la clave `workout` que lo
+    habría fundido perdía sesiones reales (ver
+    test_workout_generic_name_is_not_strength_family)."""
+    pairs = [
+        ("Strength", "Fuerza Postural en el Gimnasio", "2024-04-02", 22, 94),
+        ("Strength", "Body weight", "2024-04-14", 30, 128),
+        ("Cycling", "Bike", "2024-04-15", 29, 221),
+    ]
+    for name_a, name_b, date, dur, kcal in pairs:
+        a = {**_empty_source(), "exercises": [
+            {"date": date, "name": name_a, "dur_min": dur, "kcal": kcal}]}
+        b = {**_empty_source(), "exercises": [
+            {"date": date, "name": name_b, "dur_min": dur, "kcal": kcal}]}
+        out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+        assert len(out) == 1, f"{name_a!r} vs {name_b!r} no se fundió: {out}"
+        assert out[0]["dur_min"] == dur, out[0]
+        assert out[0]["kcal"] == kcal, out[0]
+
+
+def test_workout_generic_name_is_not_strength_family():
+    """Hallazgo de la validación: `workout` NO puede ser clave de la familia
+    `strength`, porque es substring de nombres REALES que no son fuerza.
+
+    "Aerobic Workout" aparece 5 veces en el dataset de producción (18-jun,
+    23-jun, 30-jun, 1-jul, 2-jul) y el 2-jul convive el MISMO DÍA con dos
+    registros de fuerza reales. Con la clave puesta, bastaba que las kcal
+    coincidieran dentro de ±1 -- la señal sobre la que se apoya toda la regla --
+    para que la sesión aeróbica se fundiera con la de fuerza y desapareciera,
+    dejando además el nombre equivocado en el superviviente.
+
+    Precio aceptado: el par real del 4-ago (Strength vs Workout, 30min/152kcal)
+    vuelve a salir DUPLICADO. Duplicado visible > sesión perdida en silencio.
+    """
+    # 1) una sesión aeróbica real NO se la come una sesión de fuerza del mismo
+    #    día aunque coincidan kcal y duración (valores reales del 18-jun).
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-06-18", "name": "Aerobic Workout", "type": "OTHER",
+         "dur_min": 36, "kcal": 197}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-06-18", "name": "Strength", "dur_min": 38, "kcal": 197}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 2, f"'Aerobic Workout' absorbido por 'Strength': {out}"
+    assert sorted(w["name"] for w in out) == ["Aerobic Workout", "Strength"], out
+
+    # 2) el mismo caso con el gemelo sin duración (forma del registro de Google),
+    #    donde la guardia de ±5 min no puede ayudar.
+    c = {**_empty_source(), "exercises": [
+        {"date": "2026-06-18", "name": "Aerobic Workout", "type": "OTHER",
+         "dur_min": 36, "kcal": 197}]}
+    d = {**_empty_source(), "exercises": [
+        {"date": "2026-06-18", "name": "Strength", "dur_min": None, "kcal": 197}]}
+    out2 = merge_sources({"healthkit": c, "google_health": d})["exercises"]
+    assert len(out2) == 2, f"'Aerobic Workout' absorbido (gemelo sin dur): {out2}"
+
+    # 3) contrapartida asumida: el par real del 4-ago YA NO se funde.
+    e = {**_empty_source(), "exercises": [
+        {"date": "2024-05-01", "name": "Strength", "dur_min": 30, "kcal": 152}]}
+    f = {**_empty_source(), "exercises": [
+        {"date": "2024-05-01", "name": "Workout", "type": "WORKOUT",
+         "dur_min": 30, "kcal": 152}]}
+    out3 = merge_sources({"healthkit": e, "google_health": f})["exercises"]
+    assert len(out3) == 2, (
+        "el par del 4-ago se fundió: ¿volvió `workout` a la tabla de familias? "
+        f"{out3}")
+
+
+def test_activity_family_ambiguous_falls_back_to_containment():
+    """A4: un nombre que matchea DOS familias distintas ("Gym Cycling" toca
+    `strength` por 'gym' y `cycling` por 'cycling') no se clasifica -> cae al
+    criterio de contención de hoy. 'gymcycling' no contiene 'bike' ni viceversa,
+    así que NO se funden por familia (decisión cerrada del roadmap: ambigüedad
+    -> None, no resolver por orden de declaración del diccionario)."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-10", "name": "Gym Cycling", "dur_min": 40, "kcal": 200}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-10", "name": "Bike", "dur_min": 40, "kcal": 200}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 2, f"'Gym Cycling' vs 'Bike' no debía fundirse: {out}"
+
+
+def test_activity_family_unknown_preserves_old_containment():
+    """A3: un nombre sin familia conocida se comporta EXACTAMENTE como antes de
+    este roadmap (contención de substring), en ambos sentidos: 'Kitesurf' es
+    substring de 'Kitesurfing' -> funde; 'Kitesurf' vs 'Ajedrez' -> no funde,
+    aunque compartan kcal."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-11", "name": "Kitesurf", "dur_min": 50, "kcal": 300}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-11", "name": "Kitesurfing", "dur_min": 52, "kcal": 300}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 1, f"'Kitesurf' vs 'Kitesurfing' debía fundirse por contención: {out}"
+
+    c = {**_empty_source(), "exercises": [
+        {"date": "2026-07-12", "name": "Kitesurf", "dur_min": 50, "kcal": 300}]}
+    d = {**_empty_source(), "exercises": [
+        {"date": "2026-07-12", "name": "Ajedrez", "dur_min": 51, "kcal": 300}]}
+    out2 = merge_sources({"healthkit": c, "google_health": d})["exercises"]
+    assert len(out2) == 2, f"'Kitesurf' vs 'Ajedrez' no debía fundirse: {out2}"
+
+
+def test_workouts_without_name_or_type_never_equivalent():
+    """A6: vacío en cualquiera de los dos lados -> NUNCA equivalente.
+
+    Añadido por la validación: el roadmap daba A6 por "ya cubierto por tests
+    existentes", pero no lo estaba — borrar la guardia `if not na or not nb`
+    de `_names_equivalent` dejaba la suite COMPLETA en verde (2062 passed).
+    Sin nombre ni tipo, `_activity_family` devuelve None por ambos lados y todo
+    el peso recae en esa guardia: sin ella `"" in ""` es True y dos workouts
+    anónimos del mismo día con las mismas kcal colapsan en uno.
+
+    `dur_min=None` en un lado es deliberado: aísla la regla de kcal (la que
+    consulta `_names_equivalent`) de la regla vieja de nombre-exacto, que con
+    dos `name=None` también da match pero exige duración en AMBOS."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-19", "name": None, "type": None,
+         "dur_min": 40, "kcal": 200}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-19", "name": None, "type": None,
+         "dur_min": None, "kcal": 200}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 2, f"dos workouts sin name/type colapsaron: {out}"
+
+
+def test_activity_family_reads_type_not_only_name():
+    """A5: la familia se busca en `name` Y en `type` (mismo patrón que
+    `strength_minutes` en app/load.py), porque Google manda
+    {name: 'Sport', type: 'STRENGTH_TRAINING'} y el nombre solo no clasifica."""
+    a = {**_empty_source(), "exercises": [
+        {"date": "2026-07-13", "name": "Sport", "type": "STRENGTH_TRAINING",
+         "dur_min": 40, "kcal": 180}]}
+    b = {**_empty_source(), "exercises": [
+        {"date": "2026-07-13", "name": "Strength", "dur_min": 40, "kcal": 180}]}
+    out = merge_sources({"healthkit": a, "google_health": b})["exercises"]
+    assert len(out) == 1, f"{{name:'Sport', type:'STRENGTH_TRAINING'}} vs 'Strength' debía fundirse: {out}"
