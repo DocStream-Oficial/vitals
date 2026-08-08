@@ -301,11 +301,96 @@ def _norm_activity(w: dict) -> str:
     return "".join(ch for ch in str(raw).lower() if ch.isalnum())
 
 
+# Roadmap familias-actividad: tabla de familias de actividad. Cada clave se busca
+# por substring sobre el normalizado (minúsculas, solo alfanuméricos) de
+# f"{name} {type}" -- mismo patrón que ya usa `strength_minutes` en
+# app/load.py:167, porque Google manda {name: "Sport", type: "STRENGTH_TRAINING"}
+# y el nombre solo no alcanza para reconocer la familia.
+#
+# 🔴 `workout` NO está en la tabla, y no debe volver a entrar sin evidencia nueva.
+# El roadmap la propuso (es lo que Google pone cuando no reconoce la actividad:
+# una sesión de fuerza que la otra fuente etiqueta "Workout", con kcal idénticas) con la
+# condición explícita de retirarla si la validación encontraba un caso realista
+# de pérdida de sesión. Se encontró:
+#   `workout` es substring de "Aerobic Workout", un nombre REAL y RECURRENTE del
+#   dataset de campo (5 registros en 5 días distintos). NO es una sesión de fuerza, pero la clave la clasificaba como
+#   `strength`. En uno de esos días ese registro convive con DOS
+#   registros de fuerza reales (una sesión y su gemelo de la otra fuente): la
+#   única cosa que impedía absorberlo era que sus kcal no coincidían. Con las
+#   kcal coincidiendo dentro de ±1 -- que es justo la señal sobre la que se apoya
+#   toda la regla -- la sesión aeróbica desaparece en silencio y el registro
+#   superviviente se queda además con el nombre equivocado.
+#   Mismo problema con "Cardio Workout", "HIIT Workout", "Circuit Workout".
+# Consecuencia aceptada al quitarla: el par Strength/Workout vuelve a salir DUPLICADO.
+# Es el mal menor deliberado del repo -- duplicado visible > sesión perdida.
+#
+# 🔑 `running`/`walking`/`swimming` y NO las formas cortas `run`/`walk`/`swim`:
+# esas son substrings demasiado promiscuos (p.ej. "run" cae dentro de palabras
+# que no son deportes). Si aparece un caso real que las necesite, se añaden
+# con su evidencia.
+_ACTIVITY_FAMILIES: dict[str, tuple[str, ...]] = {
+    "cycling": ("cycling", "bike", "biking", "ciclismo", "spinning"),
+    "strength": ("strength", "weight", "bodyweight", "fuerza", "pesas", "gym",
+                 "musculac", "resistance", "coretraining"),
+    "tennis": ("tennis", "tenis", "padel"),
+    "run": ("running", "correr", "jogging"),
+    "walk": ("walking", "caminata", "hiking", "senderismo"),
+    "swim": ("swimming", "natacion"),
+    "yoga": ("yoga", "pilates", "stretching"),
+}
+
+
+def _activity_family(w: dict) -> str | None:
+    """Clasifica un workout en una familia de actividad, o `None` si no matchea
+    ninguna familia o matchea más de una (ambigüedad).
+
+    Motivo (roadmap familias-actividad): el problema real del 4 duplicados de
+    producción no es que las kcal coincidan -- es que `cycling` y `bike` SON el
+    mismo deporte, y `strength`/`body weight`/`fuerza`/`workout` son la misma
+    familia, pero `_names_equivalent` comparaba por CONTENCIÓN de substring y
+    ninguno de esos nombres se contiene entre sí.
+
+    Ambigüedad -> None (decisión cerrada del roadmap): si el texto normalizado
+    toca palabras clave de MÁS de una familia distinta (p.ej. "Gym Cycling"
+    toca `strength` por "gym" y `cycling` por "cycling"), NO se puede decidir
+    una sola familia -> se cae al criterio de contención de hoy en
+    `_names_equivalent`. Alternativa descartada: resolver por orden de
+    declaración del diccionario -- haría que el resultado dependiera del orden
+    en que alguien escribió la tabla, la clase de sorpresa que no se debe dejar
+    en un motor de fusión. El conteo es por FAMILIA distinta, no por número de
+    claves que matchean: "Fuerza Postural en el Gimnasio" toca
+    `fuerza` y `gym`, pero ambas son la familia `strength` -> cuenta como una
+    sola, no como ambigüedad."""
+    raw = f"{w.get('name') or ''} {w.get('type') or ''}"
+    norm = "".join(ch for ch in raw.lower() if ch.isalnum())
+    if not norm:
+        return None
+    matched = {
+        family
+        for family, keywords in _ACTIVITY_FAMILIES.items()
+        if any(kw in norm for kw in keywords)
+    }
+    if len(matched) == 1:
+        return next(iter(matched))
+    return None
+
+
 def _names_equivalent(a: dict, b: dict) -> bool:
-    """Dos nombres/tipos de actividad son 'de la misma familia' si el normalizado
-    de uno CONTIENE al del otro ("strengthtraining" contiene "strength" ->
-    equivalentes; "tennis" vs "yoga" -> no). Vacío en cualquiera de los dos ->
-    nunca equivalente (evita que dos workouts sin name/type colapsen por default)."""
+    """Dos nombres/tipos de actividad son equivalentes si:
+    1. Ambos clasifican en una familia de actividad conocida (_activity_family)
+       y es la MISMA familia (roadmap familias-actividad) -- p.ej. "Cycling" y
+       "Bike" son ambos `cycling` aunque ninguno contenga al otro como substring.
+    2. Si alguno de los dos no clasifica en ninguna familia (o es ambiguo,
+       matchea más de una), se cae al criterio de HOY, intacto: el normalizado
+       de uno CONTIENE al del otro ("strengthtraining" contiene "strength" ->
+       equivalentes; "tennis" vs "yoga" -> no). Vacío en cualquiera de los dos ->
+       nunca equivalente (evita que dos workouts sin name/type colapsen por
+       default). Este fallback es BYTE-IDÉNTICO al de antes de este roadmap --
+       protege un año de histórico para cualquier nombre sin familia conocida."""
+    fa, fb = _activity_family(a), _activity_family(b)
+    if fa is not None and fb is not None:
+        return fa == fb
+
     na, nb = _norm_activity(a), _norm_activity(b)
     if not na or not nb:
         return False
