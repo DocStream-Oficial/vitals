@@ -546,6 +546,20 @@ pytest -q
 or shipped in the repo. CI runs the full suite on Python 3.9 and 3.12 on every
 push/PR (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
+### iOS sleep aggregator
+
+The Xcode project has no test target, so the sleep-night reconstruction logic
+lives in `ios/App/App/SleepAggregator.swift` as a **Foundation-only** file (no
+`import HealthKit`) precisely so it can be compiled and exercised on a Mac:
+
+```bash
+swiftc -o /tmp/verify_sleep ios/App/App/SleepAggregator.swift scripts/verify_sleep_union.swift && /tmp/verify_sleep
+```
+
+17 cases covering interval union, per-source night reconstruction and the
+hypnogram contract. Run it after touching `SleepAggregator.swift` — it is the
+only automated check that code has.
+
 ```bash
 python scripts/i18n_audit.py   # verifies all 4 locales (ES/EN/FR/PT) are in sync
 ```
