@@ -6,9 +6,11 @@ Cambios de higiene (compuertas, NO fórmulas):
 - Recovery: exige ≥2 componentes reales de {hrv, rhr, asleep}. Un día con solo HRV
   no recibe recovery (quedaba 0 espurio al clampearse el componente único).
 - Siesta-como-noche: un registro de sueño se ignora (no se setean campos de sueño)
-  si su onset cae en ventana diurna (bed_min > 240 → después de 04:00, o
+  si su onset cae en ventana diurna (bed_min > 600 → después de 10:00, o
   bed_min < -300 → antes de 19:00 del día anterior) O si asleep < 120 min.
-  Umbral documentado: [-300, 240] en minutos desde medianoche (–300=19:00, 240=04:00).
+  Umbral documentado: [-300, 600] en minutos desde medianoche (–300=19:00, 600=10:00).
+  La cota superior era 240 (04:00) hasta que se midió su costo — ver el comentario de
+  _NAP_BED_MIN_HI para por qué se movió y qué costó tenerla ahí.
 
 Tier 2 añadidos (aditivos, NO modifican fórmulas golden):
 - _rolling_sd: pstdev de las últimas ~30 lecturas no-None.
@@ -92,10 +94,19 @@ def recent_base(summary: dict, metric: str):
 
 
 # ── Umbrales de higiene (no son fórmulas: son compuertas) ──────────────────────
-# Siesta: onset fuera de ventana nocturna [-300, 240] (19:00–04:00) O sueño < 120 min
+# Siesta: onset fuera de ventana nocturna [-300, 600] (19:00–10:00) O sueño < 120 min
 _NAP_BED_MIN_LO = -300   # onset antes de 19:00 del día anterior
-_NAP_BED_MIN_HI =  240   # onset después de 04:00 (05:12 en adelante ya es diurno)
+_NAP_BED_MIN_HI =  600   # onset después de las 10:00 ya es siesta; antes es noche
 _NAP_MIN_ASLEEP = 120    # menos de 2h → no cuenta como noche
+
+# 🔑 Por qué 600 y no 240. El corte estaba en las 04:00 y asumía que quien se
+# acuesta más tarde está tomando una siesta — falso para cualquier perfil
+# noctámbulo. La regla llevaba DORMIDA para las noches de HealthKit (nunca
+# traían bed_min) y despertó al arreglarlo; entonces descartó 11 noches
+# legítimas de un histórico de campo, TODAS por el reloj y ninguna por
+# duración: onsets entre las 04:00 y las 06:00 con 5-7h de sueño detrás, una
+# de ellas perdida por DOS minutos. Regla nueva: la siesta empieza a las
+# 10:00, todo lo anterior es noche. La cota inferior (19:00) NO se movió.
 
 
 def _is_nap(sleep_rec: dict) -> bool:

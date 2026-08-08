@@ -375,12 +375,12 @@ def test_nap_fields_excluded(monkeypatch):
     from app.scoring import build_dataset
     monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
 
-    # Siesta: onset 09:00 (bed_min = 540 > 240) con 134 min asleep
+    # Siesta: onset 11:00 (bed_min = 660 > 600) con 134 min asleep
     # Noche legítima: onset 23:00 (bed_min = -60) con 420 min asleep
     # Short night (asleep=80 < 120) con onset normal → también excluida
     sleep_d = {
-        "2024-01-01": {"asleep": 134, "inbed": 150, "bed_min": 540,  "bedtime": "09:00",
-                        "deep": 10, "rem": 20, "light": 104, "eff": 89.3, "waketime": "11:14"},   # siesta
+        "2024-01-01": {"asleep": 134, "inbed": 150, "bed_min": 660,  "bedtime": "11:00",
+                        "deep": 10, "rem": 20, "light": 104, "eff": 89.3, "waketime": "13:14"},   # siesta
         "2024-01-02": {"asleep": 420, "inbed": 460, "bed_min": -60,  "bedtime": "23:00",
                         "deep": 80, "rem": 100, "light": 240, "eff": 91.3, "waketime": "06:00"},  # noche legít.
         "2024-01-03": {"asleep": 80,  "inbed": 100, "bed_min": -30,  "bedtime": "23:30",
@@ -396,7 +396,7 @@ def test_nap_fields_excluded(monkeypatch):
     ds = build_dataset(sleep_d, rhr, hrv, {}, {}, steps, azm)
     by_date = {d["date"]: d for d in ds["days"]}
 
-    # 2024-01-01: siesta (bed_min=540 > 240) → sin campos de sueño
+    # 2024-01-01: siesta (bed_min=660 > 600) → sin campos de sueño
     d1 = by_date["2024-01-01"]
     for f in ("asleep", "inbed", "deep", "rem", "light", "eff", "bedtime", "waketime", "bed_min", "sleep_perf"):
         assert f not in d1, f"Campo {f} debe estar ausente en siesta (got {d1.get(f)})"
@@ -420,6 +420,54 @@ def test_nap_fields_excluded(monkeypatch):
     # 2024-01-04: onset 17:30 (bed_min=-390 < -300) → sin campos de sueño
     d4 = by_date["2024-01-04"]
     assert "asleep" not in d4, f"asleep debe estar ausente (evening onset), got {d4.get('asleep')}"
+
+
+def test_nap_threshold_is_10am_not_4am(monkeypatch):
+    """La siesta empieza a las 10:00; todo lo anterior es noche (2026-08-08).
+
+    Casos REALES del histórico del usuario que el corte viejo de las 04:00 se
+    estaba comiendo — todos pasan de 2h, así que ninguno cae por duración: solo
+    caían por el reloj. El 12-ene se perdía por DOS minutos.
+    """
+    import app.scoring as scoring
+    from app.scoring import build_dataset
+    monkeypatch.setattr(scoring, "RECOVERY_ANCHORED", False)
+
+    #            fecha         bedtime  bed_min  asleep  ¿noche?
+    casos = [
+        ("2024-02-12", "04:02",  242, 379, True),   # se perdia por 2 minutos
+        ("2024-02-01", "04:40",  280, 415, True),   # fin de año
+        ("2023-12-25", "05:12",  312, 333, True),
+        ("2024-03-05", "06:05",  365, 357, True),
+        ("2023-11-06", "09:37",  577, 175, True),   # justo debajo del corte
+        ("2026-02-10", "10:00",  600, 300, True),   # frontera exacta: 10:00 AUN es noche
+        ("2026-02-11", "10:01",  601, 300, False),  # un minuto despues ya es siesta
+        ("2026-02-12", "13:00",  780, 300, False),  # siesta franca de la tarde
+        ("2026-02-13", "17:30", -390, 480, False),  # cota inferior intacta (<19:00)
+    ]
+    sleep_d = {
+        f: {"asleep": a, "inbed": a + 20, "bed_min": bm, "bedtime": bt,
+            "deep": 60, "rem": 80, "light": a - 140, "eff": 92.0, "waketime": "12:00"}
+        for f, bt, bm, a, _ in casos
+    }
+    hrv = {f: 60.0 for f, *_ in casos}
+    rhr = {f: 50.0 for f, *_ in casos}
+
+    ds = build_dataset(sleep_d, rhr, hrv, {}, {}, {}, {})
+    by_date = {d["date"]: d for d in ds["days"]}
+
+    for fecha, bedtime, bed_min, asleep, es_noche in casos:
+        d = by_date[fecha]
+        if es_noche:
+            assert d.get("asleep") == asleep, (
+                f"{fecha} onset {bedtime} (bed_min={bed_min}) debe contar como NOCHE"
+            )
+            assert d.get("bed_min") == bed_min
+        else:
+            assert "asleep" not in d, (
+                f"{fecha} onset {bedtime} (bed_min={bed_min}) debe descartarse como SIESTA, "
+                f"got asleep={d.get('asleep')}"
+            )
 
 
 def test_normal_day_formula_unchanged(monkeypatch):
