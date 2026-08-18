@@ -190,6 +190,26 @@
     } catch(e){ return null; }
   }
 
+  // El usuario tambien puede venir en la URL que se TECLEA a mano
+  // (?vitals_user=). extractUserFromLocation() solo mira window.location, que
+  // en esta pantalla es el index.html empaquetado y nunca trae query; y
+  // normalize() descarta el query string a proposito (lo guardado debe ser el
+  // origen limpio). Resultado: hasta ahora el UNICO camino que fijaba el
+  // usuario era el QR -- y el escaner esta desactivado en este build, asi que
+  // un hogar con varios perfiles no tenia forma de emparejar y su ingesta caia
+  // al usuario por defecto (los datos de una persona entrando a la cuenta de
+  // otra). Se lee ANTES de normalizar. Sin ?vitals_user= el comportamiento es
+  // identico al de antes.
+  function extractUserFromTyped(raw){
+    try {
+      var s = String(raw || "").trim();
+      if(!s) return null;
+      if(!/^https?:\/\//i.test(s)) s = "https://" + s;
+      var u = new URL(s).searchParams.get("vitals_user");
+      return (u && u.trim()) ? u.trim() : null;
+    } catch(e){ return null; }
+  }
+
   // v1: sin escaner nativo (SPM) -> ocultar boton de QR, dejar solo entrada manual.
   // (Si un build futuro agrega un scanner compatible, el boton reaparece y el handler ya funciona.)
   (function(){
@@ -242,7 +262,7 @@
     // Fase 8D (paso D3, household): si el QR escaneado (o la URL pegada)
     // trae ?vitals_user=, se persiste para futuros arranques y se empuja al
     // plugin nativo junto con url/token.
-    var user = extractUserFromLocation();
+    var user = extractUserFromLocation() || extractUserFromTyped(u);
     if(user){ try { localStorage.setItem(USER_KEY, user); } catch(e){} }
     pushHealthConfig(n, token, user);
     window.location.replace(n);
