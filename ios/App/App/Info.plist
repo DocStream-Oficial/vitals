@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>tv.docstream.vitals.sync</string>
+	</array>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -22,6 +26,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
@@ -32,20 +38,6 @@
 	<string>Si registras un periodo o sintoma desde Vitals, la app puede escribir esos datos en la app Salud para mantenerlos sincronizados con tu Seguimiento de Ciclo de Apple, si lo activaste.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vitals usa el microfono para las notas de voz del Coach Deportivo.</string>
-	<!-- Fase 8D (paso D4): sync en background vía BGAppRefreshTask. El identifier
-	     DEBE coincidir exacto con HealthSyncManager.backgroundTaskIdentifier y
-	     con el string registrado en AppDelegate (BGTaskScheduler.shared.register).
-	     Requiere la capability "Background Modes -> Background fetch" activada
-	     en el target de Xcode (ver docs de deployment, roadmap D4). -->
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>tv.docstream.vitals.sync</string>
-	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>processing</string>
-	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -63,6 +55,11 @@
 			</array>
 		</dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
