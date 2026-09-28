@@ -261,7 +261,7 @@ function renderOrderList(scope) {
 
     // Name
     var label = document.createElement('div');
-    label.style.cssText = 'flex:1;font:500 14px -apple-system;color:var(--label);';
+    label.style.cssText = 'flex:1;font:500 14px var(--font);color:var(--label);';
     label.textContent = name;
 
     // Up button
@@ -351,22 +351,21 @@ function _attachOrderHandleDrag(handle, row, list, scope) {
 }
 
 // ── THEME ──
-function setMode(mode){
-  localStorage.setItem('vitals-theme', mode);
-  document.body.className = mode === 'light' ? 'light' : '';
-  var dk=document.getElementById('themeIconDark'), lt=document.getElementById('themeIconLight');
-  if(dk&&lt){ dk.style.display = mode==='light'?'none':'block'; lt.style.display = mode==='light'?'block':'none'; }
-}
-function toggleTheme(){
-  var cur = localStorage.getItem('vitals-theme') || 'dark';
-  setMode(cur==='light'?'dark':'light');
-  // Roadmap P3 Fase A: el cambio de tema puede alterar line-heights/anchos de
-  // texto → recompute (rAF para esperar el repaint del CSS).
+// Roadmap HIG paso 3: la apariencia SIGUE AL SISTEMA (§3 — Apple desaconseja
+// un interruptor propio). El <script> en línea tras <body> ya puso body.light
+// en la carga (sin parpadeo); aquí solo escuchamos cambios en vivo.
+function applySystemTheme(){
+  var light = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  document.body.classList.toggle('light', light);
   if (typeof layoutMasonryAll === 'function') requestAnimationFrame(function(){ layoutMasonryAll(); });
 }
 (function(){
-  var saved = localStorage.getItem('vitals-theme') || 'dark';
-  setMode(saved);
+  applySystemTheme();
+  try {
+    var mq = window.matchMedia('(prefers-color-scheme: light)');
+    if (mq.addEventListener) mq.addEventListener('change', applySystemTheme);
+    else if (mq.addListener) mq.addListener(applySystemTheme);
+  } catch(e){}
 })();
 
 // ── TABS ──
@@ -378,21 +377,15 @@ function goTab(screenId){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.getElementById(screenId).classList.add('active');
   currentTab = screenId;
-  // Update tab bar icon colors
-  var GREEN = '#30D158', DIM = 'var(--label2)';
+  // Roadmap HIG paso 5: el color de la pestaña activa ya lo da .tab-item.active
+  // (var(--accent)) vía CSS — aquí solo se alterna la clase + aria-selected
+  // (antes se pintaba stroke/fill/color a mano en cada ícono).
   Object.keys(TAB_MAP).forEach(function(sid){
     var tabEl = document.getElementById(TAB_MAP[sid]);
+    if(!tabEl) return;
     var isActive = sid === screenId;
-    var col = isActive ? GREEN : DIM;
-    tabEl.querySelectorAll('svg').forEach(function(s){
-      s.setAttribute('stroke', col);
-      // For grid icon (fill-based)
-      if(s.querySelector('rect')){s.setAttribute('fill',col);s.removeAttribute('stroke');}
-    });
-    tabEl.querySelector('span').style.color = col;
-    if(isActive){
-      tabEl.querySelector('svg').setAttribute('stroke-width','2.2');
-    }
+    tabEl.classList.toggle('active', isActive);
+    tabEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
   // Lazy-render Tendencias on first visit and on each activation
   if(screenId === 'screenTend'){ renderTend(); }
@@ -425,6 +418,24 @@ function smooth(pts){
   return d;
 }
 
+// Roadmap HIG paso 8: las etiquetas del eje Y se pintan como HTML encima del
+// SVG. Dentro de un SVG con preserveAspectRatio="none" el <text> se estiraba
+// de forma no uniforme (salía comprimido a ~4 px de ancho). Charts §7.
+function _chartWithAxis(svg, W, H, padL, ticks, refLbls){
+  var html = '<div class="chart-wrap">' + svg;
+  (ticks||[]).forEach(function(tk){
+    html += '<span class="chart-ylbl" style="top:'+(tk.y/H*100).toFixed(2)+'%;width:'+(padL/W*100).toFixed(2)+'%">'+tk.label+'</span>';
+  });
+  (refLbls||[]).forEach(function(r){
+    html += '<span class="chart-reflbl" style="top:'+(r.y/H*100).toFixed(2)+'%;right:'+(r.padR/W*100).toFixed(2)+'%;color:'+r.color+'">'+r.label+'</span>';
+  });
+  return html + '</div>';
+}
+function _hmShort(m){ // "10 pm" si es hora exacta, si no "10:30 pm"
+  m=Math.round(((m%1440)+1440)%1440);
+  return (m%60===0) ? _hm(m).replace(':00','') : _hm(m);
+}
+
 function spark(data, color){
   if(!data||!data.length) return '';
   var W=62,H=24,p=3;
@@ -438,24 +449,23 @@ function spark(data, color){
     '<circle class="an-dot" style="animation-delay:.6s" cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.4" fill="'+color+'"/></svg>';
 }
 
-function ringsSVG(rec, sleepPct, strainFrac){
-  function ring(r, frac, grad, col, delay){
-    var c=2*Math.PI*r;
-    var dash=Math.max(0.001,Math.min(1,frac))*c;
-    return '<circle cx="75" cy="75" r="'+r+'" fill="none" style="stroke:var(--ring-track)" stroke-width="12.5"/>'+
-      '<circle class="an-ring" cx="75" cy="75" r="'+r+'" fill="none" stroke="url(#'+grad+')" stroke-width="12.5" stroke-linecap="round"'+
-      ' stroke-dasharray="'+dash.toFixed(2)+' '+c.toFixed(2)+'"'+
-      ' transform="rotate(-90 75 75)" style="--dlen:'+dash.toFixed(2)+';animation-delay:'+delay+'s;filter:drop-shadow(0 0 5px '+hexA(col,0.55)+')">';
-  }
-  return '<svg viewBox="0 0 150 150" width="100%" style="display:block"><defs>'+
-    '<linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5BF07F"/><stop offset="1" stop-color="#28B84A"/></linearGradient>'+
-    '<linearGradient id="rs" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C7AF5"/><stop offset="1" stop-color="#4A48D8"/></linearGradient>'+
-    '<linearGradient id="rt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8FE0FF"/><stop offset="1" stop-color="#2AA4F0"/></linearGradient>'+
-    '</defs>'+
-    ring(58,rec/100,'rg',A.green,0)+'</circle>'+
-    ring(43.5,sleepPct/100,'rs',A.indigo,0.12)+'</circle>'+
-    ring(29,strainFrac,'rt',A.cyan,0.24)+'</circle>'+
-    '</svg>';
+// Roadmap HIG paso 12: un solo medidor de recuperación (arco abierto de 270°)
+// en vez de 3 anillos concéntricos — las HIG prohíben replicar los Activity
+// rings de Apple para otros datos (§8). Color por zona (67/34, mismos
+// umbrales que _renderFitnessDeep).
+function recoveryZoneColor(rec){ return rec >= 67 ? '#30D158' : (rec >= 34 ? '#FF9F0A' : '#FF453A'); }
+function recoveryGaugeSVG(rec){
+  var r=62, cx=75, cy=75, sw=12, sweep=270;
+  var c=2*Math.PI*r, arcLen=c*sweep/360;
+  var frac=Math.max(0,Math.min(1,(rec||0)/100)), dash=Math.max(0.001,frac*arcLen);
+  var col=recoveryZoneColor(rec||0);
+  // rotate(135): el arco empieza abajo-izquierda y termina abajo-derecha (hueco abajo).
+  return '<svg viewBox="0 0 150 150" width="100%" style="display:block" aria-hidden="true">'
+    + '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" style="stroke:var(--ring-track)" stroke-width="'+sw+'" stroke-linecap="round"'
+    +   ' stroke-dasharray="'+arcLen.toFixed(2)+' '+c.toFixed(2)+'" transform="rotate(135 '+cx+' '+cy+')"/>'
+    + '<circle class="an-ring" cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+sw+'" stroke-linecap="round"'
+    +   ' stroke-dasharray="'+dash.toFixed(2)+' '+c.toFixed(2)+'" transform="rotate(135 '+cx+' '+cy+')" style="--dlen:'+dash.toFixed(2)+'"/>'
+    + '</svg>';
 }
 
 function buildDetailChart(data, color, minVal, maxVal, yTicks){
@@ -470,10 +480,11 @@ function buildDetailChart(data, color, minVal, maxVal, yTicks){
   var X=function(i){return padL+(N<=1?pw/2:i*pw/(N-1));};
   var Y=function(v){return padT+(1-(v-minVal)/(maxVal-minVal))*ph;};
   var body='';
-  (yTicks||[]).forEach(function(t){
-    var y=Y(t);
+  var ticks=[];
+  (yTicks||[]).forEach(function(tv){
+    var y=Y(tv);
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" style="stroke:var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-    body+='<text x="'+(padL-6)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" style="fill:var(--axis);font:500 9px -apple-system">'+t+'</text>';
+    ticks.push({y:y, label:tv});
   });
   var pts=data.map(function(v,i){return [X(i),Y(clamp(v,minVal,maxVal))];});
   var line=smooth(pts);
@@ -484,7 +495,8 @@ function buildDetailChart(data, color, minVal, maxVal, yTicks){
   body+='<path class="an-area" d="'+area+'" fill="url(#dtf)"/>';
   body+='<path class="an-line" pathLength="1" vector-effect="non-scaling-stroke" d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 1px 4px '+hexA(color,0.4)+')" />';
   body+='<circle class="an-dot" style="animation-delay:.7s" cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="3.5" fill="'+color+'"/>';
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="overflow:visible;display:block">'+body+'</svg>';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="overflow:visible;display:block">'+body+'</svg>';
+  return _chartWithAxis(svg, W, H, padL, ticks, null);
 }
 
 // ── ICON SVG ──
@@ -500,6 +512,39 @@ function icon(name, color, s){
   return '<svg viewBox="0 0 24 24" width="'+s+'" height="'+s+'" fill="none" stroke="'+color+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="'+ICONS[name]+'"/></svg>';
 }
 
+// Roadmap HIG paso 7: los avisos llegan del servidor con emoji; en iOS 27 algunos
+// no se pintan ("?") y además no respetan el estilo de íconos del sistema. Se
+// mapean a íconos de línea propios (NO SF Symbols — licencia, §6).
+var INSIGHT_ICON_PATHS = {
+  battery:'M3.5 8.5h14a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 2 14v-4a1.5 1.5 0 0 1 1.5-1.5zM21.5 10.5v3M5.5 11v2',
+  heart:ICONS.heart,
+  moon:'M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z',
+  flame:'M12 21a6 6 0 0 0 6-6c0-4-3-6.5-4-9.5-1 2.5-2.5 3.5-3.5 3.5 0-1.5-.5-3-1.5-4C7 7.5 6 10.5 6 15a6 6 0 0 0 6 6z',
+  walk:'M13.5 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM9.5 21l2-6.5 2.5 2.5V21M8 12l3.5-3.5 2.5 2.5 3 1M11.5 8.5L10 14',
+  thermo:ICONS.thermo,
+  clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2',
+  dumbbell:'M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11',
+  trendUp:'M3 17l5-5 3.5 3.5L20 6M16 6h4v4',
+  trendDown:'M3 7l5 5 3.5-3.5L20 18M16 18h4v-4',
+  drop:ICONS.drop,
+  target:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM12 12h.01',
+  alert:'M12 4l9 16H3zM12 10v4M12 17h.01',
+  star:'M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z',
+  leaf:'M5 19c0-8 5-13 14-14 0 9-5 14-13 14M5 19l7-7',
+  sparkle:'M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z'
+};
+var INSIGHT_EMOJI_ICON = {
+  '🔋':'battery','💓':'heart','❤':'heart','😴':'moon','🌙':'moon','🔥':'flame',
+  '🚶':'walk','🏃':'walk','🌡':'thermo','🕐':'clock','⏳':'clock','💪':'dumbbell',
+  '📈':'trendUp','📉':'trendDown','💧':'drop','🩸':'drop','🎯':'target','⚠':'alert',
+  '⭐':'star','✨':'star','🍂':'leaf'
+};
+function insightIconSvg(emoji){
+  var key = String(emoji || '').replace(/\uFE0F/g, '').trim();
+  var path = INSIGHT_ICON_PATHS[INSIGHT_EMOJI_ICON[key] || 'sparkle'];
+  return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+path+'"/></svg>';
+}
+
 // ── LOCALE DATE ──
 // Legacy aliases — point to locale-aware helpers
 var DIAS  = _getDias();
@@ -510,6 +555,27 @@ function fmtDateES(dateStr){
   var d=new Date(+p[0],+p[1]-1,+p[2]);
   var dias = _getDias(); var meses = _getMeses();
   return dias[d.getDay()]+', '+d.getDate()+(t('date_de'))+meses[d.getMonth()];
+}
+
+// Roadmap HIG paso 9: fechas legibles (Charts §7: "June 6", no "6/6").
+function _loc(){ return (PROFILE && PROFILE.locale) || 'es'; }
+function _parseISODate(s){ var p=String(s||'').split('-'); return p.length===3 ? new Date(+p[0],+p[1]-1,+p[2]) : null; }
+function _cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+function fmtNavDate(dateStr){ // "Hoy" / "Ayer" / "hace 3 días" (≤6 días) / "sáb, 4 jul"
+  var d=_parseISODate(dateStr); if(!d) return '—';
+  var now=new Date(); var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  var diff=Math.round((today-d)/86400000);
+  try{
+    if(diff>=0 && diff<=6) return _cap(new Intl.RelativeTimeFormat(_loc(),{numeric:'auto'}).format(-diff,'day'));
+    return _cap(new Intl.DateTimeFormat(_loc(),{weekday:'short',day:'numeric',month:'short'}).format(d));
+  }catch(e){ return dateStr; }
+}
+function fmtShortDay(dateStr){ // "sáb 4"
+  var d=_parseISODate(dateStr); if(!d) return '';
+  try{ return new Intl.DateTimeFormat(_loc(),{weekday:'short'}).format(d).replace('.','')+' '+d.getDate(); }catch(e){ return dateStr.slice(5); }
+}
+function fmtInt(n){
+  try{ return new Intl.NumberFormat(_loc(),{useGrouping:'always',maximumFractionDigits:0}).format(n); }catch(e){ return String(Math.round(n)); }
 }
 
 // ── AVG HELPERS ──
@@ -534,16 +600,20 @@ function renderInsights(){
   if(!container) return;
   var list = (typeof INSIGHTS !== 'undefined' && Array.isArray(INSIGHTS)) ? INSIGHTS : [];
 
-  // (b) descartar insights cuyo summary duplique el headline del Coach.
+  // (b) descartar insights cuyo summary duplique el headline del Coach — ahora
+  // también si el headline EMPIEZA con el resumen (roadmap HIG paso 7).
   var coachHeadline = ((typeof COACH !== 'undefined' && COACH && COACH.headline) || '').trim();
+  function _normSent(s){ return String(s||'').trim().replace(/[.\s]+$/,''); }
+  var ch = _normSent(coachHeadline);
   if(coachHeadline){
     list = list.filter(function(ins){
-      return (ins.summary || '').trim() !== coachHeadline;
+      var s = _normSent(ins.summary);
+      return !(s && ch && (ch === s || ch.indexOf(s) === 0));
     });
   }
 
   if(!list.length){
-    container.innerHTML = '<div class="insight-all-ok">🙂 <span>'+escHtml(t('insights_all_ok'))+'</span></div>';
+    container.innerHTML = '<div class="insight-all-ok"><span>'+escHtml(t('insights_all_ok'))+'</span></div>';
     return;
   }
 
@@ -565,9 +635,8 @@ function renderInsights(){
     }).join('');
     return '<div class="insight-card" data-sev="'+ins.severity+'">'
       + '<div class="insight-header">'
-      +   '<span class="insight-icon">'+ins.icon+'</span>'
+      +   '<span class="insight-icon">'+insightIconSvg(ins.icon)+'</span>'
       +   '<span class="insight-title">'+escHtml(ins.title)+'</span>'
-      +   '<span class="insight-sev-dot"></span>'
       + '</div>'
       + '<div class="insight-summary">'+escHtml(ins.summary)+'</div>'
       + (factors ? '<div class="insight-factors">'+factors+'</div>' : '')
@@ -609,7 +678,10 @@ function escHtml(s){
 var _techDetailSeq = 0;
 function techDetail(idHint, techHtml){
   var id = 'td_' + (idHint || '') + '_' + (_techDetailSeq++);
-  return '<span class="techdetail-trigger" onclick="toggleTechDetail(\''+id+'\')" role="button" aria-label="'+escHtml(t('techdetail_al'))+'">ⓘ</span>'
+  // Roadmap HIG paso 6: glifo "ⓘ" (texto) -> SVG en línea (no SF Symbols, §6);
+  // corrige además el glifo roto/encimado junto al subtítulo de Healthspan.
+  var icon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+  return '<span class="techdetail-trigger" onclick="toggleTechDetail(\''+id+'\')" role="button" aria-label="'+escHtml(t('techdetail_al'))+'">'+icon+'</span>'
     + '<div class="techdetail-body" id="'+id+'">'+techHtml+'</div>';
 }
 function toggleTechDetail(id){
@@ -690,8 +762,8 @@ function renderCycleCard(){
   var phaseLabel = t('phase_' + CYCLE.phase) || CYCLE.phase || '—';
   var daysUntil = CYCLE.period && CYCLE.period.days_until;
   var html = '<div style="display:flex;align-items:baseline;gap:8px;margin-top:6px">'
-    + '<span style="font:600 22px -apple-system;color:var(--label)">' + t('cycle_card_day').replace('{n}', CYCLE.cycle_day) + '</span>'
-    + '<span style="font:500 13px -apple-system;color:var(--label3);text-transform:capitalize">' + escHtml(phaseLabel) + '</span>'
+    + '<span style="font:600 22px var(--font);color:var(--label)">' + t('cycle_card_day').replace('{n}', CYCLE.cycle_day) + '</span>'
+    + '<span style="font:500 13px var(--font);color:var(--label3);text-transform:capitalize">' + escHtml(phaseLabel) + '</span>'
     + '</div>';
 
   if (daysUntil != null) {
@@ -702,12 +774,12 @@ function renderCycleCard(){
   }
 
   if (CYCLE.fertile_window) {
-    html += '<div style="margin-top:8px;display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,55,95,.12);color:#FF375F;font:600 11px -apple-system">'
+    html += '<div style="margin-top:8px;display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,55,95,.12);color:#FF375F;font:600 11px var(--font)">'
       + '🌸 ' + escHtml(t('cycle_card_fertile_chip')) + '</div>';
   }
 
   if (CYCLE.delay && CYCLE.delay.is_delayed) {
-    html += '<div style="margin-top:8px;font:500 12px -apple-system;color:#FF9F0A">⏳ '
+    html += '<div style="margin-top:8px;font:500 12px var(--font);color:#FF9F0A">⏳ '
       + escHtml(t('cycle_delay_summary').replace('{n_days}', CYCLE.delay.days)) + '</div>';
   }
 
@@ -786,7 +858,7 @@ function _renderCycleDeep(){
   html += '<div class="mas-sync-card deep-span-all" style="margin-top:6px">'
     + '<div class="mas-row-label" style="margin-bottom:8px">' + t('cycle_deep_log_period') + '</div>'
     + '<input type="date" id="cycleLogStart" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--sep);background:var(--bg2);color:var(--label);margin-bottom:8px">'
-    + '<div id="cycleLogBtn" onclick="_submitCyclePeriod()" style="text-align:center;padding:10px;border-radius:10px;background:#FF375F;color:#fff;font:600 14px -apple-system;cursor:pointer">'
+    + '<div id="cycleLogBtn" onclick="_submitCyclePeriod()" style="text-align:center;padding:10px;border-radius:10px;background:#FF375F;color:#fff;font:600 14px var(--font);cursor:pointer">'
     + t('cycle_deep_save') + '</div>'
     + '</div>';
 
@@ -824,7 +896,7 @@ function renderHoy(){
 
   // Fecha
   document.getElementById('todayDate').textContent = fmtDateES(day.date);
-  document.getElementById('scrubDate').textContent = day.date || '—';
+  document.getElementById('scrubDate').textContent = fmtNavDate(day.date);
   document.getElementById('btnPrev').disabled = sel <= 0;
   document.getElementById('btnNext').disabled = sel >= days.length-1;
 
@@ -834,10 +906,12 @@ function renderHoy(){
   var strain = day.strain != null ? day.strain : 0;
   var strainFrac = clamp(strain/21,0,1);
 
-  document.getElementById('ringWrap').innerHTML = ringsSVG(rec, sleepPct, strainFrac);
+  document.getElementById('ringSvg').innerHTML = recoveryGaugeSVG(day.recovery != null ? day.recovery : 0);
+  var ringWrapEl = document.getElementById('ringWrap');
+  if(ringWrapEl) ringWrapEl.setAttribute('aria-label', t('ring_recovery') + ' ' + (day.recovery != null ? day.recovery + '%' : '—'));
 
   // recovery label
-  document.getElementById('recVal').innerHTML = (day.recovery!=null ? day.recovery : '—') + '<span class="ring-sub" style="margin-left:1px">%</span>';
+  document.getElementById('recVal').innerHTML = (day.recovery!=null ? day.recovery : '—') + '<span class="ring-sub">%</span>';
 
   // recovery_n: confianza de señales
   (function(){
@@ -861,6 +935,12 @@ function renderHoy(){
 
   // strain
   document.getElementById('strainVal').innerHTML = (day.strain!=null?day.strain.toFixed(1):'—') + '<span class="ring-sub" style="margin-left:2px">/ 21</span>';
+
+  // Roadmap HIG paso 12: barras lineales de Sueño/Esfuerzo bajo el medidor.
+  var sleepBarEl = document.getElementById('sleepBar');
+  if(sleepBarEl) sleepBarEl.style.transform = 'scaleX(' + (clamp(sleepPct,0,100)/100) + ')';
+  var strainBarEl = document.getElementById('strainBar');
+  if(strainBarEl) strainBarEl.style.transform = 'scaleX(' + strainFrac + ')';
 
   // ── EDAD CORPORAL ──
   // Roadmap vo2-sin-inventar Paso 5: sin VO2 medido vigente, el backend gatea
@@ -1548,7 +1628,7 @@ function renderPlanCard(data){
     taskLine = escHtml(data.today_task.label);
     if(data.today_task.adapted){
       adaptedBadge = '<span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;'
-        + 'background:rgba(255,159,10,.14);color:#FF9F0A;font:600 10px -apple-system">'
+        + 'background:rgba(255,159,10,.14);color:#FF9F0A;font:600 10px var(--font)">'
         + escHtml(t('plan_adapted_badge')) + '</span>';
     }
   }
@@ -1559,14 +1639,14 @@ function renderPlanCard(data){
   }
 
   bodyEl.innerHTML =
-    '<div style="font:600 16px/1.3 -apple-system;color:var(--label);margin-top:6px">' + escHtml(dayLine) + '</div>'
-    + '<div style="font:500 14px/1.4 -apple-system;color:var(--label2);margin-top:4px">' + taskLine + adaptedBadge + '</div>'
+    '<div style="font:600 16px/1.3 var(--font);color:var(--label);margin-top:6px">' + escHtml(dayLine) + '</div>'
+    + '<div style="font:500 14px/1.4 var(--font);color:var(--label2);margin-top:4px">' + taskLine + adaptedBadge + '</div>'
     + adherenceLine;
 
   var todayStr = (days.length ? days[days.length-1].date : null) || new Date().toISOString().slice(0,10);
-  actionsEl.innerHTML = '<button class="plan-done-btn" onclick="planMarkDone(event)" '
-    + 'style="padding:8px 16px;border-radius:12px;border:none;background:#30D158;color:#000;'
-    + 'font:600 13px -apple-system;cursor:pointer">' + escHtml(t('plan_done_btn')) + '</button>';
+  // Roadmap HIG paso 10: estilo del botón movido a CSS (.plan-done-btn) —
+  // color de acción azul + botón estándar iOS (17px/600, §3/§7).
+  actionsEl.innerHTML = '<button class="plan-done-btn" onclick="planMarkDone(event)">' + escHtml(t('plan_done_btn')) + '</button>';
 }
 
 function planMarkDone(ev){
@@ -1785,7 +1865,7 @@ function _showSyncInd(show){
       'transition:opacity .3s ease, transform .3s ease;pointer-events:none;display:flex;'+
       'align-items:center;gap:7px;padding:7px 14px;border-radius:999px;background:rgba(28,28,32,.85);'+
       'backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);'+
-      'color:rgba(235,235,245,.78);font:600 12px -apple-system';
+      'color:rgba(235,235,245,.78);font:600 12px var(--font)';
     ind.innerHTML = '<span class="spin-icon" style="display:inline-block">↻</span> ' + t('sync_doing');
     document.body.appendChild(ind);
   }
@@ -1974,7 +2054,7 @@ function _deepCard(cfg){
   var sparkHtml = '';
   if(cfg.sparkVals && cfg.sparkVals.some(function(v){ return v != null; })){
     sparkHtml = '<div class="deep-mc-spark">'+_miniSparkline(cfg.sparkVals, cfg.color || A.green)+'</div>';
-    sparkHtml += '<div style="font:500 10px/1 -apple-system;color:var(--label3);margin-top:4px">'+t('ds_sparkline_7d')+'</div>';
+    sparkHtml += '<div style="font:500 10px/1 var(--font);color:var(--label3);margin-top:4px">'+t('ds_sparkline_7d')+'</div>';
   }
   return '<div class="deep-mc'+(cfg.spanAll ? ' deep-span-all' : '')+'">'
     +'<div class="deep-mc-header">'
@@ -1999,9 +2079,13 @@ function _deepSection(labelKey){
 }
 
 /** Build bedtime mini-bars for the last 7 nights with bedtime+waketime data. */
+// Roadmap HIG paso 12: horario de sueño en columnas VERTICALES (arriba = hora
+// de dormir, abajo = hora de despertar) — las barras horizontales dentro de
+// columnas eran ilegibles (todas se veían iguales). Mismo nombre/firma y
+// mismo mensaje ds_no_sched cuando no hay datos.
 function _bedtimeBars(){
   var recent = days.slice(-14).filter(function(d){ return d.bedtime && d.waketime; }).slice(-7);
-  if(!recent.length) return '<div style="font:400 13px/1.4 -apple-system;color:var(--label3);padding:8px 0">'+t('ds_no_sched')+'</div>';
+  if(!recent.length) return '<div style="font:400 13px/1.4 var(--font);color:var(--label3);padding:8px 0">'+t('ds_no_sched')+'</div>';
 
   // Parse "HH:MM" → minutes from midnight (bedtime may be negative = before midnight)
   function toMin(s){
@@ -2023,31 +2107,46 @@ function _bedtimeBars(){
 
   var allStart = recent.map(function(d){ return normBed(d.bedtime); }).filter(function(v){ return v !== null; });
   var allEnd   = recent.map(function(d){ return normWake(d.waketime); }).filter(function(v){ return v !== null; });
-  if(!allStart.length) return '<div style="font:400 13px/1.4 -apple-system;color:var(--label3);padding:8px 0">'+t('ds_no_sched')+'</div>';
+  if(!allStart.length) return '<div style="font:400 13px/1.4 var(--font);color:var(--label3);padding:8px 0">'+t('ds_no_sched')+'</div>';
 
   var minT = Math.min.apply(null, allStart) - 20;
   var maxT = Math.max.apply(null, allEnd.concat([allStart[0]+600])) + 20;
   var span = maxT - minT || 1;
 
   function pct(m){ return ((m - minT) / span * 100).toFixed(1)+'%'; }
-  function barW(s,e){ var w = (e-s)/span*100; return Math.max(w,2).toFixed(1)+'%'; }
 
-  var barsHtml = '<div style="display:flex;gap:4px;align-items:stretch;margin-top:8px">';
+  // Eje izquierdo: 3 etiquetas de hora (min redondeado arriba, punto medio,
+  // max redondeado abajo), posicionadas con top:% usando la misma pct().
+  var axisTop = Math.ceil(minT/60)*60;
+  var axisMid = Math.round((minT+maxT)/2/60)*60;
+  var axisBot = Math.floor(maxT/60)*60;
+  var axisHtml = '<div style="position:relative;width:34px;flex:none;height:120px">'
+    + '<span style="position:absolute;left:0;top:'+pct(axisTop)+';transform:translateY(-50%);font:500 11px/1 var(--font);color:var(--label3)">'+_hmShort(axisTop)+'</span>'
+    + '<span style="position:absolute;left:0;top:'+pct(axisMid)+';transform:translateY(-50%);font:500 11px/1 var(--font);color:var(--label3)">'+_hmShort(axisMid)+'</span>'
+    + '<span style="position:absolute;left:0;top:'+pct(axisBot)+';transform:translateY(-50%);font:500 11px/1 var(--font);color:var(--label3)">'+_hmShort(axisBot)+'</span>'
+    + '</div>';
+
+  var colsHtml = '<div style="display:flex;gap:4px;align-items:stretch;flex:1">';
   recent.forEach(function(d){
     var s = normBed(d.bedtime), e = normWake(d.waketime);
-    if(s == null || e == null){ barsHtml += '<div style="flex:1"></div>'; return; }
-    var date = d.date ? d.date.slice(5) : '';
-    // bar as a relative-width fill within a row
-    barsHtml += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
-      +'<div style="width:100%;height:52px;position:relative;background:var(--card2);border-radius:6px;overflow:hidden">'
-        +'<div style="position:absolute;top:0;bottom:0;left:'+pct(s)+';width:'+barW(s,e)+';background:'
-          +A.indigo+';border-radius:4px;opacity:.85"></div>'
+    if(s == null || e == null){ colsHtml += '<div style="flex:1"></div>'; return; }
+    var dayLbl = d.date ? fmtShortDay(d.date) : '';
+    var aria = (d.date ? fmtShortDay(d.date) : '') + ': ' + _hmShort(s) + ' – ' + _hmShort(e);
+    var fillH = Math.max((e-s)/span*100, 2).toFixed(1)+'%';
+    colsHtml += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px" title="'+escHtml(aria)+'" aria-label="'+escHtml(aria)+'">'
+      +'<div style="width:100%;height:120px;position:relative;background:var(--card2);border-radius:6px;overflow:hidden">'
+        +'<div style="position:absolute;left:0;right:0;top:'+pct(s)+';height:'+fillH+';background:'
+          +A.indigo+';border-radius:5px;opacity:.85"></div>'
       +'</div>'
-      +'<div style="font:500 9px/1 -apple-system;color:var(--label3);text-align:center">'+date+'</div>'
+      // Roadmap HIG (post-validación): la columna es angosta y "dom 28" se partía
+      // al azar; se apila a propósito (día de la semana arriba, número abajo).
+      +'<div style="font:500 11px/1.25 var(--font);color:var(--label3);text-align:center;white-space:nowrap">'+escHtml(dayLbl).replace(/ (\d+)$/, '<br>$1')+'</div>'
     +'</div>';
   });
-  barsHtml += '</div>';
-  barsHtml += '<div style="display:flex;gap:14px;margin-top:6px;font:400 11px/1 -apple-system;color:var(--label3)">'
+  colsHtml += '</div>';
+
+  var barsHtml = '<div style="display:flex;gap:8px;align-items:stretch;margin-top:8px">' + axisHtml + colsHtml + '</div>';
+  barsHtml += '<div style="display:flex;gap:14px;margin-top:6px;font:400 11px/1 var(--font);color:var(--label3)">'
     +'<span><span style="display:inline-block;width:9px;height:9px;background:'+A.indigo+';border-radius:3px;margin-right:3px;vertical-align:middle"></span>'+t('ds_bed_lbl')+'→'+t('ds_wake_lbl')+'</span>'
     +'</div>';
   return barsHtml;
@@ -2209,7 +2308,7 @@ function _hypnogramAxis(totalMin, bedtime){
   for(var i=0;i<nTicks;i++){
     var frac = i/(nTicks-1);
     var m = bedMin + frac*totalMin;
-    html += '<span style="font:400 9px/1 -apple-system;color:var(--label3)">'+_hm(m)+'</span>';
+    html += '<span style="font:400 9px/1 var(--font);color:var(--label3)">'+_hm(m)+'</span>';
   }
   html += '</div>';
   return html;
@@ -2240,17 +2339,17 @@ function _renderHypnogramBlock(today){
       // Rama 2: sin segments pero con totales por fase — se muestra la
       // leyenda explicando por qué no hay hipnograma + los totales igual,
       // para no perder la info que sí existe.
-      emptyHtml += '<div style="font:400 13px/1.4 -apple-system;color:var(--label3)">'+t('ds_hypno_empty_no_stages')+'</div>';
+      emptyHtml += '<div style="font:400 13px/1.4 var(--font);color:var(--label3)">'+t('ds_hypno_empty_no_stages')+'</div>';
       emptyHtml += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px">';
       var dDeep = today.deep != null ? String(today.deep) : null;
       var dRem = today.rem != null ? String(today.rem) : null;
       var dLight = today.light != null ? String(today.light) : null;
-      emptyHtml += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_deep')+'</div>'
-        + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.deep+'">'+(dDeep != null ? dDeep+t('du_min_short') : '—')+'</div></div>';
-      emptyHtml += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_rem')+'</div>'
-        + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.rem+'">'+(dRem != null ? dRem+t('du_min_short') : '—')+'</div></div>';
-      emptyHtml += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_light')+'</div>'
-        + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.light+'">'+(dLight != null ? dLight+t('du_min_short') : '—')+'</div></div>';
+      emptyHtml += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_deep')+'</div>'
+        + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.deep+'">'+(dDeep != null ? dDeep+t('du_min_short') : '—')+'</div></div>';
+      emptyHtml += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_rem')+'</div>'
+        + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.rem+'">'+(dRem != null ? dRem+t('du_min_short') : '—')+'</div></div>';
+      emptyHtml += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_light')+'</div>'
+        + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.light+'">'+(dLight != null ? dLight+t('du_min_short') : '—')+'</div></div>';
       emptyHtml += '</div>';
     } else if(today.asleep != null && today.asleep > 0){
       // Rama 3: SÍ durmió (hay asleep) pero sin segments NI totales por fase —
@@ -2258,13 +2357,13 @@ function _renderHypnogramBlock(today){
       // caía en "aún no hay datos", INCOHERENTE cuando la duración sí existe (y
       // se muestra en la card de abajo). Ahora reconoce el sueño: muestra la
       // duración dormida + la leyenda de que falta el desglose por fases.
-      emptyHtml += '<div style="font:400 13px/1.4 -apple-system;color:var(--label3)">'+t('ds_hypno_empty_no_stages')+'</div>';
+      emptyHtml += '<div style="font:400 13px/1.4 var(--font);color:var(--label3)">'+t('ds_hypno_empty_no_stages')+'</div>';
       var _dH = Math.floor(today.asleep/60), _dM = today.asleep%60;
-      emptyHtml += '<div style="margin-top:14px"><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_duration')+'</div>'
-        + '<div style="font:680 20px/1 -apple-system">'+_dH+'h '+(_dM<10?'0':'')+_dM+'m</div></div>';
+      emptyHtml += '<div style="margin-top:14px"><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_duration')+'</div>'
+        + '<div style="font:680 20px/1 var(--font)">'+_dH+'h '+(_dM<10?'0':'')+_dM+'m</div></div>';
     } else {
       // Rama 4: sin NADA de dato de sueño para esta noche (ni duración ni fases).
-      emptyHtml += '<div style="font:400 13px/1.4 -apple-system;color:var(--label3)">'+t('ds_hypno_empty_no_data')+'</div>';
+      emptyHtml += '<div style="font:400 13px/1.4 var(--font);color:var(--label3)">'+t('ds_hypno_empty_no_data')+'</div>';
     }
     emptyHtml += '</div>'; // /deep-mc
     return emptyHtml;
@@ -2296,7 +2395,7 @@ function _renderHypnogramBlock(today){
   // Leyenda de etapas (color + nombre), mismo patrón visual que _bedtimeBars().
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">';
   _HYPNO_ROWS.forEach(function(stage){
-    html += '<span style="font:400 11px/1 -apple-system;color:var(--label3)">'
+    html += '<span style="font:400 11px/1 var(--font);color:var(--label3)">'
       + '<span style="display:inline-block;width:9px;height:9px;background:'+_HYPNO_COLORS[stage]+';border-radius:3px;margin-right:4px;vertical-align:middle"></span>'
       + t('ds_hypno_'+stage) + '</span>';
   });
@@ -2306,19 +2405,19 @@ function _renderHypnogramBlock(today){
   // deep/rem/light sobre asleep (fila 2) — criterio 15 del roadmap.
   html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px">';
   var effVal = today.eff != null ? String(today.eff)+t('du_pct') : '—';
-  html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_eff')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system;color:var(--label)">'+effVal+'</div></div>';
-  html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_awakenings')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system;color:var(--label)">'+nAwakenings+'</div></div>';
+  html += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_eff')+'</div>'
+    + '<div style="font:680 20px/1 var(--font);color:var(--label)">'+effVal+'</div></div>';
+  html += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_awakenings')+'</div>'
+    + '<div style="font:680 20px/1 var(--font);color:var(--label)">'+nAwakenings+'</div></div>';
   html += '</div>';
   var pctDeep = pctOf('deep'), pctRem = pctOf('rem'), pctLight = pctOf('light');
   html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px">';
-  html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_deep')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.deep+'">'+(pctDeep != null ? pctDeep+t('du_pct') : '—')+'</div></div>';
-  html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_rem')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.rem+'">'+(pctRem != null ? pctRem+t('du_pct') : '—')+'</div></div>';
-  html += '<div><div style="font:600 11px/1 -apple-system;color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_light')+'</div>'
-    + '<div style="font:680 20px/1 -apple-system;color:'+_HYPNO_COLORS.light+'">'+(pctLight != null ? pctLight+t('du_pct') : '—')+'</div></div>';
+  html += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_deep')+'</div>'
+    + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.deep+'">'+(pctDeep != null ? pctDeep+t('du_pct') : '—')+'</div></div>';
+  html += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_rem')+'</div>'
+    + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.rem+'">'+(pctRem != null ? pctRem+t('du_pct') : '—')+'</div></div>';
+  html += '<div><div style="font:600 11px/1 var(--font);color:var(--label2);margin-bottom:3px">'+t('ds_hypno_pct_light')+'</div>'
+    + '<div style="font:680 20px/1 var(--font);color:'+_HYPNO_COLORS.light+'">'+(pctLight != null ? pctLight+t('du_pct') : '—')+'</div></div>';
   html += '</div>';
 
   html += '</div>'; // /deep-mc
@@ -2496,7 +2595,7 @@ function renderSleepTab(){
   sleepSel = clamp(sleepSel, 0, Math.max(0, days.length - 1));
 
   var night = days[sleepSel] || {};
-  document.getElementById('sleepSelDate').textContent = night.date || '—';
+  document.getElementById('sleepSelDate').textContent = fmtNavDate(night.date);
   document.getElementById('sleepBtnPrev').disabled = sleepSel <= 0;
   document.getElementById('sleepBtnNext').disabled = sleepSel >= days.length - 1;
 
@@ -2546,7 +2645,7 @@ function _buildSleepTrendSection(){
     ['deep','rem','light','awake'],
     ['#4B3FA8','#9D78FF','#2E7BE6','rgba(150,150,175,.6)'],
     sleepGoalMinChart,
-    {H:160, padL:32, yTicks:[120,240,360,480,600]}
+    {H:160, padL:32, yTicks:[120,240,360,480,600], fmtY:function(m){ return Math.round(m/60)+' h'; }}
   );
   html += '<div class="tend-legend" style="margin-top:10px">'
     + '<span class="tend-legend-item"><span class="tend-legend-dot" style="background:#4B3FA8"></span><span>'+t('tend_sleep_legend_deep')+'</span></span>'
@@ -2713,11 +2812,11 @@ function _renderVitalsDeep(){
 
   html += '<div class="deep-span-all" style="text-align:center;padding:8px 0 20px">'
     + donutHtml
-    + '<div style="font:700 42px/1 -apple-system;color:' + wbColor + ';letter-spacing:-1px">'
+    + '<div style="font:700 42px/1 var(--font);color:' + wbColor + ';letter-spacing:-1px">'
     + (wb != null ? wb : '—') + '</div>'
-    + '<div style="font:600 13px/1.3 -apple-system;color:var(--label2);margin-top:4px">'
+    + '<div style="font:600 13px/1.3 var(--font);color:var(--label2);margin-top:4px">'
     + t('dv_wellbeing') + '</div>'
-    + '<div style="font:500 12px/1 -apple-system;color:' + wbColor + ';margin-top:4px">'
+    + '<div style="font:500 12px/1 var(--font);color:' + wbColor + ';margin-top:4px">'
     + wbLabel + '</div>'
     + '</div>';
 
@@ -2954,11 +3053,12 @@ function lineChart(series, opts){
   if(opts.maxV == null){ maxV += span*0.05; }
 
   var body = '';
+  var ticks=[], refLbls=[];
   // Y-axis grid + tick labels
-  (opts.yTicks||[]).forEach(function(t){
-    var y=_tY(t,minV,maxV,padT,ph);
+  (opts.yTicks||[]).forEach(function(tv){
+    var y=_tY(tv,minV,maxV,padT,ph);
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-    body+='<text x="'+(padL-5)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" fill="var(--axis)" style="font:500 9px -apple-system">'+t+'</text>';
+    ticks.push({y:y, label:tv});
   });
   // reference lines (horizontal thresholds)
   (opts.refLines||[]).forEach(function(r){
@@ -2966,7 +3066,7 @@ function lineChart(series, opts){
     var dash = r.dashed ? 'stroke-dasharray="4 3"' : '';
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="'+(r.color||'#fff')+'" stroke-width="1.2" vector-effect="non-scaling-stroke" '+dash+' opacity="0.6"/>';
     if(r.label){
-      body+='<text x="'+(W-padR-2)+'" y="'+(y-3).toFixed(1)+'" text-anchor="end" fill="'+(r.color||'#fff')+'" style="font:500 9px -apple-system" opacity="0.7">'+r.label+'</text>';
+      refLbls.push({y:y-3, padR:padR, color:r.color||'var(--label2)', label:r.label});
     }
   });
   // each series
@@ -3010,7 +3110,8 @@ function lineChart(series, opts){
       }
     });
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  return _chartWithAxis(svg, W, H, padL, ticks, refLbls);
 }
 
 /**
@@ -3030,10 +3131,11 @@ function bandChart(vals, color, bandLo, bandHi, baseV, opts){
   var maxV = opts.maxV != null ? opts.maxV : Math.max.apply(null,allV) + 2;
 
   var body='';
-  (opts.yTicks||[]).forEach(function(t){
-    var y=_tY(t,minV,maxV,padT,ph);
+  var ticks=[];
+  (opts.yTicks||[]).forEach(function(tv){
+    var y=_tY(tv,minV,maxV,padT,ph);
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-    body+='<text x="'+(padL-5)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" fill="var(--axis)" style="font:500 9px -apple-system">'+t+'</text>';
+    ticks.push({y:y, label:tv});
   });
   // Band
   var n=vals.length;
@@ -3063,7 +3165,8 @@ function bandChart(vals, color, bandLo, bandHi, baseV, opts){
     var lp=last[last.length-1];
     body+='<circle class="an-dot" style="animation-delay:.7s" cx="'+lp[0].toFixed(1)+'" cy="'+lp[1].toFixed(1)+'" r="3" fill="'+color+'"/>';
   }
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  return _chartWithAxis(svg, W, H, padL, ticks, null);
 }
 
 /**
@@ -3094,11 +3197,13 @@ function stackedBars(daysSlice, fieldGroups, colors, refMinutes, opts){
   if(!maxV) maxV=1;
   var barW=Math.max(2, pw/n*0.72);
   var gap=(pw/n)*(1-0.72)/2;
+  var fmtY = opts.fmtY || function(tv){ return String(tv); };
   var body='';
-  (opts.yTicks||[]).forEach(function(t){
-    var y=_tY(t,0,maxV,padT,ph);
+  var ticks=[];
+  (opts.yTicks||[]).forEach(function(tv){
+    var y=_tY(tv,0,maxV,padT,ph);
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-    body+='<text x="'+(padL-5)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" fill="var(--axis)" style="font:500 9px -apple-system">'+t+'</text>';
+    ticks.push({y:y, label:fmtY(tv)});
   });
   // Reference line (8h)
   if(refMinutes!=null){
@@ -3114,7 +3219,9 @@ function stackedBars(daysSlice, fieldGroups, colors, refMinutes, opts){
       if(!v) return;
       var barH=v/maxV*ph;
       var y=base-barH;
-      col+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+barH.toFixed(1)+'" fill="'+colors[fi]+'" rx="1.5"/>';
+      // Roadmap HIG paso 8 (Charts §7): separador de 1px entre segmentos
+      // apilados — nunca solo color para distinguir fases del sueño.
+      col+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+Math.max(barH-1,0.5).toFixed(1)+'" fill="'+colors[fi]+'" rx="1.5"/>';
       base=y;
     });
     if(col){
@@ -3122,7 +3229,8 @@ function stackedBars(daysSlice, fieldGroups, colors, refMinutes, opts){
       body+='<g class="an-bar" style="animation-delay:'+dly+'s">'+col+'</g>';
     }
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  return _chartWithAxis(svg, W, H, padL, ticks, null);
 }
 
 /**
@@ -3144,11 +3252,14 @@ function scatterChart(vals, color, refV, opts){
   var maxV=opts.maxV!=null?opts.maxV:Math.max.apply(null,allV)+30;
   var n=vals.length;
   var body='';
-  (opts.yTicks||[]).forEach(function(t){
-    var y=_tY(t,minV,maxV,padT,ph);
-    var lab=t>=0?_hm(t):'-'+_hm(-t);
+  var ticks=[];
+  (opts.yTicks||[]).forEach(function(tv){
+    var y=_tY(tv,minV,maxV,padT,ph);
+    // Roadmap HIG paso 8: _hmShort normaliza mod 1440 — antes t<0 pintaba
+    // "-2:00 am" para las 10 pm; ahora siempre "10 pm"/"12 am" legible (§7).
+    var lab=_hmShort(tv);
     body+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-    body+='<text x="'+(padL-5)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" fill="var(--axis)" style="font:500 9px -apple-system">'+lab+'</text>';
+    ticks.push({y:y, label:lab});
   });
   if(refV!=null){
     var yRef=_tY(refV,minV,maxV,padT,ph);
@@ -3160,7 +3271,8 @@ function scatterChart(vals, color, refV, opts){
     var cy=_tY(v,minV,maxV,padT,ph);
     body+='<circle class="an-dot" style="animation-delay:'+(i/n*0.4).toFixed(3)+'s" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="3.2" fill="'+hexA(color,0.82)+'"/>';
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" style="display:block;overflow:visible">'+body+'</svg>';
+  return _chartWithAxis(svg, W, H, padL, ticks, null);
 }
 
 /**
@@ -3323,8 +3435,10 @@ function renderWeeklyCompare(){
       return;
     }
     var div = r.div || 1;
-    var curDisp = m.cur != null ? (m.cur/div).toFixed(r.nd) : '—';
-    var prevDisp = m.prev != null ? (m.prev/div).toFixed(r.nd) : '—';
+    // Roadmap HIG paso 9: pasos con separador de miles (Intl.NumberFormat) —
+    // "1,234" en vez de "1234" (legibilidad de números grandes, §7).
+    var curDisp = m.cur != null ? (r.key==='steps' ? fmtInt(m.cur/div) : (m.cur/div).toFixed(r.nd)) : '—';
+    var prevDisp = m.prev != null ? (r.key==='steps' ? fmtInt(m.prev/div) : (m.prev/div).toFixed(r.nd)) : '—';
     var deltaScaled = m.delta != null ? m.delta/div : null;
     html += '<div class="wcmp-row">'
       + '<div class="wcmp-lbl">'+r.lbl+'</div>'
@@ -3493,7 +3607,9 @@ function renderTend(){
   var avgRecovery = avgOf(slice.map(function(d){return d.recovery;}));
 
   function fmt(v, dec){ return v!=null ? v.toFixed(dec!=null?dec:1) : '—'; }
-  function fmtInt(v){ return v!=null ? Math.round(v).toString() : '—'; }
+  // Validación HIG: delega en el fmtInt global (Intl, separador de miles) —
+  // antes "Pasos 8487" aquí vs "7.968" en Semana vs anterior, misma pantalla.
+  function fmtInt(v){ return v!=null ? window.fmtInt(v) : '—'; }
 
   var metrics = [
     {dot:'#30D158', l:t('met_recovery'), v: fmtInt(avgRecovery), u:'%',  s:t('met_sub_avg'), tk:'recovery'},
@@ -3546,7 +3662,7 @@ function renderTend(){
           +(hasHr   ? '<div class="tend-workout-bpm">'+(e.avg_hr!=null?Math.round(e.avg_hr)+' bpm':'—')+'</div>' : '')
           +'</div>';
       }).join('')
-    : '<div style="padding:12px 10px;font:400 13px -apple-system;color:var(--label3)">'+t('tend_workouts_empty')+'</div>';
+    : '<div style="padding:12px 10px;font:400 13px var(--font);color:var(--label3)">'+t('tend_workouts_empty')+'</div>';
 
   renderPalancas();
 
@@ -4235,13 +4351,6 @@ function renderMas() {
   // Roadmap P1 (F4, paso 8): sección Programas — catálogo + iniciar/abandonar.
   if (typeof renderProgramsSection === 'function') { renderProgramsSection(); }
 
-  // Theme toggle mirror
-  var toggle = document.getElementById('masThemeToggle');
-  if (toggle) {
-    var cur = localStorage.getItem('vitals-theme') || 'dark';
-    toggle.checked = (cur === 'dark');
-  }
-
   // Fase 7: toggle de seguimiento de ciclo — refleja PROFILE.cycle_tracking.
   // Inclusivo: funciona con cualquier sex; solo se muestra un HINT si sex==='F'
   // (sugerido, nunca forzado — ver roadmap "toggle opt-in inclusivo").
@@ -4579,13 +4688,6 @@ function sourceDisconnect(name, label) {
     .catch(function() { renderSourcesList(); });
 }
 
-function masToggleTheme(checkbox) {
-  setMode(checkbox.checked ? 'dark' : 'light');
-  // Keep Más toggle in sync
-  var toggle = document.getElementById('masThemeToggle');
-  if (toggle) toggle.checked = checkbox.checked;
-}
-
 // Fase 7: toggle opt-in del módulo de salud femenina/ciclo. PUT /api/profile
 // {cycle_tracking}; en error de red revertimos el checkbox visualmente (no
 // dejamos la UI mintiendo sobre un estado que no se guardó).
@@ -4770,12 +4872,12 @@ function _renderProgramsList(list, catalog, planStatus){
     var isActive = p.id === activeId;
     var actionBtn = isActive
       ? '<button onclick="programAbandon(event)" style="padding:6px 14px;border-radius:10px;border:1px solid rgba(255,55,95,.3);'
-        + 'background:rgba(255,55,95,.1);color:#FF375F;font:600 12px -apple-system;cursor:pointer">'
+        + 'background:rgba(255,55,95,.1);color:#FF375F;font:600 12px var(--font);cursor:pointer">'
         + escHtml(t('plan_abandon_btn')) + '</button>'
       : '<button onclick="programStart(event,\''+p.id+'\')" '
         + (activeId ? 'disabled style="opacity:.4;pointer-events:none;' : 'style="')
         + 'padding:6px 14px;border-radius:10px;border:none;background:#0A84FF;color:#fff;'
-        + 'font:600 12px -apple-system;cursor:pointer">'
+        + 'font:600 12px var(--font);cursor:pointer">'
         + escHtml(t('plan_start_btn')) + '</button>';
     return '<div class="mas-row" style="align-items:flex-start">'
       + '<div style="flex:1">'

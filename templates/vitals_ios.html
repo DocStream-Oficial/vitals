@@ -6,7 +6,8 @@
 <title>Vitals · iOS</title>
 <!-- PWA -->
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#07090e">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0c">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,6 +17,9 @@
 <link rel="stylesheet" href="/static/css/vitals.css">
 </head>
 <body>
+<!-- Roadmap HIG paso 3: la apariencia SIGUE AL SISTEMA (§3) — se aplica ANTES
+     de pintar nada para evitar parpadeo (flash claro/oscuro). -->
+<script>try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)document.body.classList.add('light');}catch(e){}</script>
 
 <!-- ── DATA INJECTION ── -->
 <script>
@@ -32,6 +36,10 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
 
 <!-- ── AMBIENT BACKGROUND ── -->
 <div id="glow"></div>
+<!-- Roadmap HIG paso 4: efecto de borde de desplazamiento (§1 scroll edge) —
+     decorativo, aria-hidden, pointer-events:none (no bloquea toques del
+     encabezado). -->
+<div id="edgeTop" aria-hidden="true"></div>
 
 <!-- ── APP (responsive) ── -->
 <div class="app">
@@ -70,10 +78,6 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
           <div id="todayDate"></div>
         </div>
         <div class="head-actions">
-          <button id="themeBtn" onclick="toggleTheme()" data-i18n-al="theme_al" data-i18n-t="theme_title" aria-label="Cambiar tema" title="Tema claro/oscuro">
-            <svg id="themeIconDark" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z"/></svg>
-            <svg id="themeIconLight" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg>
-          </button>
           <div class="avatar" id="headerAvatar">M<div class="avatar-dot"></div></div>
         </div>
       </div>
@@ -90,24 +94,28 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
       <!-- Insight Cards (alert/watch/positive/info) — generadas por renderInsights() -->
       <div id="insightCards" class="span-all"></div>
 
-      <!-- HERO RINGS -->
+      <!-- HERO — Roadmap HIG paso 12: medidor único de recuperación (arco
+           abierto de 270°, §8: NO replica los Activity rings de Apple) +
+           Sueño/Esfuerzo como barras lineales. -->
       <div class="card span-all" id="heroCard">
-        <div id="ringWrap"></div>
-        <div id="ringLabels">
-          <div class="ring-row" onclick="openDetail('recovery')">
-            <div class="ring-tag"><span class="ring-dot" style="background:#30D158;box-shadow:0 0 8px rgba(48,209,88,.6)"></span><span class="ring-tag-lbl" data-i18n="ring_recovery">Recuperación</span></div>
-            <div>
-              <div class="ring-val" id="recVal">—<span class="ring-sub" style="margin-left:1px">%</span></div>
-              <div id="recConf" style="font-size:11px;color:var(--label3);margin-top:1px"></div>
-            </div>
+        <div id="ringWrap" role="button" tabindex="0" onclick="openDetail('recovery')" aria-label="Recuperación">
+          <div id="ringSvg"></div>
+          <div class="gauge-center">
+            <div class="ring-val gauge-val" id="recVal">—<span class="ring-sub">%</span></div>
+            <div class="gauge-lbl" data-i18n="ring_recovery">Recuperación</div>
+            <div id="recConf" class="gauge-conf"></div>
           </div>
+        </div>
+        <div id="ringLabels">
           <div class="ring-row" onclick="goTab('screenSleep')">
-            <div class="ring-tag"><span class="ring-dot" style="background:#5E5CE6;box-shadow:0 0 8px rgba(94,92,230,.6)"></span><span class="ring-tag-lbl" data-i18n="ring_sleep">Sueño</span></div>
+            <div class="ring-tag"><span class="ring-dot" style="background:#5E5CE6"></span><span class="ring-tag-lbl" data-i18n="ring_sleep">Sueño</span></div>
             <div class="ring-val" id="sleepVal">—<span class="ring-sub" id="sleepPctSpan" style="margin-left:5px"></span></div>
+            <div class="hero-bar"><div class="hero-bar-fill" id="sleepBar" style="background:#5E5CE6"></div></div>
           </div>
           <div class="ring-row" onclick="openDetail('strain')">
-            <div class="ring-tag"><span class="ring-dot" style="background:#64D2FF;box-shadow:0 0 8px rgba(100,210,255,.6)"></span><span class="ring-tag-lbl" data-i18n="ring_strain">Esfuerzo</span></div>
+            <div class="ring-tag"><span class="ring-dot" style="background:#64D2FF"></span><span class="ring-tag-lbl" data-i18n="ring_strain">Esfuerzo</span></div>
             <div class="ring-val" id="strainVal">—<span class="ring-sub" style="margin-left:2px">/ 21</span></div>
+            <div class="hero-bar"><div class="hero-bar-fill" id="strainBar" style="background:#64D2FF"></div></div>
           </div>
         </div>
       </div>
@@ -126,7 +134,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
         <div id="coachChips"></div>
         <div id="coachBullets"></div>
         <div id="coachPlanBtn" onclick="goCoachWithPlanPrompt()"><span data-i18n="coach_plan_btn">Ver plan del día</span>
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#30D158" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </div>
       </div>
 
@@ -288,7 +296,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
 
       <div id="tendHeader">
         <div id="tendTitle" data-i18n="tend_title">Tendencias</div>
-        <button id="tendSortBtn" onclick="openOrderPopup('tend')" data-i18n-al="tend_sort_al" aria-label="Acomodar tarjetas de Tendencias">
+        <button id="tendSortBtn" class="hdr-btn" onclick="openOrderPopup('tend')" data-i18n-al="tend_sort_al" aria-label="Acomodar tarjetas de Tendencias">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
         </button>
       </div>
@@ -389,7 +397,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
       <div class="tend-card" id="tendPalancasCard">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#5E5CE6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-          <span style="font:650 15px/1.2 -apple-system;color:var(--label)" data-i18n="tend_palancas">Palancas</span>
+          <span style="font:650 15px/1.2 var(--font);color:var(--label)" data-i18n="tend_palancas">Palancas</span>
         </div>
         <div id="tendPalancas"></div>
       </div>
@@ -447,13 +455,8 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
           </button>
         </div>
         <div class="head-actions">
-          <button id="coachNewConvBtn" onclick="newConversation()" data-i18n-al="coach_new_conv" data-i18n-t="coach_new_conv" aria-label="Nueva conversación" title="Nueva conversación"
-            style="width:38px;height:38px;border-radius:999px;flex:none;cursor:pointer;background:var(--card2);border:1px solid var(--card-border);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;color:var(--label);transition:opacity .2s">
+          <button id="coachNewConvBtn" class="hdr-btn" onclick="newConversation()" data-i18n-al="coach_new_conv" data-i18n-t="coach_new_conv" aria-label="Nueva conversación" title="Nueva conversación">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
-          <button id="themeBtnCoach" onclick="toggleTheme()" data-i18n-al="theme_al" data-i18n-t="theme_title" aria-label="Cambiar tema" title="Tema claro/oscuro"
-            style="width:38px;height:38px;border-radius:999px;flex:none;cursor:pointer;background:var(--card2);border:1px solid var(--card-border);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;color:var(--label);transition:opacity .2s">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z"/></svg>
           </button>
         </div>
       </div>
@@ -560,21 +563,10 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
         <!-- Idioma + Unidades (inyectado por renderMasLocaleControls) -->
         <div class="span-all" id="masLocaleArea"></div>
 
-        <!-- Apariencia -->
-        <div class="span-all">
-          <div class="mas-section-lbl" data-i18n="mas_appearance_lbl">Apariencia</div>
-          <div class="mas-row">
-            <div>
-              <div class="mas-row-label" data-i18n="mas_dark_mode_lbl">Modo oscuro</div>
-              <div class="mas-row-sub" data-i18n="mas_dark_mode_sub">Sigue la preferencia del sistema o elige</div>
-            </div>
-            <label class="ios-toggle">
-              <input type="checkbox" id="masThemeToggle" onchange="masToggleTheme(this)">
-              <div class="ios-toggle-track"></div>
-              <div class="ios-toggle-thumb"></div>
-            </label>
-          </div>
-        </div>
+        <!-- Roadmap HIG paso 3: se quitó la sección "Apariencia" (toggle de modo
+             oscuro) — la apariencia sigue al sistema (§3), sin interruptor propio.
+             Claves i18n mas_appearance_lbl/mas_dark_mode_lbl/mas_dark_mode_sub
+             quedan sin uso a propósito (regla del roadmap: no borrar claves). -->
 
         <!-- Salud — toggle de seguimiento de ciclo (Fase 7, opt-in, inclusivo) -->
         <div class="span-all">
@@ -656,8 +648,8 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
             <div id="masSourcesList"><!-- poblado por renderSourcesList() con una fila por fuente --></div>
             <div class="mas-sync-row" style="border:none;padding-bottom:0;margin-bottom:0">
               <div>
-                <div style="font:500 14px -apple-system;color:var(--label)" data-i18n="mas_last_sync_lbl">Última actualización</div>
-                <div style="font:400 11px -apple-system;color:var(--label3)" id="masLastSync">—</div>
+                <div style="font:500 14px var(--font);color:var(--label)" data-i18n="mas_last_sync_lbl">Última actualización</div>
+                <div style="font:400 11px var(--font);color:var(--label3)" id="masLastSync">—</div>
                 <!-- Reconnect chip (roadmap P2 paso 4): visible SOLO si token
                      expiró pero data <24h de antigüedad — reemplaza el banner
                      rojo top por este aviso discreto y no urgente. -->
@@ -817,29 +809,31 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
     </div>
   </div>
 
-  <!-- TAB BAR -->
-  <div id="tabBar">
-    <div class="tab-item" onclick="goTab('screenHoy')" id="tabHoy">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="#30D158" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5C7 17 3.5 13.8 3.5 10.2 3.5 7.6 5.5 6 7.7 6c1.6 0 2.9.9 3.6 2 .7-1.1 2-2 3.6-2 2.2 0 4.2 1.6 4.2 4.2 0 3.6-3.5 6.8-8.5 10.3z"/></svg>
-      <span style="color:#30D158" data-i18n="tab_hoy">Hoy</span>
-    </div>
-    <div class="tab-item" onclick="goTab('screenSleep')" id="tabSleep">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="var(--label2)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z"/></svg>
-      <span style="color:var(--label2)" data-i18n="tab_sleep">Sueño</span>
-    </div>
-    <div class="tab-item" onclick="goTab('screenTend')" id="tabTend">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="var(--label2)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 3.5 3.5L20 6M16 6h4v4"/></svg>
-      <span style="color:var(--label2)" data-i18n="tab_tend">Tendencias</span>
-    </div>
-    <div class="tab-item" onclick="goTab('screenCoach')" id="tabCoach">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="var(--label2)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z"/></svg>
-      <span style="color:var(--label2)" data-i18n="tab_coach">Coach</span>
-    </div>
-    <div class="tab-item" onclick="goTab('screenMas')" id="tabMas">
+  <!-- TAB BAR — Roadmap HIG paso 5: Liquid Glass (§1, §5). Botones reales con
+       role="tab"/aria-selected (accesibilidad); color monocromo salvo la
+       pestaña activa, que toma --accent vía .active (goTab() en JS). -->
+  <div id="tabBar" role="tablist">
+    <button type="button" class="tab-item active" role="tab" aria-selected="true" onclick="goTab('screenHoy')" id="tabHoy">
+      <svg class="tab-fill" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5C7 17 3.5 13.8 3.5 10.2 3.5 7.6 5.5 6 7.7 6c1.6 0 2.9.9 3.6 2 .7-1.1 2-2 3.6-2 2.2 0 4.2 1.6 4.2 4.2 0 3.6-3.5 6.8-8.5 10.3z"/></svg>
+      <span data-i18n="tab_hoy">Hoy</span>
+    </button>
+    <button type="button" class="tab-item" role="tab" aria-selected="false" onclick="goTab('screenSleep')" id="tabSleep">
+      <svg class="tab-fill" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5a6.2 6.2 0 0 0 9.5 9.5z"/></svg>
+      <span data-i18n="tab_sleep">Sueño</span>
+    </button>
+    <button type="button" class="tab-item" role="tab" aria-selected="false" onclick="goTab('screenTend')" id="tabTend">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 3.5 3.5L20 6M16 6h4v4"/></svg>
+      <span data-i18n="tab_tend">Tendencias</span>
+    </button>
+    <button type="button" class="tab-item" role="tab" aria-selected="false" onclick="goTab('screenCoach')" id="tabCoach">
+      <svg class="tab-fill" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.6 4.3 4.3 1.6-4.3 1.6L12 15.3l-1.6-4.3L6.1 9.4l4.3-1.6z"/></svg>
+      <span data-i18n="tab_coach">Coach</span>
+    </button>
+    <button type="button" class="tab-item" role="tab" aria-selected="false" onclick="goTab('screenMas')" id="tabMas">
       <span class="tab-dot" id="tabMasDot"></span>
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="var(--label2)"><rect x="3.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2.2"/></svg>
-      <span style="color:var(--label2)" data-i18n="tab_mas">Más</span>
-    </div>
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="currentColor"><rect x="3.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2.2"/></svg>
+      <span data-i18n="tab_mas">Más</span>
+    </button>
   </div>
 
 </div><!-- /.app -->
@@ -901,7 +895,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
     <div class="pm-handle"></div>
     <div class="pm-title" data-i18n="journal_add_title">Nuevo hábito</div>
     <input id="journalAddInput" type="text" maxlength="40" data-i18n-ph="journal_add_placeholder" placeholder="Ej. Colágeno marino" class="ob-input" style="width:100%;box-sizing:border-box;margin-bottom:6px">
-    <div id="journalAddErr" style="color:#FF375F;font:500 12.5px -apple-system;margin-bottom:10px;display:none"></div>
+    <div id="journalAddErr" style="color:#FF375F;font:500 12.5px var(--font);margin-bottom:10px;display:none"></div>
     <button id="journalAddSaveBtn" onclick="journalSubmitCustom()" class="journal-add-savebtn" data-i18n="journal_add_save">Agregar</button>
   </div>
 </div>
@@ -923,7 +917,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
     <div class="pm-handle"></div>
     <div class="pm-title" data-i18n="household_add_title">Nuevo usuario</div>
     <input id="householdAddInput" type="text" maxlength="60" data-i18n-ph="household_add_placeholder" placeholder="Ej. Ana" class="ob-input" style="width:100%;box-sizing:border-box;margin-bottom:6px">
-    <div id="householdAddErr" style="color:#FF375F;font:500 12.5px -apple-system;margin-bottom:10px;display:none"></div>
+    <div id="householdAddErr" style="color:#FF375F;font:500 12.5px var(--font);margin-bottom:10px;display:none"></div>
     <button onclick="householdSubmitAdd()" class="journal-add-savebtn" data-i18n="household_add_save">Agregar</button>
   </div>
 </div>
@@ -976,7 +970,7 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
         <label data-i18n="labs_form_note">Nota (opcional)</label>
         <input type="text" id="labsFormNote" maxlength="500" class="ob-input" style="width:100%;box-sizing:border-box">
       </div>
-      <div id="labsAddErr" style="color:#FF375F;font:500 12.5px -apple-system;margin-bottom:10px;display:none"></div>
+      <div id="labsAddErr" style="color:#FF375F;font:500 12.5px var(--font);margin-bottom:10px;display:none"></div>
       <button class="journal-add-savebtn" onclick="labsSubmitEntry()" data-i18n="labs_form_save">Guardar</button>
     </div>
 

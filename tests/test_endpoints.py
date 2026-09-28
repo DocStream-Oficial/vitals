@@ -534,7 +534,11 @@ def test_mas_screen_present_no_placeholder(client):
 
     mas_block = body[mas_start:]
     assert "Próximamente" not in mas_block, "El bloque Más todavía contiene 'Próximamente'"
-    assert "masThemeToggle" in mas_block, "Falta el toggle de tema en #screenMas"
+    # Roadmap HIG paso 3: se quitó el toggle de tema propio (#masThemeToggle) —
+    # la apariencia sigue al sistema (§3), sin interruptor en la app. Se
+    # sustituye la señal de "contenido real" por la tarjeta de perfil, que
+    # sigue siendo parte fija de #screenMas.
+    assert "masProfileCard" in mas_block, "Falta la tarjeta de perfil en #screenMas"
     assert "Sincronizar" in mas_block, "Falta botón Sincronizar en #screenMas"
     assert "Mike" in mas_block or "perfil" in mas_block.lower(), "Falta el perfil del usuario en #screenMas"
 

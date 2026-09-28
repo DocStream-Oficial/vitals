@@ -149,7 +149,7 @@ function attachChartInteraction(svgContainer, cfg) {
     'position:absolute', 'pointer-events:none', 'opacity:0',
     'transition:opacity .12s ease', 'z-index:5',
     'background:var(--card2, #1c1c1e)', 'border:1px solid var(--card-border, rgba(255,255,255,.12))',
-    'border-radius:10px', 'padding:6px 10px', 'font:600 12px -apple-system',
+    'border-radius:10px', 'padding:6px 10px', 'font:600 12px var(--font)',
     'color:var(--label, #fff)', 'white-space:nowrap', 'box-shadow:0 4px 14px rgba(0,0,0,.35)',
     'left:0', 'top:0',
   ].join(';');
