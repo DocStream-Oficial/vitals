@@ -3,9 +3,12 @@ coach_headline.py — Titular del Coach por IA (1-2 líneas), cacheado por firma
 de estado. Paso 3 del roadmap Frescura de Alertas + Coach.
 
 signature(dataset, changes) -> str
-  Hash de factores medibles CUANTIZADOS (buckets/bandas, no valores exactos)
-  + fecha del último día + kind del top cambio. Coarse a propósito: NO cambia
-  por micro-fluctuaciones, solo cuando un factor cruza de banda o cambia el día.
+  Hash de los números que el titular puede CITAR (recuperación exacta, HRV,
+  horas de sueño a 0.1 h, tal como van en el prompt) + banda de esfuerzo +
+  fecha del último día + top cambio. Antes era 100 % por bandas y el titular
+  quedaba con números viejos (una bajada de recuperación dentro de la misma
+  banda no lo regeneraba). El esfuerzo sigue por banda porque sube durante el
+  día; el prompt pide no citar su valor exacto.
 
 load_cache()/save_cache() -> dict | None
   data/coach_headline.json = {signature, headline, generated_at, locale}.
@@ -160,6 +163,13 @@ def signature(dataset: dict, changes: Optional[list] = None, insights: Optional[
         hrv_base = summary.get("hrv_base_recent") or summary.get("hrv_base")
         rec_bucket = _bucket_recovery(today.get("recovery"))
         hrv_bucket = _bucket_hrv_vs_base(today.get("hrv"), hrv_base)
+        # Valores exactos que el titular puede citar (mismo redondeo que el
+        # prompt): si cambian, el texto cacheado ya no es correcto.
+        quoted = "{}|{}|{}".format(
+            today.get("recovery"),
+            today.get("hrv"),
+            round(today["asleep"] / 60, 1) if today.get("asleep") is not None else None,
+        )
         # sleep-goal-vs-need: titular usa el OBJETIVO (sleep_goal_min) con
         # fallback a la NECESIDAD y luego 480, mismo patrón que app/changes.py.
         # _bucket_sleep NO cambia de firma.
@@ -167,7 +177,7 @@ def signature(dataset: dict, changes: Optional[list] = None, insights: Optional[
         strain_bucket = _bucket_strain(today.get("strain"))
         top_kind = changes[0].get("kind", "none") if changes else "none"
         top_factor = changes[0].get("factor", "none") if changes else "none"
-        raw = f"{date_str}|{rec_bucket}|{hrv_bucket}|{sleep_bucket}|{strain_bucket}|{top_factor}:{top_kind}"
+        raw = f"{date_str}|{rec_bucket}|{hrv_bucket}|{sleep_bucket}|{strain_bucket}|{top_factor}:{top_kind}|{quoted}"
 
     alert_ids = _alert_ids(insights)
     if alert_ids:
@@ -287,7 +297,9 @@ def _build_headline_prompt(dataset: dict, changes: list, locale: str, alerts: Op
         f"más relevante de hoy; si no hay cambios, resume el estado general con foco "
         f"en la prioridad #1 del usuario. Sin saludos, sin markdown, sin comillas, "
         f"solo el texto del titular. No diagnostiques; ante señales de posible "
-        f"enfermedad usa tono de vigilancia, no alarmista."
+        f"enfermedad usa tono de vigilancia, no alarmista. Si citas números, usa "
+        f"exactamente los de arriba; no cites el valor exacto de esfuerzo (sube "
+        f"durante el día), descríbelo con palabras."
     )
     if alerts:
         instruction += (

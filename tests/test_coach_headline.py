@@ -45,11 +45,31 @@ def test_signature_empty_dataset_stable():
     assert ch.signature(None or {}) is not None
 
 
-def test_signature_stable_across_micro_fluctuation_same_band():
-    """recovery 70 vs 71 -> misma banda 'high' -> MISMA firma (coarse a propósito)."""
-    ds1 = _dataset(recovery=70)
-    ds2 = _dataset(recovery=71)
-    assert ch.signature(ds1) == ch.signature(ds2)
+def test_signature_changes_when_quoted_recovery_changes_same_band():
+    """El titular cita la recuperación exacta: 30 -> 12 (ambos banda 'low') debe
+    cambiar la firma, o el texto cacheado queda con un número viejo."""
+    assert ch.signature(_dataset(recovery=30)) != ch.signature(_dataset(recovery=12))
+
+
+def test_signature_changes_when_quoted_sleep_or_hrv_changes():
+    assert ch.signature(_dataset(asleep=265)) != ch.signature(_dataset(asleep=300))
+    assert ch.signature(_dataset(hrv=55)) != ch.signature(_dataset(hrv=40))
+
+
+def test_signature_stable_when_sleep_same_rounded_hours():
+    """Mismo redondeo que el prompt (0.1 h): 450 y 452 min son ambos 7.5 h."""
+    assert ch.signature(_dataset(asleep=450)) == ch.signature(_dataset(asleep=452))
+
+
+def test_signature_stable_across_strain_fluctuation_same_band():
+    """El esfuerzo sube durante el día y el titular no cita su valor exacto:
+    10 vs 11 (misma banda 'mid') -> MISMA firma (no regenera en cada sync)."""
+    assert ch.signature(_dataset(strain=10)) == ch.signature(_dataset(strain=11))
+
+
+def test_prompt_asks_not_to_quote_exact_strain():
+    prompt = ch._build_headline_prompt(_dataset(), [], "es")
+    assert "no cites el valor exacto de esfuerzo" in prompt
 
 
 def test_signature_changes_when_band_crosses():

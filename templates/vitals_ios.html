@@ -764,9 +764,9 @@ var CYCLE = __CYCLE__; // Fase 7: estado de ciclo (salud femenina, opt-in). {ena
   <!-- DETAIL OVERLAY -->
   <div id="detailOverlay">
     <div id="glow2" style="position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(50% 30% at 84% 3%, rgba(48,209,88,.16), transparent 70%), radial-gradient(56% 40% at 6% 88%, rgba(94,92,230,.18), transparent 72%)"></div>
-    <div id="detailBack" onclick="closeDetail()">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg><span data-i18n="detail_back">Hoy</span>
-    </div>
+    <button type="button" id="detailBack" onclick="closeDetail()">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg><span data-i18n="detail_back">Hoy</span>
+    </button>
     <div style="position:relative">
       <div id="detailTitle"></div>
       <div id="detailValRow">

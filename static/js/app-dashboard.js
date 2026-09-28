@@ -1914,7 +1914,7 @@ var DETAIL_CFG = {
     get chartLabel(){return t('detail_rec_chart');},
     dataFn:function(days){return days.map(function(d){return d.recovery;}).filter(function(v){return v!=null;});},
     dateFn:function(days){return days.filter(function(d){return d.recovery!=null;}).map(function(d){return d.date;});},
-    valFn:function(day){return day.recovery!=null?day.recovery+'%':'—';},
+    valFn:function(day){return day.recovery!=null?String(day.recovery):'—';}, // el "%" ya lo pone unit (antes salía "72% %")
     subFn:function(day){
       var rn = day.recovery_n;
       if(rn == null) return t('detail_rec_today')+'0–100%';
@@ -2906,7 +2906,6 @@ function openDetail(key){
   if(key === 'sleep' || key === 'fitness' || key === 'vitals' || key === 'cycle'){
     // Rich deep screen
     var accent = key === 'sleep' ? A.indigo : key === 'vitals' ? '#FF375F' : key === 'cycle' ? '#FF375F' : A.green;
-    document.getElementById('detailBack').style.color = accent;
     document.getElementById('detailTitle').textContent =
       key === 'sleep' ? t('ring_sleep')
       : key === 'vitals' ? t('detail_vitals_title')
@@ -2942,8 +2941,6 @@ function openDetail(key){
   var cfg = DETAIL_CFG[key];
   if(!cfg) return;
 
-  // Back button color
-  document.getElementById('detailBack').style.color = cfg.accent;
   document.getElementById('detailTitle').textContent = cfg.title;
   var today = days[sel]||{};
   document.getElementById('detailVal').textContent = cfg.valFn(today);

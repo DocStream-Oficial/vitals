@@ -159,7 +159,7 @@ body.light #glow{
    contenido que sube bajo la barra de estado se difumina en vez de chocar
    con el reloj. Decorativo: no intercepta toques. */
 #edgeTop{
-  position:fixed;left:0;right:0;top:0;z-index:45;pointer-events:none;
+  position:fixed;left:0;right:0;top:0;z-index:61;pointer-events:none; /* sobre #detailOverlay (60), bajo #orderOverlay (62) y las hojas */
   height:calc(env(safe-area-inset-top,0px) + 18px);
   background:linear-gradient(to bottom,var(--app-bg) 0%,var(--app-bg) 40%,transparent 100%);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
@@ -956,13 +956,24 @@ body.light #glow{
 #detailOverlay{
   display:none;position:fixed;inset:0;z-index:60;
   background:var(--app-bg);overflow-y:auto;overflow-x:hidden;
-  padding:40px max(18px,calc(50% - 280px)) 60px;
+  /* Respeta la zona segura: antes el padding superior era fijo (40px) y el botón
+     "‹ Hoy" quedaba debajo del reloj/Dynamic Island en todas las pantallas de
+     detalle (recuperación, esfuerzo, sueño, condición física, ciclo). */
+  padding:calc(env(safe-area-inset-top,0px) + 8px) max(18px,calc(50% - 280px)) calc(env(safe-area-inset-bottom,0px) + 60px);
 }
 #detailOverlay.visible{display:block}
+/* Botón de regreso = capa de navegación: vidrio, 44 pt, color de acción y fijo
+   al desplazar (como la barra de navegación de iOS). */
 #detailBack{
-  display:inline-flex;align-items:center;gap:4px;
-  font:500 16px/1 var(--font);cursor:pointer;margin-bottom:18px;
+  position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:5;
+  display:inline-flex;align-items:center;gap:2px;min-height:44px;
+  padding:0 16px 0 10px;margin:0 0 14px -8px;border-radius:999px;cursor:pointer;
+  font:600 17px/1 var(--font);color:var(--accent);
+  background:var(--glass);border:1px solid var(--glass-border);
+  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+  box-shadow:inset 0 1px 0 var(--glass-hi);
 }
+#detailBack:active{opacity:.6}
 #detailTitle{font:700 32px/1.05 var(--font);letter-spacing:-.02em;color:var(--label)}
 #detailValRow{display:flex;align-items:baseline;gap:8px;margin-top:10px}
 #detailVal{font:680 56px/1 var(--font);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
@@ -977,7 +988,7 @@ body.light #glow{
 
 /* ── ORDER OVERLAY ── */
 #orderOverlay{
-  display:none;position:fixed;inset:0;z-index:61;
+  display:none;position:fixed;inset:0;z-index:62;
   background:rgba(0,0,0,.55);
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
   align-items:flex-end;justify-content:center;
@@ -1676,10 +1687,16 @@ body.light #glow{
 
 /* Roadmap HIG paso 2: preferencias de accesibilidad del sistema (§9). */
 @media (prefers-reduced-transparency: reduce){
-  #tabBar,.hdr-btn,#edgeTop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--glass-solid)!important}
+  #tabBar,.hdr-btn,#edgeTop,#detailBack{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--glass-solid)!important}
   #edgeTop{background:linear-gradient(var(--app-bg) 70%,transparent)!important}
 }
 @media (prefers-contrast: more){
   :root{--label2:rgba(235,235,245,.82);--label3:rgba(235,235,245,.62);--card-border:rgba(255,255,255,.3);--sep:rgba(255,255,255,.25)}
   body.light{--label2:rgba(60,60,67,.85);--label3:rgba(60,60,67,.7);--card-border:rgba(60,60,67,.35);--sep:rgba(60,60,67,.3)}
+}
+
+/* Hojas inferiores: nunca más altas que la pantalla menos la zona del reloj
+   (con 92vh la hoja del ECG quedaba a ras del Dynamic Island). */
+#journalDetailSheet,#profileModalSheet,#ecgViewerSheet,#orderOverlayCard,#reportModalSheet,#labsModalSheet{
+  max-height:min(90vh, calc(100dvh - env(safe-area-inset-top,0px) - 12px));
 }
