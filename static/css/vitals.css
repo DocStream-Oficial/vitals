@@ -1556,10 +1556,15 @@ body.light #glow{
 .an-dot{transform-box:fill-box;transform-origin:center;animation:dotPop .42s cubic-bezier(.34,1.32,.64,1) both}
 .an-ring{animation:ringSweep .9s cubic-bezier(.22,.61,.36,1) both}
 @media (prefers-reduced-motion: reduce){
-  .an-line,.an-fade,.an-area,.an-bar,.an-dot,.an-ring{
+  .an-line,.an-fade,.an-area,.an-bar,.an-dot{
     animation:none!important;stroke-dashoffset:0!important;stroke-dasharray:none!important;
     opacity:1!important;transform:none!important;
   }
+  /* Los arcos (.an-ring: medidor de recuperación, donas) SE DIBUJAN con
+     stroke-dasharray y se orientan con el atributo transform="rotate()": aquí
+     solo se apaga la animación. Quitarles el dasharray/transform (como a las
+     líneas) los pintaba como anillo completo al 100 % con Reducir movimiento. */
+  .an-ring{animation:none!important;stroke-dashoffset:0!important}
   /* Roadmap HIG paso 2: la reducción de movimiento también cubre las
      transiciones de pantalla/detalle y el shimmer del skeleton (§9). */
   .anim-in,.detail-in{animation:none!important}
