@@ -962,18 +962,16 @@ body.light #glow{
   padding:calc(env(safe-area-inset-top,0px) + 8px) max(18px,calc(50% - 280px)) calc(env(safe-area-inset-bottom,0px) + 60px);
 }
 #detailOverlay.visible{display:block}
-/* Botón de regreso = capa de navegación: vidrio, 44 pt, color de acción y fijo
-   al desplazar (como la barra de navegación de iOS). */
+/* Botón de regreso estilo iOS: texto + chevron en color de acción, sin fondo ni
+   borde, área táctil de 44 pt. No es fijo: se desplaza con el contenido (la
+   versión "píldora de vidrio fija" tapaba el título al desplazar — 27-sep). */
 #detailBack{
-  position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:5;
   display:inline-flex;align-items:center;gap:2px;min-height:44px;
-  padding:0 16px 0 10px;margin:0 0 14px -8px;border-radius:999px;cursor:pointer;
-  font:600 17px/1 var(--font);color:var(--accent);
-  background:var(--glass);border:1px solid var(--glass-border);
-  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
-  box-shadow:inset 0 1px 0 var(--glass-hi);
+  padding:0 8px 0 0;margin:0 0 6px -6px;cursor:pointer;
+  font:400 17px/1 var(--font);color:var(--accent);
+  background:none;border:none;-webkit-tap-highlight-color:transparent;
 }
-#detailBack:active{opacity:.6}
+#detailBack:active{opacity:.5}
 #detailTitle{font:700 32px/1.05 var(--font);letter-spacing:-.02em;color:var(--label)}
 #detailValRow{display:flex;align-items:baseline;gap:8px;margin-top:10px}
 #detailVal{font:680 56px/1 var(--font);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
@@ -1687,7 +1685,7 @@ body.light #glow{
 
 /* Roadmap HIG paso 2: preferencias de accesibilidad del sistema (§9). */
 @media (prefers-reduced-transparency: reduce){
-  #tabBar,.hdr-btn,#edgeTop,#detailBack{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--glass-solid)!important}
+  #tabBar,.hdr-btn,#edgeTop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--glass-solid)!important}
   #edgeTop{background:linear-gradient(var(--app-bg) 70%,transparent)!important}
 }
 @media (prefers-contrast: more){
